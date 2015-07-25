@@ -32,10 +32,8 @@ impl mio::Handler for SupremeClient {
 pub fn run_supreme_client() {
     let mut client = UnixStream::connect("/tmp/s.socket").unwrap();
 
-    for i in (0..10) {
-        client.write_message("hello world.".as_bytes());
-        thread::sleep_ms(500);
-    }
+    client.write_message("{ \"type\": \"call\", \"function\": \"core.exit\" }".as_bytes());
+    thread::sleep_ms(1500);
     // let mut event_loop = mio::EventLoop::new().unwrap();
     // event_loop.register(&client, CLIENT);
 

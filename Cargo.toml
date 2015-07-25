@@ -3,5 +3,8 @@ name = "s"
 version = "0.1.0"
 authors = ["Holger Rapp <HolgerRapp@gmx.net>"]
 
+[dependencies]
+serde = "0.4.3"
+
 [dependencies.mio]
 git="https://github.com/carllerche/mio.git"
