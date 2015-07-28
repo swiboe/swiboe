@@ -1,11 +1,10 @@
-#![feature(slice_position_elem)]
-
 extern crate mio;
 extern crate serde;
 
-// NOCOM(#sirver): what needs to be pub here?
-mod buffer;
-pub mod server;
+mod ipc_bridge;
+mod plugin_base;
+mod plugin_remote;
 pub mod client;
 pub mod ipc;
 pub mod plugin_core;
+pub mod server;

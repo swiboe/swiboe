@@ -1,20 +1,6 @@
-use super::server::{Function, FunctionResult, CommandSender, Command, FunctionCallContext, Plugin, PluginId};
 use serde::json;
-
-struct RemoteFunction {
-    // NOCOM(#sirver): client?
-    name: String,
-}
-
-// NOCOM(#sirver): is this async or sync?
-impl Function for RemoteFunction {
-    fn name(&self) -> &str { &self.name }
-
-    fn call(&self, context: FunctionCallContext) -> FunctionResult {
-        // NOCOM(#sirver): implement this
-        FunctionResult::DONE
-    }
-}
+use super::plugin_base::{FunctionResult, Plugin, FunctionCallContext, PluginId};
+use super::server::{CommandSender, Command};
 
 struct CorePlugin;
 
