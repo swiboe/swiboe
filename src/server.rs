@@ -19,8 +19,8 @@ pub enum Command {
     RegisterFunction(Box<Function>),
     // NOCOM(#sirver): How can this be a proper struct?
     CallFunction(String, FunctionCallContext),
-    RemotePluginConnected(RemotePluginId),
-    RemotePluginDisconnected(RemotePluginId),
+    PluginConnected(Plugin),
+    PluginDisconnected(Plugin),
     Broadcast(json::value::Value),
 }
 pub type CommandSender = Sender<Command>;
@@ -45,15 +45,16 @@ pub struct RemotePluginId {
     token: mio::Token,
 }
 
-enum PluginId {
-    RemotePluginId,
+#[derive(PartialEq, Eq, Clone, Copy)]
+pub enum Plugin {
+    Remote(RemotePluginId),
 }
 
 pub struct SupremeServer {
     functions: HashMap<String, Box<Function>>,
     commands: Receiver<Command>,
     // NOCOM(#sirver): bad name :(
-    remote_plugins: Vec<RemotePluginId>,
+    remote_plugins: Vec<Plugin>,
     event_loop_channel: mio::Sender<HandlerMessage>,
 }
 
@@ -73,14 +74,18 @@ impl SupremeServer {
 
                     // println!("#sirver broadcast args: {:#?}", args);
                     for plugin in &self.remote_plugins {
-                        self.event_loop_channel.send(HandlerMessage::SendData(
-                                *plugin, s.clone())).unwrap();
+                        match *plugin {
+                            Plugin::Remote(id) =>  {
+                                self.event_loop_channel.send(HandlerMessage::SendData(
+                                        id, s.clone())).unwrap();
+                            }
+                        }
                     }
                 },
-                Command::RemotePluginConnected(plugin) => {
+                Command::PluginConnected(plugin) => {
                     self.remote_plugins.push(plugin);
                 },
-                Command::RemotePluginDisconnected(plugin) => {
+                Command::PluginDisconnected(plugin) => {
                     let index = self.remote_plugins.position_elem(&plugin).unwrap();
                     self.remote_plugins.swap_remove(index);
                     // NOCOM(#sirver): needs to remove all associated functions
@@ -148,7 +153,7 @@ impl mio::Handler for IpcBridge {
                         stream: stream,
                         remote_plugin_id: remote_plugin_id,
                     };
-                    commands.send(Command::RemotePluginConnected(remote_plugin_id)).unwrap();
+                    commands.send(Command::PluginConnected(Plugin::Remote(remote_plugin_id))).unwrap();
                     connection
                 }) {
                     Some(token) => {
@@ -170,7 +175,7 @@ impl mio::Handler for IpcBridge {
                 if events.is_hup() {
                     {
                         let connection = &self.connections[client_token];
-                        self.commands.send(Command::RemotePluginDisconnected(connection.remote_plugin_id)).unwrap();
+                        self.commands.send(Command::PluginDisconnected(Plugin::Remote(connection.remote_plugin_id))).unwrap();
                     }
                     self.connections.remove(client_token);
                 } else if events.is_readable() {
