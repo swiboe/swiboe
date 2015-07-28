@@ -1,4 +1,4 @@
-use super::server::{Function, FunctionResult, CommandSender, Command, FunctionCallContext};
+use super::server::{Function, FunctionResult, CommandSender, Command, FunctionCallContext, Plugin, PluginId};
 use serde::json;
 
 struct RemoteFunction {
@@ -16,46 +16,45 @@ impl Function for RemoteFunction {
     }
 }
 
-struct CoreExit;
-impl Function for CoreExit {
-    fn name(&self) -> &str { "core.exit" }
+struct CorePlugin;
 
+impl Plugin for CorePlugin {
+    fn name(&self) -> &'static str { "core" }
+    // NOCOM(#sirver): rethink this name.
+    fn broadcast(&self, _: &json::value::Value) {
+    }
+    fn id(&self) -> PluginId {
+        PluginId::Local("core")
+    }
     fn call(&self, context: FunctionCallContext) -> FunctionResult {
-        context.commands.send(Command::Shutdown).unwrap();
+        match &context.function as &str {
+            "core.exit" => {
+                context.commands.send(Command::Shutdown).unwrap();
+            },
+            "core.broadcast" => {
+                context.commands.send(Command::Broadcast(context.args)).unwrap();
+            },
+            "core.register_function" => {
+                let function = context.args.find("name")
+                    .and_then(|o| o.as_string())
+                    .unwrap().into();
+                context.commands.send(
+                    Command::RegisterFunction(context.caller, function)).unwrap();
+            },
+            _ => panic!("{} was called, but is not a core function.", context.function),
+        }
         FunctionResult::DONE
     }
 }
-
-struct CoreRegisterFunction;
-impl Function for CoreRegisterFunction {
-    fn name(&self) -> &str { "core.register_function" }
-
-    fn call(&self, context: FunctionCallContext) -> FunctionResult {
-        let function = RemoteFunction {
-            name: context.args.find("name").unwrap().as_string().unwrap().into(),
-        };
-        context.commands.send(Command::RegisterFunction(Box::new(function))).unwrap();
-        println!("#sirver args: {:#?}", context.args);
-        // NOCOM(#sirver): implement
-        // command_sender.send(Command::RegisterFunction(Box::new(function))).unwrap();
-        // commands.send(Command::Shutdown).unwrap();
-        FunctionResult::DONE
-    }
-}
-
-struct CoreBroadcast;
-impl Function for CoreBroadcast {
-    fn name(&self) -> &str { "core.broadcast" }
-
-    fn call(&self, context: FunctionCallContext) -> FunctionResult {
-        context.commands.send(Command::Broadcast(context.args)).unwrap();
-        FunctionResult::DONE
-    }
-}
-
 
 pub fn register(command_sender: &CommandSender) {
-    command_sender.send(Command::RegisterFunction(Box::new(CoreExit))).unwrap();
-    command_sender.send(Command::RegisterFunction(Box::new(CoreRegisterFunction))).unwrap();
-    command_sender.send(Command::RegisterFunction(Box::new(CoreBroadcast))).unwrap();
+    let core = CorePlugin;
+    let id = core.id();
+
+    command_sender.send(Command::PluginConnected(Box::new(CorePlugin))).unwrap();
+
+    // NOCOM(#sirver): ugly repetition.
+    command_sender.send(Command::RegisterFunction(id, "core.exit".into())).unwrap();
+    command_sender.send(Command::RegisterFunction(id, "core.broadcast".into())).unwrap();
+    command_sender.send(Command::RegisterFunction(id, "core.register_function".into())).unwrap();
 }

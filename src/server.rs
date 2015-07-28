@@ -10,17 +10,77 @@ use super::plugin_core;
 
 const SERVER: mio::Token = mio::Token(0);
 
+#[derive(PartialEq, Eq, Clone, Copy, Hash)]
+pub struct RemotePluginId {
+    serial: u64,
+    token: mio::Token,
+}
+
+#[derive(PartialEq, Eq, Clone, Copy, Hash)]
+pub enum PluginId {
+    // NOCOM(#sirver): rename to internal.
+    Local(&'static str),
+    Remote(RemotePluginId),
+}
+
+pub trait Plugin: Send {
+    fn name(&self) -> &'static str;
+    fn id(&self) -> PluginId;
+    fn broadcast(&self, data: &json::value::Value);
+    fn call(&self, context: FunctionCallContext) -> FunctionResult;
+}
+
+struct RemotePlugin {
+    id: PluginId,
+    event_loop_channel: mio::Sender<HandlerMessage>,
+}
+
+impl RemotePlugin {
+    fn remote_id(&self) -> RemotePluginId {
+        if let PluginId::Remote(remote_id) = self.id {
+            return remote_id;
+        }
+        panic!("RemotePlugin with non ::Remote() id.");
+    }
+}
+
+impl Plugin for RemotePlugin {
+    // NOCOM(#sirver): name does not fit :(
+    fn name(&self) -> &'static str { "remote_plugin" }
+    fn id(&self) -> PluginId {
+        self.id
+    }
+
+    fn broadcast(&self, data: &json::value::Value) {
+        let s = json::to_string(&data).unwrap();
+        self.event_loop_channel.send(
+            HandlerMessage::SendData(self.remote_id(), s)).unwrap();
+    }
+
+    fn call(&self, context: FunctionCallContext) -> FunctionResult {
+        let data = json::builder::ObjectBuilder::new()
+                .insert("context".into(), context.context)
+                .insert("function".into(), context.function)
+                .insert("args".into(), context.args)
+                .unwrap();
+        let s = json::to_string(&data).unwrap();
+        self.event_loop_channel.send(
+            HandlerMessage::SendData(self.remote_id(), s)).unwrap();
+        FunctionResult::DONE
+    }
+}
+
 pub enum FunctionResult {
     DONE,
 }
 
 pub enum Command {
     Shutdown,
-    RegisterFunction(Box<Function>),
+    RegisterFunction(PluginId, String),
     // NOCOM(#sirver): How can this be a proper struct?
-    CallFunction(String, FunctionCallContext),
-    PluginConnected(Plugin),
-    PluginDisconnected(Plugin),
+    CallFunction(FunctionCallContext),
+    PluginConnected(Box<Plugin>),
+    PluginDisconnected(PluginId),
     Broadcast(json::value::Value),
 }
 pub type CommandSender = Sender<Command>;
@@ -29,32 +89,29 @@ pub type CommandSender = Sender<Command>;
 pub struct FunctionCallContext {
     // NOCOM(#sirver): maybe force this to be a uuid?
     pub context: String,
+    pub function: String,
     pub args: json::value::Value,
     pub commands: CommandSender,
+    pub caller: PluginId,
     // NOCOM(#sirver): needs some sort of backchannel? Needs to know who send it.
 }
 
+// NOCOM(#sirver): can go away?
 pub trait Function: Send {
     fn name(&self) -> &str;
     fn call(&self, context: FunctionCallContext) -> FunctionResult;
 }
 
-#[derive(PartialEq, Eq, Clone, Copy)]
-pub struct RemotePluginId {
-    serial: u64,
-    token: mio::Token,
-}
-
-#[derive(PartialEq, Eq, Clone, Copy)]
-pub enum Plugin {
-    Remote(RemotePluginId),
+struct FunctionRegister {
+    owner: PluginId,
+    handler: Box<Function>,
 }
 
 pub struct SupremeServer {
-    functions: HashMap<String, Box<Function>>,
+    functions: HashMap<String, PluginId>,
     commands: Receiver<Command>,
-    // NOCOM(#sirver): bad name :(
-    remote_plugins: Vec<Plugin>,
+    // NOCOM(#sirver): rather a hashmap?
+    plugins: HashMap<PluginId, Box<Plugin>>,
     event_loop_channel: mio::Sender<HandlerMessage>,
 }
 
@@ -63,40 +120,33 @@ impl SupremeServer {
         while let Ok(command) = self.commands.recv() {
             match command {
                 Command::Shutdown => break,
-                Command::RegisterFunction(handler) => self.register_function(0, handler),
-                Command::CallFunction(name, call_context) => {
-                    let function = self.functions.get(&name as &str).unwrap();
-                    function.call(call_context);
+                Command::RegisterFunction(plugin_id, name) => {
+                    // NOCOM(#sirver): make sure the plugin_id is known.
+                    // TODO(sirver): add priority.
+                    self.functions.insert(name, plugin_id);
+                },
+                Command::CallFunction(call_context) => {
+                    // NOCOM(#sirver): redo
+                    let plugin_id = self.functions.get(&call_context.function as &str).unwrap();
+                    let owner = &mut self.plugins.get_mut(&plugin_id).unwrap();
+                    owner.call(call_context);
                 },
                 Command::Broadcast(args) => {
-                    // NOCOM(#sirver): broadcast to internal plugins.
-                    let s = json::to_string(&args).unwrap();
-
-                    // println!("#sirver broadcast args: {:#?}", args);
-                    for plugin in &self.remote_plugins {
-                        match *plugin {
-                            Plugin::Remote(id) =>  {
-                                self.event_loop_channel.send(HandlerMessage::SendData(
-                                        id, s.clone())).unwrap();
-                            }
-                        }
+                    // NOCOM(#sirver): repeats serialization. :(
+                    for plugin in self.plugins.values() {
+                        plugin.broadcast(&args);
                     }
                 },
                 Command::PluginConnected(plugin) => {
-                    self.remote_plugins.push(plugin);
+                    // NOCOM(#sirver): make sure plugin is not yet known.
+                    self.plugins.insert(plugin.id(), plugin);
                 },
                 Command::PluginDisconnected(plugin) => {
-                    let index = self.remote_plugins.position_elem(&plugin).unwrap();
-                    self.remote_plugins.swap_remove(index);
+                    self.plugins.remove(&plugin).unwrap();
                     // NOCOM(#sirver): needs to remove all associated functions
                 }
             }
         }
-    }
-
-    // TODO(sirver): use priority.
-    pub fn register_function(&mut self, _: u32, handler: Box<Function>) {
-        self.functions.insert(handler.name().into(), handler);
     }
 }
 
@@ -149,11 +199,15 @@ impl mio::Handler for IpcBridge {
                         serial: serial,
                         token: token,
                     };
+                    let plugin = RemotePlugin {
+                        id: PluginId::Remote(remote_plugin_id),
+                        event_loop_channel: event_loop.channel(),
+                    };
                     let connection = Connection {
                         stream: stream,
                         remote_plugin_id: remote_plugin_id,
                     };
-                    commands.send(Command::PluginConnected(Plugin::Remote(remote_plugin_id))).unwrap();
+                    commands.send(Command::PluginConnected(Box::new(plugin))).unwrap();
                     connection
                 }) {
                     Some(token) => {
@@ -175,8 +229,9 @@ impl mio::Handler for IpcBridge {
                 if events.is_hup() {
                     {
                         let connection = &self.connections[client_token];
-                        self.commands.send(Command::PluginDisconnected(Plugin::Remote(connection.remote_plugin_id))).unwrap();
+                        self.commands.send(Command::PluginDisconnected(PluginId::Remote(connection.remote_plugin_id))).unwrap();
                     }
+                    // NOCOM(#sirver): does this return the entry? If so, code can be simplified.
                     self.connections.remove(client_token);
                 } else if events.is_readable() {
                     let mut vec = Vec::new();
@@ -195,10 +250,12 @@ impl mio::Handler for IpcBridge {
                             .unwrap_or(json::builder::ObjectBuilder::new().unwrap());
                         let call_context = FunctionCallContext {
                             context: context,
+                            function: name,
                             args: args,
                             commands: self.commands.clone(),
+                            caller: PluginId::Remote(conn.remote_plugin_id),
                         };
-                        self.commands.send(Command::CallFunction(name, call_context)).unwrap();
+                        self.commands.send(Command::CallFunction(call_context)).unwrap();
                     }
                 }
             }
@@ -224,7 +281,7 @@ pub fn run_supreme_server() {
         functions: HashMap::new(),
         commands: rx,
         event_loop_channel: event_loop.channel(),
-        remote_plugins: Vec::new(),
+        plugins: HashMap::new(),
     };
 
     plugin_core::register(&tx);
