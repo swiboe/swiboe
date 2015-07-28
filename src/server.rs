@@ -3,7 +3,7 @@ use serde::json;
 use std::collections::HashMap;
 use std::sync::mpsc::{channel, Sender, Receiver};
 use std::thread;
-use super::plugin_base::{PluginId, FunctionCallContext, Plugin};
+use super::plugin::{PluginId, FunctionCallContext, Plugin};
 use super::ipc_bridge::{IpcBridge, HandlerMessage};
 use super::plugin_core;
 

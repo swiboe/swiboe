@@ -1,5 +1,5 @@
 use serde::json;
-use super::plugin_base::{FunctionResult, Plugin, FunctionCallContext, PluginId};
+use super::plugin::{FunctionResult, Plugin, FunctionCallContext, PluginId};
 use super::server::{CommandSender, Command};
 
 struct CorePlugin;
