@@ -19,6 +19,8 @@ pub enum Command {
     RegisterFunction(Box<Function>),
     // NOCOM(#sirver): How can this be a proper struct?
     CallFunction(String, FunctionCallContext),
+    RemotePluginConnected(RemotePluginId),
+    RemotePluginDisconnected(RemotePluginId),
     Broadcast(json::value::Value),
 }
 pub type CommandSender = Sender<Command>;
@@ -37,10 +39,21 @@ pub trait Function: Send {
     fn call(&self, context: FunctionCallContext) -> FunctionResult;
 }
 
+#[derive(PartialEq, Eq, Clone, Copy)]
+pub struct RemotePluginId {
+    serial: u64,
+    token: mio::Token,
+}
+
+enum PluginId {
+    RemotePluginId,
+}
+
 pub struct SupremeServer {
     functions: HashMap<String, Box<Function>>,
     commands: Receiver<Command>,
     // NOCOM(#sirver): bad name :(
+    remote_plugins: Vec<RemotePluginId>,
     event_loop_channel: mio::Sender<HandlerMessage>,
 }
 
@@ -56,10 +69,21 @@ impl SupremeServer {
                 },
                 Command::Broadcast(args) => {
                     // NOCOM(#sirver): broadcast to internal plugins.
+                    let s = json::to_string(&args).unwrap();
 
                     // println!("#sirver broadcast args: {:#?}", args);
-                    self.event_loop_channel.send(
-                        HandlerMessage::Broadcast(args));
+                    for plugin in &self.remote_plugins {
+                        self.event_loop_channel.send(HandlerMessage::SendData(
+                                *plugin, s.clone())).unwrap();
+                    }
+                },
+                Command::RemotePluginConnected(plugin) => {
+                    self.remote_plugins.push(plugin);
+                },
+                Command::RemotePluginDisconnected(plugin) => {
+                    let index = self.remote_plugins.position_elem(&plugin).unwrap();
+                    self.remote_plugins.swap_remove(index);
+                    // NOCOM(#sirver): needs to remove all associated functions
                 }
             }
         }
@@ -73,29 +97,20 @@ impl SupremeServer {
 
 struct IpcBridge {
     unix_listener: UnixListener,
-    // NOCOM(#sirver): replace conn and conns
     connections: mio::util::Slab<Connection>,
     commands: CommandSender,
-}
-
-pub struct Connection {
-    stream: UnixStream,
-    token: mio::Token,
+    next_serial: u64,
 }
 
 // NOCOM(#sirver): ClientConnection?
-impl Connection {
-    pub fn new(stream: UnixStream, token: mio::Token) -> Self {
-        Connection {
-            stream: stream,
-            token: token,
-        }
-    }
+pub struct Connection {
+    stream: UnixStream,
+    remote_plugin_id: RemotePluginId,
 }
 
 enum HandlerMessage {
     Quit,
-    Broadcast(json::value::Value),
+    SendData(RemotePluginId, String),
 }
 
 impl mio::Handler for IpcBridge {
@@ -105,10 +120,11 @@ impl mio::Handler for IpcBridge {
     fn notify(&mut self, event_loop: &mut mio::EventLoop<Self>, message: HandlerMessage) {
         match message {
             HandlerMessage::Quit => event_loop.shutdown(),
-            HandlerMessage::Broadcast(data) => {
-                let s = json::to_string(&data).unwrap();
-                for conn in self.connections.iter_mut() {
-                    conn.stream.write_message(s.as_bytes());
+            HandlerMessage::SendData(receiver, data) => {
+                // NOCOM(#sirver): what if that is no longer valid?
+                let conn = &mut self.connections[receiver.token];
+                if conn.remote_plugin_id == receiver {
+                    conn.stream.write_message(data.as_bytes());
                 }
             }
         }
@@ -118,16 +134,29 @@ impl mio::Handler for IpcBridge {
         match token {
             SERVER => {
                 let stream = self.unix_listener.accept().unwrap().unwrap();
+                // NOCOM(#sirver): can this be done in Some(token)?
+                let serial = self.next_serial;
+                let commands = self.commands.clone();
+                self.next_serial += 1;
                 match self.connections.insert_with(|token| {
                     println!("registering {:?} with event loop", token);
-                    Connection::new(stream, token)
+                    let remote_plugin_id = RemotePluginId {
+                        serial: serial,
+                        token: token,
+                    };
+                    let connection = Connection {
+                        stream: stream,
+                        remote_plugin_id: remote_plugin_id,
+                    };
+                    commands.send(Command::RemotePluginConnected(remote_plugin_id)).unwrap();
+                    connection
                 }) {
                     Some(token) => {
                         // If we successfully insert, then register our connection.
                         let conn = &mut self.connections[token];
                         event_loop.register_opt(
                             &conn.stream,
-                            conn.token,
+                            conn.remote_plugin_id.token,
                             mio::EventSet::readable(),
                             mio::PollOpt::level()).unwrap();
                     },
@@ -139,6 +168,10 @@ impl mio::Handler for IpcBridge {
             },
             client_token => {
                 if events.is_hup() {
+                    {
+                        let connection = &self.connections[client_token];
+                        self.commands.send(Command::RemotePluginDisconnected(connection.remote_plugin_id)).unwrap();
+                    }
                     self.connections.remove(client_token);
                 } else if events.is_readable() {
                     let mut vec = Vec::new();
@@ -180,11 +213,13 @@ pub fn run_supreme_server() {
         unix_listener: server,
         connections: mio::util::Slab::new_starting_at(mio::Token(1), 1024),
         commands: tx.clone(),
+        next_serial: 1,
     };
     let mut s_server = SupremeServer {
         functions: HashMap::new(),
         commands: rx,
         event_loop_channel: event_loop.channel(),
+        remote_plugins: Vec::new(),
     };
 
     plugin_core::register(&tx);

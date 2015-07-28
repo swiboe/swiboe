@@ -1,3 +1,5 @@
+#![feature(slice_position_elem)]
+
 extern crate mio;
 extern crate serde;
 

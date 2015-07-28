@@ -46,6 +46,7 @@ if __name__ == '__main__':
     import time
 
     client = SupremeClient("/tmp/s.socket")
+    client2 = SupremeClient("/tmp/s.socket")
     # client.call("core.register_function", {
         # "name": "python.test_client.hello_world"
     # })
@@ -53,16 +54,15 @@ if __name__ == '__main__':
     start = time.time()
     NUM_RUNS = 1000
     for i in range(NUM_RUNS):
-        snow = time.time()
         client.call("core.broadcast", {
             "blub": "blah"
         })
         msg = client.read_message()
-        print "#sirver: %f" % ((time.time() - snow) * 1000.)
+        msg1 = client2.read_message()
+        assert msg == msg1
     duration_in_seconds = time.time() - start
     print "#sirver %fms per roundtrip." % (duration_in_seconds * 1000 / NUM_RUNS)
 
     # client.write_message(json.dumps({ "type": "call", "function": "core.exit" }))
-    time.sleep(1)
 
     # client.call("python.test_client.hello_world", {})
