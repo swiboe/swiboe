@@ -3,6 +3,15 @@ import socket
 import struct
 import sys
 import time
+import uuid
+
+def recv_all(socket, num_bytes):
+    data = ""
+    while num_bytes:
+        new_data = socket.recv(num_bytes)
+        num_bytes -= len(new_data)
+        data += new_data
+    return data
 
 class SupremeClient(object):
 
@@ -19,19 +28,41 @@ class SupremeClient(object):
         data = struct.pack("<L", len(msg)) + msg
         self._socket.sendall(data)
 
+    def read_message(self):
+        blob = recv_all(self._socket, 4)
+        length, = struct.unpack("<L", blob)
+        return recv_all(self._socket, length)
+
     def call(self, function, args):
         d = {}
         d['function'] = function
         d['type'] = 'call'
+        d['context'] = str(uuid.uuid4())
         d['args'] = args
         client.write_message(json.dumps(d))
 
 if __name__ == '__main__':
     import json
+    import time
+
     client = SupremeClient("/tmp/s.socket")
-    client.call("core.register_function", {
-        "name": "python.test_client.hello_world"
-    })
+    # client.call("core.register_function", {
+        # "name": "python.test_client.hello_world"
+    # })
+
+    start = time.time()
+    NUM_RUNS = 1000
+    for i in range(NUM_RUNS):
+        snow = time.time()
+        client.call("core.broadcast", {
+            "blub": "blah"
+        })
+        msg = client.read_message()
+        print "#sirver: %f" % ((time.time() - snow) * 1000.)
+    duration_in_seconds = time.time() - start
+    print "#sirver %fms per roundtrip." % (duration_in_seconds * 1000 / NUM_RUNS)
 
     # client.write_message(json.dumps({ "type": "call", "function": "core.exit" }))
-    time.sleep(3)
+    time.sleep(1)
+
+    # client.call("python.test_client.hello_world", {})
