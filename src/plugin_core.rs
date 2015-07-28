@@ -1,20 +1,18 @@
-use super::server::{SupremeServer, Function, FunctionResult};
+use super::server::{Function, FunctionResult, CommandSender, Command};
 use serde::json;
 
-// TODO(sirver): move function name into trait?
 struct CoreExit;
-impl<'a> Function<'a> for CoreExit {
+impl<'a, 'b> Function<'a, 'b> for CoreExit {
     fn name(&self) -> &'a str {
         "core.exit"
     }
 
-    fn call(&self, args: &json::value::Value) -> FunctionResult {
-        println!("#sirver Should shutdown :(");
-        // server.shutdown();
+    fn call(&self, _: json::value::Value, commands: &CommandSender<'a, 'b>) -> FunctionResult {
+        commands.send(Command::SHUTDOWN).unwrap();
         FunctionResult::DONE
     }
 }
 
-pub fn register(server: &mut SupremeServer) {
-    server.register_function(0, Box::new(CoreExit));
+pub fn register(command_sender: &CommandSender) {
+    command_sender.send(Command::REGISTER_FUNCTION(Box::new(CoreExit))).unwrap();
 }

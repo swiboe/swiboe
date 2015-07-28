@@ -2,6 +2,8 @@ use mio::unix::{UnixListener, UnixStream};
 use mio;
 use serde::json;
 use std::collections::HashMap;
+use std::sync::mpsc::{channel, Sender, Receiver};
+use std::thread;
 use super::buffer::Buffer;
 use super::ipc::{IpcRead, IpcWrite};
 use super::plugin_core;
@@ -13,17 +15,51 @@ pub enum FunctionResult {
     NOT_HANDLED,
 }
 
-pub trait Function<'a> {
+pub enum Command<'a, 'b> {
+    SHUTDOWN,
+    REGISTER_FUNCTION(Box<Function<'a, 'b>>),
+    CALL_FUNCTION(String, json::value::Value),
+}
+pub type CommandSender<'a, 'b> = Sender<Command<'a, 'b>>;
+
+pub trait Function<'a, 'b>: Send {
     fn name(&self) -> &'a str;
-    fn call(&self, args: &json::value::Value) -> FunctionResult;
+    fn call(&self, args: json::value::Value, commands: &CommandSender<'a, 'b>) -> FunctionResult;
 }
 
-pub struct SupremeServer<'a> {
+pub struct SupremeServer<'a, 'b> {
     buffers: Vec<Buffer>,
+    functions: HashMap<&'a str, Box<Function<'a, 'b>>>,
+    commands: Receiver<Command<'a, 'b>>,
+    commands_sender: CommandSender<'a, 'b>,
+}
+
+impl<'a, 'b> SupremeServer<'a, 'b> {
+    pub fn spin_forever(&mut self) {
+        while let Ok(command) = self.commands.recv() {
+            match command {
+                Command::SHUTDOWN => break,
+                Command::REGISTER_FUNCTION(handler) => self.register_function(0, handler),
+                Command::CALL_FUNCTION(name, args) => {
+                    let function = self.functions.get(&name as &str).unwrap();
+                    println!("#sirver name: {:#?}", name);
+                    function.call(args, &self.commands_sender);
+                }
+            }
+        }
+    }
+
+    // TODO(sirver): use priority.
+    pub fn register_function(&mut self, unused_priority: u32, handler: Box<Function<'a, 'b>>) {
+        self.functions.insert(handler.name(), handler);
+    }
+}
+
+struct IpcBridge<'a, 'b> {
     unix_listener: UnixListener,
     // NOCOM(#sirver): replace conn and conns
-    conns: mio::util::Slab<Connection>,
-    functions: HashMap<&'a str, Box<Function<'a>>>,
+    connections: mio::util::Slab<Connection>,
+    commands: CommandSender<'a, 'b>,
 }
 
 struct Connection {
@@ -33,7 +69,7 @@ struct Connection {
 
 // NOCOM(#sirver): ClientConnection?
 impl Connection {
-    pub fn new(stream: UnixStream, token: mio::Token) -> Connection {
+    pub fn new(stream: UnixStream, token: mio::Token) -> Self {
         Connection {
             stream: stream,
             token: token,
@@ -41,40 +77,36 @@ impl Connection {
     }
 }
 
-impl<'a> SupremeServer<'a> {
-    pub fn shutdown(&mut self) {
-        // self.event_loop.shutdown();
-        println!("#sirver Should shutdown. ");
-        // NOCOM(#sirver): figure that out
-        // self.unix_listener.close();
-    }
-
-    // TODO(sirver): use priority.
-    pub fn register_function(&mut self, unused_priority: u32, handler: Box<Function<'a>>) {
-        self.functions.insert(handler.name(), handler);
-    }
+enum HandlerMessage {
+    QUIT,
 }
 
-impl<'a> mio::Handler for SupremeServer<'a> {
+impl<'a, 'b> mio::Handler for IpcBridge<'a, 'b> {
     type Timeout = ();
-    type Message = ();
+    type Message = HandlerMessage;
 
-    fn ready(&mut self, event_loop: &mut mio::EventLoop<SupremeServer>, token: mio::Token, events: mio::EventSet) {
+    fn notify(&mut self, event_loop: &mut mio::EventLoop<Self>, message: HandlerMessage) {
+        match message {
+            HandlerMessage::QUIT => event_loop.shutdown(),
+        }
+    }
+
+    fn ready(&mut self, event_loop: &mut mio::EventLoop<Self>, token: mio::Token, events: mio::EventSet) {
         match token {
             SERVER => {
                 let stream = self.unix_listener.accept().unwrap().unwrap();
-                match self.conns.insert_with(|token| {
+                match self.connections.insert_with(|token| {
                     println!("registering {:?} with event loop", token);
                     Connection::new(stream, token)
                 }) {
                     Some(token) => {
                         // If we successfully insert, then register our connection.
-                        let conn = &mut self.conns[token];
+                        let conn = &mut self.connections[token];
                         event_loop.register_opt(
                             &conn.stream,
                             conn.token,
                             mio::EventSet::readable(),
-                            mio::PollOpt::edge() | mio::PollOpt::oneshot()).unwrap();
+                            mio::PollOpt::level()).unwrap();
                     },
                     None => {
                         // If we fail to insert, `conn` will go out of scope and be dropped.
@@ -83,18 +115,15 @@ impl<'a> mio::Handler for SupremeServer<'a> {
                 };
             },
             client_token => {
+                println!("#sirver client_token: {:#?}", client_token);
                 if events.is_hup() {
-                    self.conns.remove(client_token);
+                    self.connections.remove(client_token);
                 } else if events.is_readable() {
                     let mut vec = Vec::new();
                     {
-                        let conn = &mut self.conns[token];
+                        let conn = &mut self.connections[token];
+                        // NOCOM(#sirver): read_message can read into a string directly?
                         conn.stream.read_message(&mut vec);
-                        event_loop.reregister(
-                            &conn.stream,
-                            conn.token,
-                            mio::EventSet::readable(),
-                            mio::PollOpt::edge() | mio::PollOpt::oneshot()).unwrap();
                     }
                     let s = String::from_utf8(vec).unwrap();
                     let value: json::Value = json::from_str(&s).unwrap();
@@ -102,12 +131,12 @@ impl<'a> mio::Handler for SupremeServer<'a> {
                     let b = value.find("type").and_then(|o| o.as_string()).unwrap();
                     if value.find("type").and_then(|o| o.as_string()) == Some("call") {
                         let name = value.find("function")
-                            .and_then(|o| o.as_string()).unwrap();
-                        let function = self.functions.get(name).unwrap();
-                        function.call(value.find("args").unwrap_or(&json::builder::ObjectBuilder::new().unwrap()));
-                    };
-
-                    println!("#sirver s: {:#?}", s);
+                            .and_then(|o| o.as_string()).unwrap().into();
+                        let args = value.find("args")
+                            .map(|args| args.clone())
+                            .unwrap_or(json::builder::ObjectBuilder::new().unwrap());
+                        self.commands.send(Command::CALL_FUNCTION(name, args)).unwrap();
+                    }
                 }
             }
         }
@@ -121,13 +150,28 @@ pub fn run_supreme_server() {
     let mut event_loop = mio::EventLoop::new().unwrap();
     event_loop.register(&server, SERVER);
 
+    let (tx, rx) = channel();
+    let mut ipc_brigde = IpcBridge {
+        unix_listener: server,
+        connections: mio::util::Slab::new_starting_at(mio::Token(1), 1024),
+        commands: tx.clone(),
+    };
     let mut s_server = SupremeServer {
         buffers: Vec::new(),
-        unix_listener: server,
-        conns: mio::util::Slab::new_starting_at(mio::Token(1), 1024),
         functions: HashMap::new(),
+        commands: rx,
+        commands_sender: tx.clone(),
     };
-    plugin_core::register(&mut s_server);
 
-    event_loop.run(&mut s_server).unwrap();
+    plugin_core::register(&tx);
+
+
+    let event_loop_channel = event_loop.channel();
+    let worker_thread = thread::spawn(move || {
+        s_server.spin_forever();
+        event_loop_channel.send(HandlerMessage::QUIT).unwrap();
+    });
+
+    event_loop.run(&mut ipc_brigde).unwrap();
+    worker_thread.join();
 }
