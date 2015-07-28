@@ -5,42 +5,40 @@ use std::collections::HashMap;
 use std::sync::mpsc::{channel, Sender, Receiver};
 use std::thread;
 use super::buffer::Buffer;
-use super::ipc::{IpcRead, IpcWrite};
+use super::ipc::IpcRead;
 use super::plugin_core;
 
 const SERVER: mio::Token = mio::Token(0);
 
 pub enum FunctionResult {
     DONE,
-    NOT_HANDLED,
 }
 
-pub enum Command<'a, 'b> {
-    SHUTDOWN,
-    REGISTER_FUNCTION(Box<Function<'a, 'b>>),
-    CALL_FUNCTION(String, json::value::Value),
+pub enum Command<'a> {
+    Shutdown,
+    RegisterFunction(Box<Function<'a>>),
+    CallFunction(String, json::value::Value),
 }
-pub type CommandSender<'a, 'b> = Sender<Command<'a, 'b>>;
+pub type CommandSender<'a> = Sender<Command<'a>>;
 
-pub trait Function<'a, 'b>: Send {
+pub trait Function<'a>: Send {
     fn name(&self) -> &'a str;
-    fn call(&self, args: json::value::Value, commands: &CommandSender<'a, 'b>) -> FunctionResult;
+    fn call(&self, args: json::value::Value, commands: &CommandSender<'a>) -> FunctionResult;
 }
 
-pub struct SupremeServer<'a, 'b> {
-    buffers: Vec<Buffer>,
-    functions: HashMap<&'a str, Box<Function<'a, 'b>>>,
-    commands: Receiver<Command<'a, 'b>>,
-    commands_sender: CommandSender<'a, 'b>,
+pub struct SupremeServer<'a> {
+    functions: HashMap<&'a str, Box<Function<'a>>>,
+    commands: Receiver<Command<'a>>,
+    commands_sender: CommandSender<'a>,
 }
 
-impl<'a, 'b> SupremeServer<'a, 'b> {
+impl<'a> SupremeServer<'a> {
     pub fn spin_forever(&mut self) {
         while let Ok(command) = self.commands.recv() {
             match command {
-                Command::SHUTDOWN => break,
-                Command::REGISTER_FUNCTION(handler) => self.register_function(0, handler),
-                Command::CALL_FUNCTION(name, args) => {
+                Command::Shutdown => break,
+                Command::RegisterFunction(handler) => self.register_function(0, handler),
+                Command::CallFunction(name, args) => {
                     let function = self.functions.get(&name as &str).unwrap();
                     println!("#sirver name: {:#?}", name);
                     function.call(args, &self.commands_sender);
@@ -50,16 +48,16 @@ impl<'a, 'b> SupremeServer<'a, 'b> {
     }
 
     // TODO(sirver): use priority.
-    pub fn register_function(&mut self, unused_priority: u32, handler: Box<Function<'a, 'b>>) {
+    pub fn register_function(&mut self, _: u32, handler: Box<Function<'a>>) {
         self.functions.insert(handler.name(), handler);
     }
 }
 
-struct IpcBridge<'a, 'b> {
+struct IpcBridge<'a> {
     unix_listener: UnixListener,
     // NOCOM(#sirver): replace conn and conns
     connections: mio::util::Slab<Connection>,
-    commands: CommandSender<'a, 'b>,
+    commands: CommandSender<'a>,
 }
 
 struct Connection {
@@ -81,7 +79,7 @@ enum HandlerMessage {
     QUIT,
 }
 
-impl<'a, 'b> mio::Handler for IpcBridge<'a, 'b> {
+impl<'a> mio::Handler for IpcBridge<'a> {
     type Timeout = ();
     type Message = HandlerMessage;
 
@@ -127,15 +125,13 @@ impl<'a, 'b> mio::Handler for IpcBridge<'a, 'b> {
                     }
                     let s = String::from_utf8(vec).unwrap();
                     let value: json::Value = json::from_str(&s).unwrap();
-                    println!("#sirver value: {:#?}", value);
-                    let b = value.find("type").and_then(|o| o.as_string()).unwrap();
                     if value.find("type").and_then(|o| o.as_string()) == Some("call") {
                         let name = value.find("function")
                             .and_then(|o| o.as_string()).unwrap().into();
                         let args = value.find("args")
                             .map(|args| args.clone())
                             .unwrap_or(json::builder::ObjectBuilder::new().unwrap());
-                        self.commands.send(Command::CALL_FUNCTION(name, args)).unwrap();
+                        self.commands.send(Command::CallFunction(name, args)).unwrap();
                     }
                 }
             }
@@ -148,7 +144,7 @@ pub fn run_supreme_server() {
     let server = UnixListener::bind("/tmp/s.socket").unwrap();
 
     let mut event_loop = mio::EventLoop::new().unwrap();
-    event_loop.register(&server, SERVER);
+    event_loop.register(&server, SERVER).unwrap();
 
     let (tx, rx) = channel();
     let mut ipc_brigde = IpcBridge {
@@ -157,7 +153,6 @@ pub fn run_supreme_server() {
         commands: tx.clone(),
     };
     let mut s_server = SupremeServer {
-        buffers: Vec::new(),
         functions: HashMap::new(),
         commands: rx,
         commands_sender: tx.clone(),
@@ -173,5 +168,5 @@ pub fn run_supreme_server() {
     });
 
     event_loop.run(&mut ipc_brigde).unwrap();
-    worker_thread.join();
+    worker_thread.join().unwrap();
 }

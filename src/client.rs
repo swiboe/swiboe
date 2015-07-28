@@ -1,7 +1,6 @@
 use mio::unix::UnixStream;
 use mio;
-use std::io::Write;
-use super::ipc::{IpcRead, IpcWrite};
+use super::ipc::IpcWrite;
 use std::thread;
 
 const CLIENT: mio::Token = mio::Token(1);
@@ -17,7 +16,7 @@ impl mio::Handler for SupremeClient {
     type Timeout = ();
     type Message = ();
 
-    fn ready(&mut self, event_loop: &mut mio::EventLoop<SupremeClient>, token: mio::Token, _: mio::EventSet) {
+    fn ready(&mut self, _: &mut mio::EventLoop<SupremeClient>, token: mio::Token, _: mio::EventSet) {
         match token {
             CLIENT => {
                 println!("Message!");
