@@ -8,3 +8,10 @@ serde = "0.4.3"
 
 [dependencies.mio]
 git="https://github.com/carllerche/mio.git"
+
+[dependencies.gtk]
+git = "https://github.com/rust-gnome/gtk.git"
+features = ["gtk_3_12"]
+
+[dependencies.rustbox]
+git = "https://github.com/gchp/rustbox.git"
