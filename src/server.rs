@@ -4,13 +4,12 @@ use std::collections::HashMap;
 use std::sync::mpsc::{channel, Sender, Receiver};
 use std::thread;
 use super::plugin::{PluginId, FunctionCallContext, Plugin};
-use super::ipc_bridge::{IpcBridge, HandlerMessage};
+use super::ipc_bridge;
 use super::plugin_core;
 
 pub enum Command {
     Shutdown,
     RegisterFunction(PluginId, String),
-    // NOCOM(#sirver): How can this be a proper struct?
     CallFunction(FunctionCallContext),
     PluginConnected(Box<Plugin>),
     PluginDisconnected(PluginId),
@@ -21,7 +20,6 @@ pub type CommandSender = Sender<Command>;
 pub struct SupremeServer {
     functions: HashMap<String, PluginId>,
     commands: Receiver<Command>,
-    // NOCOM(#sirver): rather a hashmap?
     plugins: HashMap<PluginId, Box<Plugin>>,
 }
 
@@ -36,7 +34,6 @@ impl SupremeServer {
                     self.functions.insert(name, plugin_id);
                 },
                 Command::CallFunction(call_context) => {
-                    // NOCOM(#sirver): redo
                     let plugin_id = self.functions.get(&call_context.function as &str).unwrap();
                     let owner = &mut self.plugins.get_mut(&plugin_id).unwrap();
                     owner.call(call_context);
@@ -65,7 +62,7 @@ pub fn run_supreme_server() {
     let mut event_loop = mio::EventLoop::new().unwrap();
 
     let (tx, rx) = channel();
-    let mut ipc_brigde = IpcBridge::new(&mut event_loop, "/tmp/s.socket", tx.clone());
+    let mut ipc_brigde = ipc_bridge::IpcBridge::new(&mut event_loop, "/tmp/s.socket", tx.clone());
 
     let mut s_server = SupremeServer {
         functions: HashMap::new(),
@@ -76,10 +73,10 @@ pub fn run_supreme_server() {
     plugin_core::register(&tx);
 
 
-    let event_loop_channel = event_loop.channel();
+    let ipc_brigde_comands = event_loop.channel();
     let worker_thread = thread::spawn(move || {
         s_server.spin_forever();
-        event_loop_channel.send(HandlerMessage::Quit).unwrap();
+        ipc_brigde_comands.send(ipc_bridge::Command::Quit).unwrap();
     });
 
     event_loop.run(&mut ipc_brigde).unwrap();

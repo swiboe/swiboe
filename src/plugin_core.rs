@@ -10,7 +10,7 @@ impl Plugin for CorePlugin {
     fn broadcast(&self, _: &json::value::Value) {
     }
     fn id(&self) -> PluginId {
-        PluginId::Local("core")
+        PluginId::Internal("core")
     }
     fn call(&self, context: FunctionCallContext) -> FunctionResult {
         match &context.function as &str {

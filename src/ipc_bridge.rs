@@ -4,9 +4,8 @@ use serde::json;
 use super::ipc::{IpcRead, IpcWrite};
 use super::plugin::{RemotePluginId, PluginId, FunctionCallContext};
 use super::plugin::remote::{RemotePlugin};
-use super::server::{Command, CommandSender};
+use super::server;
 
-// NOCOM(#sirver): ClientConnection?
 struct Connection {
     stream: UnixStream,
     remote_plugin_id: RemotePluginId,
@@ -15,14 +14,14 @@ struct Connection {
 pub struct IpcBridge {
     unix_listener: UnixListener,
     connections: mio::util::Slab<Connection>,
-    commands: CommandSender,
+    commands: server::CommandSender,
     next_serial: u64,
 }
 
 const SERVER_TOKEN: mio::Token = mio::Token(0);
 
 impl IpcBridge {
-    pub fn new(event_loop: &mut mio::EventLoop<Self>, uds_path: &str, server_commands: CommandSender) -> Self {
+    pub fn new(event_loop: &mut mio::EventLoop<Self>, uds_path: &str, server_commands: server::CommandSender) -> Self {
         let server = UnixListener::bind(uds_path).unwrap();
         event_loop.register(&server, SERVER_TOKEN).unwrap();
         IpcBridge {
@@ -34,19 +33,19 @@ impl IpcBridge {
     }
 }
 
-pub enum HandlerMessage {
+pub enum Command {
     Quit,
     SendData(RemotePluginId, String),
 }
 
 impl mio::Handler for IpcBridge {
     type Timeout = ();
-    type Message = HandlerMessage;
+    type Message = Command;
 
-    fn notify(&mut self, event_loop: &mut mio::EventLoop<Self>, message: HandlerMessage) {
-        match message {
-            HandlerMessage::Quit => event_loop.shutdown(),
-            HandlerMessage::SendData(receiver, data) => {
+    fn notify(&mut self, event_loop: &mut mio::EventLoop<Self>, command: Command) {
+        match command {
+            Command::Quit => event_loop.shutdown(),
+            Command::SendData(receiver, data) => {
                 // NOCOM(#sirver): what if that is no longer valid?
                 let conn = &mut self.connections[receiver.token];
                 if conn.remote_plugin_id == receiver {
@@ -72,13 +71,13 @@ impl mio::Handler for IpcBridge {
                     };
                     let plugin = RemotePlugin {
                         id: PluginId::Remote(remote_plugin_id),
-                        event_loop_channel: event_loop.channel(),
+                        ipc_brigde_comands: event_loop.channel(),
                     };
                     let connection = Connection {
                         stream: stream,
                         remote_plugin_id: remote_plugin_id,
                     };
-                    commands.send(Command::PluginConnected(Box::new(plugin))).unwrap();
+                    commands.send(server::Command::PluginConnected(Box::new(plugin))).unwrap();
                     connection
                 }) {
                     Some(token) => {
@@ -98,12 +97,10 @@ impl mio::Handler for IpcBridge {
             },
             client_token => {
                 if events.is_hup() {
-                    {
-                        let connection = &self.connections[client_token];
-                        self.commands.send(Command::PluginDisconnected(PluginId::Remote(connection.remote_plugin_id))).unwrap();
-                    }
-                    // NOCOM(#sirver): does this return the entry? If so, code can be simplified.
-                    self.connections.remove(client_token);
+                    let connection = self.connections.remove(client_token).unwrap();
+                    self.commands.send(
+                        server::Command::PluginDisconnected(
+                            PluginId::Remote(connection.remote_plugin_id))).unwrap();
                 } else if events.is_readable() {
                     let mut vec = Vec::new();
                     let conn = &mut self.connections[token];
@@ -126,7 +123,7 @@ impl mio::Handler for IpcBridge {
                             commands: self.commands.clone(),
                             caller: PluginId::Remote(conn.remote_plugin_id),
                         };
-                        self.commands.send(Command::CallFunction(call_context)).unwrap();
+                        self.commands.send(server::Command::CallFunction(call_context)).unwrap();
                     }
                 }
             }

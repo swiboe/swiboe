@@ -1,12 +1,11 @@
 use mio;
 use serde::json;
-use super::super::ipc_bridge::{HandlerMessage};
+use super::super::ipc_bridge;
 use super::{PluginId, RemotePluginId, Plugin, FunctionCallContext, FunctionResult};
 
 pub struct RemotePlugin {
     pub id: PluginId,
-    // NOCOM(#sirver): rename to IpcCommand
-    pub event_loop_channel: mio::Sender<HandlerMessage>,
+    pub ipc_brigde_comands: mio::Sender<ipc_bridge::Command>,
 }
 
 impl RemotePlugin {
@@ -27,8 +26,8 @@ impl Plugin for RemotePlugin {
 
     fn broadcast(&self, data: &json::value::Value) {
         let s = json::to_string(&data).unwrap();
-        self.event_loop_channel.send(
-            HandlerMessage::SendData(self.remote_id(), s)).unwrap();
+        self.ipc_brigde_comands.send(
+            ipc_bridge::Command::SendData(self.remote_id(), s)).unwrap();
     }
 
     fn call(&self, context: FunctionCallContext) -> FunctionResult {
@@ -38,8 +37,8 @@ impl Plugin for RemotePlugin {
                 .insert("args".into(), context.args)
                 .unwrap();
         let s = json::to_string(&data).unwrap();
-        self.event_loop_channel.send(
-            HandlerMessage::SendData(self.remote_id(), s)).unwrap();
+        self.ipc_brigde_comands.send(
+            ipc_bridge::Command::SendData(self.remote_id(), s)).unwrap();
         FunctionResult::DONE
     }
 }
