@@ -1,68 +1,93 @@
-//! # Toolbar, Scrollable Text View and File Chooser
-//!
-//! A simple text file viewer
-
+extern crate cairo;
+extern crate glib;
 extern crate gtk;
+extern crate s;
 
-use std::io::prelude::*;
-use std::io::BufReader;
-use std::fs::File;
-
-use gtk::traits::*;
+use cairo::Context;
+use cairo::enums::{FontSlant, FontWeight};
 use gtk::signal::Inhibit;
+use gtk::traits::*;
+use s::client::SupremeClient;
+use std::f64::consts::PI;
+use std::fs::File;
+use std::io::BufReader;
+use std::io::prelude::*;
+
+struct SupremeGtkGui;
+
+impl SupremeGtkGui {
+    fn new() -> Self {
+        let window = gtk::Window::new(gtk::WindowType::TopLevel).unwrap();
+        window.set_title("Supreme");
+        window.set_window_position(gtk::WindowPosition::Center);
+        window.set_default_size(400, 300);
+
+        let vbox = gtk::Box::new(gtk::Orientation::Vertical, 0).unwrap();
+
+        let drawing_area = gtk::DrawingArea::new().unwrap();
+        vbox.pack_start(&drawing_area, true, true, 0);
+
+        drawing_area.connect_draw(draw);
+
+        window.connect_delete_event(|_, _| {
+            gtk::main_quit();
+            Inhibit(true)
+        });
+        window.add(&drawing_area);
+        window.add(&vbox);
+
+        let client = SupremeClient::connect("/tmp/sb.socket");
+
+        // NOCOM(#sirver): maybe a custom gtk event?
+        window.connect_delete_event(|_, _| {
+            gtk::main_quit();
+            Inhibit(true)
+        });
+
+        // NOCOM(#sirver): bring back
+        // glib::source::timeout_add(100, move || {
+            // while let Some(msg) = client.poll() {
+                // println!("#sirver msg: {:#?}", msg);
+            // }
+            // glib::source::Continue(true)
+        // });
+
+        window.show_all();
+        SupremeGtkGui
+    }
+}
+
+fn draw(widget: gtk::Widget, cr: Context) -> Inhibit {
+        cr.scale(50f64, 50f64);
+
+        cr.select_font_face("Menlo", FontSlant::Normal, FontWeight::Normal);
+        cr.set_font_size(0.35);
+
+        cr.move_to(0.04, 0.53);
+        cr.show_text("cr.");
+        cr.select_font_face("Menlo", FontSlant::Normal, FontWeight::Bold);
+        cr.show_text("select_sun_shine");
+
+        // cr.move_to(0.27, 0.65);
+        // cr.text_path("void");
+        // cr.set_source_rgb(0.5, 0.5, 1.0);
+        // cr.fill_preserve();
+        // cr.set_source_rgb(0.0, 0.0, 0.0);
+        // cr.set_line_width(0.01);
+        // cr.stroke();
+
+        // cr.set_source_rgba(1.0, 0.2, 0.2, 0.6);
+        // cr.arc(0.04, 0.53, 0.02, 0.0, PI * 2.);
+        // cr.arc(0.27, 0.65, 0.02, 0.0, PI * 2.);
+        // cr.fill();
+
+        Inhibit(false)
+}
 
 fn main() {
     gtk::init().unwrap_or_else(|_| panic!("Failed to initialize GTK."));
 
-    let window = gtk::Window::new(gtk::WindowType::TopLevel).unwrap();
-    window.set_title("Text File Viewer");
-    window.set_window_position(gtk::WindowPosition::Center);
-    window.set_default_size(400, 300);
+    let mut s = SupremeGtkGui::new();
 
-    let toolbar = gtk::Toolbar::new().unwrap();
-
-    let open_icon = gtk::Image::new_from_icon_name("document-open", gtk::IconSize::SmallToolbar).unwrap();
-    let text_view = gtk::TextView::new().unwrap();
-
-    let open_button = gtk::ToolButton::new::<gtk::Image>(Some(&open_icon), Some("Open")).unwrap();
-    open_button.set_is_important(true);
-
-    toolbar.add(&open_button);
-
-    let scroll = gtk::ScrolledWindow::new(None, None).unwrap();
-    scroll.set_policy(gtk::PolicyType::Automatic, gtk::PolicyType::Automatic);
-    scroll.add(&text_view);
-
-    let vbox = gtk::Box::new(gtk::Orientation::Vertical, 0).unwrap();
-    vbox.pack_start(&toolbar, false, true, 0);
-    vbox.pack_start(&scroll, true, true, 0);
-
-    window.add(&vbox);
-
-    open_button.connect_clicked(move |_| {
-        // TODO move this to a impl?
-        let file_chooser = gtk::FileChooserDialog::new(
-            "Open File", None, gtk::FileChooserAction::Open,
-            [("Open", gtk::ResponseType::Ok), ("Cancel", gtk::ResponseType::Cancel)]);
-        if file_chooser.run() == gtk::ResponseType::Ok as i32 {
-            let filename = file_chooser.get_filename().unwrap();
-            let file = File::open(&filename).unwrap();
-
-            let mut reader = BufReader::new(file);
-            let mut contents = String::new();
-            let _ = reader.read_to_string(&mut contents);
-
-            text_view.get_buffer().unwrap().set_text(&contents);
-        }
-
-        file_chooser.destroy();
-    });
-
-    window.connect_delete_event(|_, _| {
-        gtk::main_quit();
-        Inhibit(true)
-    });
-
-    window.show_all();
     gtk::main();
 }

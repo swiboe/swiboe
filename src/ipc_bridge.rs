@@ -1,9 +1,10 @@
 use mio::unix::{UnixListener, UnixStream};
 use mio;
 use serde::json;
+use std::path::Path;
 use super::ipc::{IpcRead, IpcWrite};
-use super::plugin::{RemotePluginId, PluginId, FunctionCallContext};
 use super::plugin::remote::{RemotePlugin};
+use super::plugin::{RemotePluginId, PluginId, FunctionCallContext};
 use super::server;
 
 struct Connection {
@@ -21,8 +22,8 @@ pub struct IpcBridge {
 const SERVER_TOKEN: mio::Token = mio::Token(0);
 
 impl IpcBridge {
-    pub fn new(event_loop: &mut mio::EventLoop<Self>, uds_path: &str, server_commands: server::CommandSender) -> Self {
-        let server = UnixListener::bind(uds_path).unwrap();
+    pub fn new(event_loop: &mut mio::EventLoop<Self>, socket_name: &Path, server_commands: server::CommandSender) -> Self {
+        let server = UnixListener::bind(socket_name).unwrap();
         event_loop.register(&server, SERVER_TOKEN).unwrap();
         IpcBridge {
             unix_listener: server,

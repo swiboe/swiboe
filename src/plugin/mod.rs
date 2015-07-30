@@ -24,7 +24,14 @@ pub struct FunctionCallContext {
 }
 
 pub enum FunctionResult {
-    DONE,
+    /// The function has handled the call. No other function should try to handle it.
+    HANDLED,
+
+    /// This function cannot handle this call. Another function can try.
+    NOT_HANDLED,
+
+    /// The function has deferred the call to another plugin which will handle it.
+    DEFERRED,
 }
 
 pub trait Plugin: Send {

@@ -45,26 +45,30 @@ if __name__ == '__main__':
     import json
     import time
 
-    client = SupremeClient("/tmp/s.socket")
-    client2 = SupremeClient("/tmp/s.socket")
-    client.call("core.register_function", {
-        "name": "python.test_client.hello_world"
-    })
+    client = SupremeClient("/tmp/sb.socket")
+    # client2 = SupremeClient("/tmp/sb.socket")
+    # client.call("core.register_function", {
+        # "name": "python.test_client.hello_world"
+    # })
 
-    start = time.time()
-    NUM_RUNS = 1000
-    for i in range(NUM_RUNS):
-        client.call("core.broadcast", {
-            "blub": "blah"
-        })
-        msg = client.read_message()
-        msg1 = client2.read_message()
-        assert msg == msg1
-    duration_in_seconds = time.time() - start
-    print "#sirver %fms per roundtrip." % (duration_in_seconds * 1000 / NUM_RUNS)
+    def benchmark():
+        start = time.time()
+        NUM_RUNS = 1000
+        for i in range(NUM_RUNS):
+            client.call("core.broadcast", {
+                "blub": "blah"
+            })
+            msg = client.read_message()
+            msg1 = client2.read_message()
+            assert msg == msg1
+        duration_in_seconds = time.time() - start
+        print "#sirver %fms per roundtrip." % (duration_in_seconds * 1000 / NUM_RUNS)
 
     # client.write_message(json.dumps({ "type": "call", "function": "core.exit" }))
 
-    client.call("python.test_client.hello_world", {})
+    client.call("core.load_into_buffer", {
+        'uri': "file:///Users/sirver/Desktop/Programming/rust/s/Cargo.toml",
+    });
+
     msg = client.read_message()
     print "#sirver msg: %r" % (msg)

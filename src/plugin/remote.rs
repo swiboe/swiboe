@@ -32,13 +32,13 @@ impl Plugin for RemotePlugin {
 
     fn call(&self, context: FunctionCallContext) -> FunctionResult {
         let data = json::builder::ObjectBuilder::new()
-                .insert("context".into(), context.context)
-                .insert("function".into(), context.function)
-                .insert("args".into(), context.args)
+                .insert("context".into(), &context.context)
+                .insert("function".into(), &context.function)
+                .insert("args".into(), &context.args)
                 .unwrap();
         let s = json::to_string(&data).unwrap();
         self.ipc_brigde_comands.send(
             ipc_bridge::Command::SendData(self.remote_id(), s)).unwrap();
-        FunctionResult::DONE
+        FunctionResult::DEFERRED
     }
 }
