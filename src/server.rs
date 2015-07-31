@@ -143,10 +143,10 @@ impl Server {
 
         plugin_core::register(&tx);
 
-        let ipc_brigde_comands = event_loop.channel();
+        let ipc_bridge_commands = event_loop.channel();
         let switchboard_thread = thread::spawn(move || {
             s_server.spin_forever();
-            ipc_brigde_comands.send(ipc_bridge::Command::Quit).unwrap();
+            ipc_bridge_commands.send(ipc_bridge::Command::Quit).unwrap();
         });
 
         let event_loop_thread = thread::spawn(move || {
@@ -168,8 +168,9 @@ impl Server {
 
     pub fn wait_for_shutdown(&mut self) {
         if let Some(thread) = self.event_loop_thread.take() {
-            thread.join();
-            fs::remove_file(&self.socket_name);
+            thread.join().expect("Could not join event_loop_thread.");
+            fs::remove_file(&self.socket_name).expect(
+                &format!("Could not remove socket {:?}", self.socket_name));
         }
     }
 }

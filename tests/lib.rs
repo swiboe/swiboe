@@ -57,8 +57,8 @@ fn shutdown_server_with_no_clients_connected() {
 fn broadcast_works() {
     let (_server, socket_name) = TestServer::new();
 
-    let mut client1 = Client::connect(&socket_name.to_string_lossy());
-    let mut client2 = Client::connect(&socket_name.to_string_lossy());
+    let client1 = Client::connect(&socket_name.to_string_lossy());
+    let client2 = Client::connect(&socket_name.to_string_lossy());
 
     let test_msg = json::builder::ObjectBuilder::new()
         .insert("blub".into(), "blah")
@@ -67,9 +67,9 @@ fn broadcast_works() {
     let function_call = client1.call("core.broadcast", &test_msg);
     assert_eq!(function_call.wait().unwrap(), RpcResultKind::Ok);
 
-    let broadcast_msg = client1.recv();
+    let broadcast_msg = client1.recv().unwrap();
     assert_eq!(test_msg, broadcast_msg);
 
-    let broadcast_msg = client2.recv();
+    let broadcast_msg = client2.recv().unwrap();
     assert_eq!(test_msg, broadcast_msg);
 }

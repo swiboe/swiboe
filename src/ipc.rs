@@ -1,4 +1,4 @@
-use super::{Error, ErrorKind, Result};
+use super::Result;
 use std::io::{self, Read, Write};
 
 // NOCOM(#sirver): add documentation (using this lint that forbids not having documentation).
@@ -30,7 +30,6 @@ fn read_all<T: Read>(reader: &mut T, buffer: &mut [u8]) -> io::Result<()> {
 impl<T: Read> IpcRead for T {
     fn read_message(&mut self, buffer: &mut Vec<u8>) -> Result<()> {
         let mut length: [u8; 4] = [0, 0, 0, 0];
-        println!("#sirver length.len(): {:#?}", length.len());
         try!(read_all(self, &mut length));
 
         let size =
@@ -38,13 +37,11 @@ impl<T: Read> IpcRead for T {
             ((length[2] as usize) << 16) |
             ((length[1] as usize) <<  8) |
             ((length[0] as usize) <<  0);
-        println!("#sirver length: {:#?},size: {:#?}", length, size);
 
         buffer.reserve(size);
         unsafe {
             buffer.set_len(size);
         }
-        println!("#sirver buffer.len(): {:#?}", buffer.len());
         try!(read_all(self, buffer));
         Ok(())
     }

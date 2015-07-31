@@ -1,3 +1,5 @@
+#![allow(deprecated)]
+
 use serde::json;
 
 // NOCOM(#sirver): use a custom enum for error codes even in json.
@@ -47,8 +49,7 @@ impl Rpc {
 
 pub struct Client<'a> {
     values: mpsc::Receiver<json::Value>,
-    event_loop_thread_guard: thread::JoinGuard<'a, ()>,
-    // NOCOM(#sirver): ipc_brigde_comands with only one m
+    _event_loop_thread_guard: thread::JoinGuard<'a, ()>,
     network_commands: mio::Sender<Command>,
 }
 
@@ -73,7 +74,10 @@ impl mio::Handler for Handler {
         match command {
             Command::Quit => event_loop.shutdown(),
             Command::SendData(data) => {
-                self.stream.write_message(data.as_bytes());
+                if let Err(err) = self.stream.write_message(data.as_bytes()) {
+                    println!("Shutting down, since sending failed: {}", err);
+                    event_loop.channel().send(Command::Quit).unwrap();
+                }
             },
             Command::Call(context, tx) => {
                 self.running_function_calls.insert(context, tx);
@@ -86,11 +90,18 @@ impl mio::Handler for Handler {
             CLIENT => {
                 if events.is_hup() {
                     event_loop.channel().send(Command::Quit).unwrap();
-                } else if events.is_readable() {
+                    return;
+                }
+
+                if events.is_readable() {
                     let mut vec = Vec::new();
-                    self.stream.read_message(&mut vec);
+                    if let Err(err) = self.stream.read_message(&mut vec) {
+                        println!("Shutting down, since receiving failed: {}", err);
+                        event_loop.channel().send(Command::Quit).unwrap();
+                        return;
+                    }
+
                     let msg = String::from_utf8(vec).unwrap();
-                    println!("#sirver msg: {:#?}", msg);
                     let value: json::Value = json::from_str(&msg).unwrap();
 
                     let channel = match value.find("context") {
@@ -113,12 +124,9 @@ impl mio::Handler for Handler {
 impl<'a> Client<'a> {
     // NOCOM(#sirver): socket_name should be a path
     pub fn connect(socket_name: &str) -> Self {
-        let mut stream =
+        let stream =
             UnixStream::connect(socket_name).unwrap();
 
-        // NOCOM(#sirver): what
-        // client.write_message("{ \"type\": \"call\", \"function\": \"core.exit\" }".as_bytes());
-        // thread::sleep_ms(1500);
         let mut event_loop = mio::EventLoop::new().unwrap();
         event_loop.register_opt(
                             &stream,
@@ -136,10 +144,10 @@ impl<'a> Client<'a> {
             }).unwrap();
         });
 
-        let mut client = Client {
+        let client = Client {
             values: values,
             network_commands: network_commands,
-            event_loop_thread_guard: event_loop_thread_guard,
+            _event_loop_thread_guard: event_loop_thread_guard,
         };
         client
     }
@@ -149,15 +157,15 @@ impl<'a> Client<'a> {
             Command::SendData(json::to_string(&data).unwrap())).unwrap();
     }
 
-    pub fn recv(&mut self) -> json::Value {
+    pub fn recv(&self) -> Result<json::Value> {
         match self.values.recv() {
-            Ok(value) => value,
-            Err(err) => panic!("Disconnected."),
+            Ok(value) => Ok(value),
+            Err(err) => Err(Error::new(ErrorKind::Disconnected(err))),
         }
     }
 
     // NOCOM(#sirver): Return a future? How about streaming functions?
-    pub fn call(&mut self, function: &str, args: &json::Value) -> Rpc {
+    pub fn call(&self, function: &str, args: &json::Value) -> Rpc {
         let context = Uuid::new_v4().to_hyphenated_string();
 
         // NOCOM(#sirver): make this a struct.

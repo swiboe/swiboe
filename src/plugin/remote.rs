@@ -6,7 +6,7 @@ use super::{PluginId, RemotePluginId, Plugin, FunctionCallContext, FunctionResul
 #[derive(Debug)]
 pub struct RemotePlugin {
     pub id: PluginId,
-    pub ipc_brigde_comands: mio::Sender<ipc_bridge::Command>,
+    pub ipc_bridge_commands: mio::Sender<ipc_bridge::Command>,
 }
 
 impl RemotePlugin {
@@ -27,7 +27,7 @@ impl Plugin for RemotePlugin {
 
     fn broadcast(&self, data: &json::value::Value) {
         let msg = json::to_string(&data).unwrap();
-        self.ipc_brigde_comands.send(
+        self.ipc_bridge_commands.send(
             ipc_bridge::Command::SendData(self.remote_id(), msg)).unwrap();
     }
 
@@ -38,7 +38,7 @@ impl Plugin for RemotePlugin {
                 .insert("args".into(), &context.args)
                 .unwrap();
         let msg = json::to_string(&data).unwrap();
-        self.ipc_brigde_comands.send(
+        self.ipc_bridge_commands.send(
             ipc_bridge::Command::SendData(self.remote_id(), msg)).unwrap();
         FunctionResult::Delegated
     }

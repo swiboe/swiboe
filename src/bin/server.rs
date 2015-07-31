@@ -1,3 +1,5 @@
+#![cfg(not(test))]
+
 extern crate switchboard;
 
 use std::path::Path;

@@ -67,14 +67,13 @@ impl mio::Handler for IpcBridge {
                 let commands = self.commands.clone();
                 self.next_serial += 1;
                 match self.connections.insert_with(|token| {
-                    println!("registering {:?} with event loop", token);
                     let remote_plugin_id = RemotePluginId {
                         serial: serial,
                         token: token,
                     };
                     let plugin = RemotePlugin {
                         id: PluginId::Remote(remote_plugin_id),
-                        ipc_brigde_comands: event_loop.channel(),
+                        ipc_bridge_commands: event_loop.channel(),
                     };
                     let connection = Connection {
                         stream: stream,
@@ -110,7 +109,6 @@ impl mio::Handler for IpcBridge {
                     // NOCOM(#sirver): read_message can read into a string directly?
                     conn.stream.read_message(&mut vec).expect("Could not read_message");
                     let msg = String::from_utf8(vec).unwrap();
-                    println!("#sirver msg: {:#?}", msg);
                     let value: json::Value = json::from_str(&msg).expect("Invalid JSON");
                     if value.find("type").and_then(|o| o.as_string()) == Some("call") {
                         let name = value.find("function")
