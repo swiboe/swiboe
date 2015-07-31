@@ -1,15 +1,19 @@
 /// Errors for use with Switchboard.
 
+use serde::json;
 use std::error;
 use std::fmt;
 use std::io;
 use std::result;
+use std::sync::mpsc;
 
 pub type Result<T> = result::Result<T, Error>;
 
 #[derive(Debug)]
 pub enum ErrorKind {
     Io(io::Error),
+    Disconnected(mpsc::RecvError),
+    JsonParsing(json::error::Error),
 }
 
 #[derive(Debug)]
@@ -35,12 +39,16 @@ impl error::Error for Error {
   fn description(&self) -> &str {
       match self.kind {
           ErrorKind::Io(ref e) => e.description(),
+          ErrorKind::Disconnected(_) => "Channel is disconnected.",
+          ErrorKind::JsonParsing(ref e) => e.description(),
       }
   }
 
   fn cause(&self) -> Option<&error::Error> {
       match self.kind {
           ErrorKind::Io(ref e) => Some(e),
+          ErrorKind::Disconnected(ref e) => Some(e),
+          ErrorKind::JsonParsing(ref e) => Some(e),
       }
   }
 }
@@ -48,5 +56,17 @@ impl error::Error for Error {
 impl From<io::Error> for Error {
      fn from(error: io::Error) -> Self {
          Error::new(ErrorKind::Io(error))
+     }
+}
+
+impl From<mpsc::RecvError> for Error {
+     fn from(error: mpsc::RecvError) -> Self {
+         Error::new(ErrorKind::Disconnected(error))
+     }
+}
+
+impl From<json::error::Error> for Error {
+     fn from(error: json::error::Error) -> Self {
+         Error::new(ErrorKind::JsonParsing(error))
      }
 }

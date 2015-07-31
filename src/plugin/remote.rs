@@ -3,6 +3,7 @@ use serde::json;
 use super::super::ipc_bridge;
 use super::{PluginId, RemotePluginId, Plugin, FunctionCallContext, FunctionResult};
 
+#[derive(Debug)]
 pub struct RemotePlugin {
     pub id: PluginId,
     pub ipc_brigde_comands: mio::Sender<ipc_bridge::Command>,
@@ -25,9 +26,9 @@ impl Plugin for RemotePlugin {
     }
 
     fn broadcast(&self, data: &json::value::Value) {
-        let s = json::to_string(&data).unwrap();
+        let msg = json::to_string(&data).unwrap();
         self.ipc_brigde_comands.send(
-            ipc_bridge::Command::SendData(self.remote_id(), s)).unwrap();
+            ipc_bridge::Command::SendData(self.remote_id(), msg)).unwrap();
     }
 
     fn call(&self, context: FunctionCallContext) -> FunctionResult {
@@ -36,9 +37,9 @@ impl Plugin for RemotePlugin {
                 .insert("function".into(), &context.function)
                 .insert("args".into(), &context.args)
                 .unwrap();
-        let s = json::to_string(&data).unwrap();
+        let msg = json::to_string(&data).unwrap();
         self.ipc_brigde_comands.send(
-            ipc_bridge::Command::SendData(self.remote_id(), s)).unwrap();
-        FunctionResult::DEFERRED
+            ipc_bridge::Command::SendData(self.remote_id(), msg)).unwrap();
+        FunctionResult::Delegated
     }
 }

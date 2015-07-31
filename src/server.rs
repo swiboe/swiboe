@@ -64,7 +64,7 @@ impl Switchboard {
                         owner.call(call_context)
                     };
                     match result {
-                        FunctionResult::NOT_HANDLED => {
+                        FunctionResult::NotHandled => {
                             // NOCOM(#sirver): immediately try the next contender
                             self.broadcast(&json::to_value(&RpcReply {
                                 context: context,
@@ -72,11 +72,11 @@ impl Switchboard {
                                 result: RpcResultKind::NoHandler
                             }));
                         },
-                        FunctionResult::DEFERRED => {
+                        FunctionResult::Delegated => {
                             // NOCOM(#sirver): wait for a reply (or timeout), then call the next
                             // contender.
                         }
-                        FunctionResult::HANDLED => {
+                        FunctionResult::Handled => {
                             self.broadcast(&json::to_value(&RpcReply {
                                 context: context,
                                 state: RpcState::Done,

@@ -67,7 +67,7 @@ if __name__ == '__main__':
     # client.write_message(json.dumps({ "type": "call", "function": "core.exit" }))
 
     client.call("core.load_into_buffer", {
-        'uri': "file:///Users/sirver/Desktop/Programming/rust/s/Cargo.toml",
+        'uri': "file:///Users/sirver/Desktop/Programming/rust/switchboard/Cargo.toml",
     });
 
     msg = client.read_message()

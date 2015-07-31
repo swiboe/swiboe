@@ -50,7 +50,9 @@ impl mio::Handler for IpcBridge {
                 // NOCOM(#sirver): what if that is no longer valid?
                 let conn = &mut self.connections[receiver.token];
                 if conn.remote_plugin_id == receiver {
-                    conn.stream.write_message(data.as_bytes());
+                    if let Some(err) = conn.stream.write_message(data.as_bytes()).err() {
+                        println!("Could not send message to {:?}: {}", receiver, err);
+                    }
                 }
             }
         }
@@ -106,9 +108,10 @@ impl mio::Handler for IpcBridge {
                     let mut vec = Vec::new();
                     let conn = &mut self.connections[token];
                     // NOCOM(#sirver): read_message can read into a string directly?
-                    conn.stream.read_message(&mut vec);
-                    let s = String::from_utf8(vec).unwrap();
-                    let value: json::Value = json::from_str(&s).unwrap();
+                    conn.stream.read_message(&mut vec).expect("Could not read_message");
+                    let msg = String::from_utf8(vec).unwrap();
+                    println!("#sirver msg: {:#?}", msg);
+                    let value: json::Value = json::from_str(&msg).expect("Invalid JSON");
                     if value.find("type").and_then(|o| o.as_string()) == Some("call") {
                         let name = value.find("function")
                             .and_then(|o| o.as_string()).unwrap().into();

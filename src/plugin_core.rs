@@ -16,11 +16,11 @@ impl Plugin for CorePlugin {
         match &context.function as &str {
             "core.exit" => {
                 context.commands.send(Command::Shutdown).unwrap();
-                FunctionResult::HANDLED
+                FunctionResult::Handled
             },
             "core.broadcast" => {
                 context.commands.send(Command::Broadcast(context.args)).unwrap();
-                FunctionResult::HANDLED
+                FunctionResult::Handled
             },
             "core.register_function" => {
                 let function = context.args.find("name")
@@ -28,7 +28,7 @@ impl Plugin for CorePlugin {
                     .unwrap().into();
                 context.commands.send(
                     Command::RegisterFunction(context.caller, function)).unwrap();
-                FunctionResult::HANDLED
+                FunctionResult::Handled
             },
             // NOCOM(#sirver): maybe 'open'
             "core.load_into_buffer" => {
@@ -37,10 +37,10 @@ impl Plugin for CorePlugin {
                     .unwrap().into();
 
                 if !uri.starts_with("file://") {
-                    return FunctionResult::NOT_HANDLED;
+                    return FunctionResult::NotHandled;
                 }
                 println!("#sirver uri: {:#?}", uri);
-                FunctionResult::HANDLED
+                FunctionResult::Handled
             }
             _ => panic!("{} was called, but is not a core function.", context.function),
         }

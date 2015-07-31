@@ -25,7 +25,7 @@ fn temporary_socket_name() -> PathBuf {
 #[bench]
 fn bench_broadcast(b: &mut Bencher) {
     let socket_name = temporary_socket_name();
-    let mut s = Server::launch(&socket_name);
+    let mut server = Server::launch(&socket_name);
 
     let mut client1 = Client::connect(&socket_name.to_string_lossy());
     let mut client2 = Client::connect(&socket_name.to_string_lossy());
@@ -42,5 +42,5 @@ fn bench_broadcast(b: &mut Bencher) {
         assert_eq!(b1, b2);
     });
 
-    s.shutdown();
+    server.shutdown();
 }

@@ -9,6 +9,7 @@ use std::sync::mpsc;
 use std::thread;
 use super::ipc::{IpcWrite, IpcRead};
 use super::server::{RpcReply, RpcState, RpcResultKind};
+use super::{Error, Result, ErrorKind};
 use uuid::Uuid;
 
 const CLIENT: mio::Token = mio::Token(1);
@@ -27,30 +28,26 @@ impl Rpc {
     }
 
     // NOCOM(#sirver): timeout?
-    fn recv(&self) -> RpcReply {
-        let value = self.values.recv().map_err(|err| {
-            panic!("Unexpected error in recv: {}", err);
-        }).unwrap();
-
-        // NOCOM(#sirver): could be faulty
-        json::from_value(value).unwrap()
+    fn recv(&self) -> Result<RpcReply> {
+        let value = try!(self.values.recv());
+        Ok(try!(json::from_value(value)))
     }
 
-    pub fn wait(self) -> RpcResultKind {
+    pub fn wait(self) -> Result<RpcResultKind> {
         loop {
-            let rpc_reply = self.recv();
+            let rpc_reply = try!(self.recv());
             if rpc_reply.state == RpcState::Done {
-                return rpc_reply.result;
+                return Ok(rpc_reply.result);
             }
+            unimplemented!();
             // NOCOM(#sirver): put data into queue.
         }
-        RpcResultKind::Ok
     }
 }
 
-pub struct Client {
+pub struct Client<'a> {
     values: mpsc::Receiver<json::Value>,
-    event_loop_thread: thread::JoinHandle<()>,
+    event_loop_thread_guard: thread::JoinGuard<'a, ()>,
     // NOCOM(#sirver): ipc_brigde_comands with only one m
     network_commands: mio::Sender<Command>,
 }
@@ -87,13 +84,14 @@ impl mio::Handler for Handler {
     fn ready(&mut self, event_loop: &mut mio::EventLoop<Self>, token: mio::Token, events: mio::EventSet) {
         match token {
             CLIENT => {
-                // NOCOM(#sirver): what about hup?
-                if events.is_readable() {
+                if events.is_hup() {
+                    event_loop.channel().send(Command::Quit).unwrap();
+                } else if events.is_readable() {
                     let mut vec = Vec::new();
                     self.stream.read_message(&mut vec);
-                    let s = String::from_utf8(vec).unwrap();
-                    println!("#sirver s: {:#?}", s);
-                    let value: json::Value = json::from_str(&s).unwrap();
+                    let msg = String::from_utf8(vec).unwrap();
+                    println!("#sirver msg: {:#?}", msg);
+                    let value: json::Value = json::from_str(&msg).unwrap();
 
                     let channel = match value.find("context") {
                         Some(context) => {
@@ -112,7 +110,7 @@ impl mio::Handler for Handler {
     }
 }
 
-impl Client {
+impl<'a> Client<'a> {
     // NOCOM(#sirver): socket_name should be a path
     pub fn connect(socket_name: &str) -> Self {
         let mut stream =
@@ -130,7 +128,7 @@ impl Client {
 
         let (client_tx, values) = mpsc::channel();
         let network_commands = event_loop.channel();
-        let event_loop_thread = thread::spawn(move || {
+        let event_loop_thread_guard = thread::scoped(move || {
             event_loop.run(&mut Handler {
                 stream: stream,
                 values: client_tx,
@@ -141,7 +139,7 @@ impl Client {
         let mut client = Client {
             values: values,
             network_commands: network_commands,
-            event_loop_thread: event_loop_thread,
+            event_loop_thread_guard: event_loop_thread_guard,
         };
         client
     }
@@ -175,5 +173,13 @@ impl Client {
 
         self.write(&data);
         Rpc::new(rx)
+    }
+}
+
+impl<'a> Drop for Client<'a> {
+    fn drop(&mut self) {
+        // The event loop is already shut down if the server disconnected us. Then this send will
+        // fail, which is fine to be ignored in that case.
+        let _ = self.network_commands.send(Command::Quit);
     }
 }
