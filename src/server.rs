@@ -173,7 +173,3 @@ impl Server {
         }
     }
 }
-
-// NOCOM(#sirver): remove users
-pub fn run_supreme_server() {
-}

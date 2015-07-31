@@ -1,5 +1,5 @@
 [package]
-name = "s"
+name = "switchboard"
 version = "0.1.0"
 authors = ["Holger Rapp <HolgerRapp@gmx.net>"]
 

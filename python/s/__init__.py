@@ -13,9 +13,9 @@ def recv_all(socket, num_bytes):
         data += new_data
     return data
 
-class SupremeClient(object):
+class SwitchboardClient(object):
 
-    """Docstring for SupremeClient. """
+    """Docstring for SwitchboardClient. """
 
     def __init__(self, socket_name):
         """TODO: to be defined1. """
@@ -45,8 +45,8 @@ if __name__ == '__main__':
     import json
     import time
 
-    client = SupremeClient("/tmp/sb.socket")
-    # client2 = SupremeClient("/tmp/sb.socket")
+    client = SwitchboardClient("/tmp/sb.socket")
+    # client2 = SwitchboardClient("/tmp/sb.socket")
     # client.call("core.register_function", {
         # "name": "python.test_client.hello_world"
     # })

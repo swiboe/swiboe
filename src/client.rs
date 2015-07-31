@@ -48,7 +48,7 @@ impl Rpc {
     }
 }
 
-pub struct SupremeClient {
+pub struct Client {
     values: mpsc::Receiver<json::Value>,
     event_loop_thread: thread::JoinHandle<()>,
     // NOCOM(#sirver): ipc_brigde_comands with only one m
@@ -92,6 +92,7 @@ impl mio::Handler for Handler {
                     let mut vec = Vec::new();
                     self.stream.read_message(&mut vec);
                     let s = String::from_utf8(vec).unwrap();
+                    println!("#sirver s: {:#?}", s);
                     let value: json::Value = json::from_str(&s).unwrap();
 
                     let channel = match value.find("context") {
@@ -111,7 +112,7 @@ impl mio::Handler for Handler {
     }
 }
 
-impl SupremeClient {
+impl Client {
     // NOCOM(#sirver): socket_name should be a path
     pub fn connect(socket_name: &str) -> Self {
         let mut stream =
@@ -137,7 +138,7 @@ impl SupremeClient {
             }).unwrap();
         });
 
-        let mut client = SupremeClient {
+        let mut client = Client {
             values: values,
             network_commands: network_commands,
             event_loop_thread: event_loop_thread,

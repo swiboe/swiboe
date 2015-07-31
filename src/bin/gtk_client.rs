@@ -1,24 +1,24 @@
 extern crate cairo;
 extern crate glib;
 extern crate gtk;
-extern crate s;
+extern crate switchboard;
 
 use cairo::Context;
 use cairo::enums::{FontSlant, FontWeight};
 use gtk::signal::Inhibit;
 use gtk::traits::*;
-use s::client::SupremeClient;
 use std::f64::consts::PI;
 use std::fs::File;
 use std::io::BufReader;
 use std::io::prelude::*;
+use switchboard::client::Client;
 
-struct SupremeGtkGui;
+struct SwitchboardGtkGui;
 
-impl SupremeGtkGui {
+impl SwitchboardGtkGui {
     fn new() -> Self {
         let window = gtk::Window::new(gtk::WindowType::TopLevel).unwrap();
-        window.set_title("Supreme");
+        window.set_title("Switchboard");
         window.set_window_position(gtk::WindowPosition::Center);
         window.set_default_size(400, 300);
 
@@ -36,7 +36,7 @@ impl SupremeGtkGui {
         window.add(&drawing_area);
         window.add(&vbox);
 
-        let client = SupremeClient::connect("/tmp/sb.socket");
+        let client = Client::connect("/tmp/sb.socket");
 
         // NOCOM(#sirver): maybe a custom gtk event?
         window.connect_delete_event(|_, _| {
@@ -53,7 +53,7 @@ impl SupremeGtkGui {
         // });
 
         window.show_all();
-        SupremeGtkGui
+        SwitchboardGtkGui
     }
 }
 
@@ -87,7 +87,7 @@ fn draw(widget: gtk::Widget, cr: Context) -> Inhibit {
 fn main() {
     gtk::init().unwrap_or_else(|_| panic!("Failed to initialize GTK."));
 
-    let mut s = SupremeGtkGui::new();
+    let mut switchboard = SwitchboardGtkGui::new();
 
     gtk::main();
 }
