@@ -1,13 +1,19 @@
 use serde::json;
+use super::ipc;
 use super::plugin::{FunctionResult, Plugin, FunctionCallContext, PluginId};
 use super::server::{CommandSender, Command};
 
 struct CorePlugin;
 
+#[derive(Serialize, Deserialize, Debug)]
+pub struct RegisterFunctionArgs {
+    pub name: String,
+}
+
 impl Plugin for CorePlugin {
     fn name(&self) -> &'static str { "core" }
     // NOCOM(#sirver): rethink this name.
-    fn broadcast(&self, _: &json::value::Value) {
+    fn broadcast(&self, _: &ipc::Message) {
     }
     fn id(&self) -> PluginId {
         PluginId::Internal("core")
@@ -19,15 +25,19 @@ impl Plugin for CorePlugin {
                 FunctionResult::Handled
             },
             "core.broadcast" => {
-                context.commands.send(Command::Broadcast(context.args)).unwrap();
+                context.commands.send(Command::Broadcast(ipc::Message::Broadcast(context.args))).unwrap();
                 FunctionResult::Handled
             },
+            // NOCOM(#sirver): These args can be pulled out into Serializable structs.
             "core.register_function" => {
-                let function = context.args.find("name")
-                    .and_then(|o| o.as_string())
-                    .unwrap().into();
+                let args: RegisterFunctionArgs = match json::from_value(context.args) {
+                    Ok(args) => args,
+                    // NOCOM(#sirver): report errors somehow?
+                    Err(_) => panic!("Invalid arguments"),
+                };
+
                 context.commands.send(
-                    Command::RegisterFunction(context.caller, function)).unwrap();
+                    Command::RegisterFunction(context.caller, args.name)).unwrap();
                 FunctionResult::Handled
             },
             // NOCOM(#sirver): maybe 'open'

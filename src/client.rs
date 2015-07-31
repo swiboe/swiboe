@@ -9,20 +9,25 @@ use mio;
 use std::collections::HashMap;
 use std::sync::mpsc;
 use std::thread;
-use super::ipc::{IpcWrite, IpcRead};
-use super::server::{RpcReply, RpcState, RpcResultKind};
+use super::ipc::{self, IpcWrite, IpcRead};
+use super::plugin_core::RegisterFunctionArgs;
 use super::{Error, Result, ErrorKind};
 use uuid::Uuid;
 
 const CLIENT: mio::Token = mio::Token(1);
 
+pub trait RemoteProcedure {
+    fn call(&mut self, client: &Client, args: json::Value) -> ipc::RpcResultKind;
+}
+
+// NOCOM(#sirver): why is that pub?
 pub struct Rpc {
     // NOCOM(#sirver): something more structured?
-    pub values: mpsc::Receiver<json::Value>,
+    pub values: mpsc::Receiver<ipc::RpcReply>,
 }
 
 impl Rpc {
-    fn new(values: mpsc::Receiver<json::Value>) -> Self {
+    fn new(values: mpsc::Receiver<ipc::RpcReply>) -> Self {
         // NOCOM(#sirver): implement drop so that we can cancel an RPC.
         Rpc {
             values: values,
@@ -30,15 +35,14 @@ impl Rpc {
     }
 
     // NOCOM(#sirver): timeout?
-    fn recv(&self) -> Result<RpcReply> {
-        let value = try!(self.values.recv());
-        Ok(try!(json::from_value(value)))
+    fn recv(&self) -> Result<ipc::RpcReply> {
+        Ok(try!(self.values.recv()))
     }
 
-    pub fn wait(self) -> Result<RpcResultKind> {
+    pub fn wait(self) -> Result<ipc::RpcResultKind> {
         loop {
             let rpc_reply = try!(self.recv());
-            if rpc_reply.state == RpcState::Done {
+            if rpc_reply.state == ipc::RpcState::Done {
                 return Ok(rpc_reply.result);
             }
             unimplemented!();
@@ -49,21 +53,22 @@ impl Rpc {
 
 pub struct Client<'a> {
     values: mpsc::Receiver<json::Value>,
-    _event_loop_thread_guard: thread::JoinGuard<'a, ()>,
     network_commands: mio::Sender<Command>,
+    remote_procedures: HashMap<String, Box<RemoteProcedure>>,
+    _event_loop_thread_guard: thread::JoinGuard<'a, ()>,
 }
 
 pub enum Command {
     Quit,
-    SendData(String),
-    Call(String, mpsc::Sender<json::Value>),
+    Send(ipc::Message),
+    Call(String, mpsc::Sender<ipc::RpcReply>),
 }
 
 // NOCOM(#sirver): bad name
 struct Handler {
     stream: UnixStream,
     values: mpsc::Sender<json::Value>,
-    running_function_calls: HashMap<String, mpsc::Sender<json::Value>>,
+    running_function_calls: HashMap<String, mpsc::Sender<ipc::RpcReply>>,
 }
 
 impl mio::Handler for Handler {
@@ -73,8 +78,8 @@ impl mio::Handler for Handler {
     fn notify(&mut self, event_loop: &mut mio::EventLoop<Self>, command: Command) {
         match command {
             Command::Quit => event_loop.shutdown(),
-            Command::SendData(data) => {
-                if let Err(err) = self.stream.write_message(data.as_bytes()) {
+            Command::Send(message) => {
+                if let Err(err) = self.stream.write_message(&message) {
                     println!("Shutting down, since sending failed: {}", err);
                     event_loop.channel().send(Command::Quit).unwrap();
                 }
@@ -94,26 +99,30 @@ impl mio::Handler for Handler {
                 }
 
                 if events.is_readable() {
-                    let mut vec = Vec::new();
-                    if let Err(err) = self.stream.read_message(&mut vec) {
-                        println!("Shutting down, since receiving failed: {}", err);
-                        event_loop.channel().send(Command::Quit).unwrap();
-                        return;
-                    }
-
-                    let msg = String::from_utf8(vec).unwrap();
-                    let value: json::Value = json::from_str(&msg).unwrap();
-
-                    let channel = match value.find("context") {
-                        Some(context) => {
-                            let context = &context.as_string().unwrap() as &str;
-                            self.running_function_calls.get(context)
+                    let message = match self.stream.read_message() {
+                        Ok(message) => message,
+                        Err(err) => {
+                            println!("Shutting down, since receiving failed: {}", err);
+                            event_loop.channel().send(Command::Quit).unwrap();
+                            return;
                         }
-                        None => Some(&self.values),
                     };
-                    channel.map(|channel| {
-                        channel.send(value).unwrap();
-                    });
+
+                    match message {
+                        ipc::Message::RpcData(rpc_data) => {
+                            // This will quietly drop any updates on functions that we no longer
+                            // know/care about.
+                            self.running_function_calls
+                                .get(&rpc_data.context)
+                                .map(|channel| {
+                                    channel.send(rpc_data).unwrap();
+                                });
+                        },
+                        ipc::Message::Broadcast(data) => {
+                            self.values.send(data).unwrap();
+                        },
+                        _ => panic!("Server send unexpected commands."),
+                    }
                 }
             },
             client_token => panic!("Unexpected token: {:?}", client_token),
@@ -147,14 +156,14 @@ impl<'a> Client<'a> {
         let client = Client {
             values: values,
             network_commands: network_commands,
+            remote_procedures: HashMap::new(),
             _event_loop_thread_guard: event_loop_thread_guard,
         };
         client
     }
 
-    pub fn write(&self, data: &json::Value) {
-        self.network_commands.send(
-            Command::SendData(json::to_string(&data).unwrap())).unwrap();
+    pub fn write(&self, message: ipc::Message) {
+        self.network_commands.send(Command::Send(message)).unwrap();
     }
 
     pub fn recv(&self) -> Result<json::Value> {
@@ -168,19 +177,29 @@ impl<'a> Client<'a> {
     pub fn call(&self, function: &str, args: &json::Value) -> Rpc {
         let context = Uuid::new_v4().to_hyphenated_string();
 
-        // NOCOM(#sirver): make this a struct.
-        let data = json::builder::ObjectBuilder::new()
-            .insert("function".into(), function)
-            .insert("type".into(), "call")
-            .insert("context".into(), &context)
-            .insert("args".into(), args)
-            .unwrap();
+        let message = ipc::Message::RpcCall {
+            function: function.into(),
+            context: context.clone(),
+            args: args.clone(),
+        };
 
         let (tx, rx) = mpsc::channel();
         self.network_commands.send(Command::Call(context, tx)).unwrap();
 
-        self.write(&data);
+        self.write(message);
         Rpc::new(rx)
+    }
+
+    pub fn register_function(&mut self, name: &str, remote_procedure: Box<RemoteProcedure>) {
+        // NOCOM(#sirver): what happens when this is already inserted? crash probably
+        // NOCOM(#sirver): rethink 'register_function' maybe, register_rpc
+        let rpc = self.call("core.register_function", &json::to_value(&RegisterFunctionArgs {
+            name: name.into(),
+        }));
+        let success = rpc.wait().unwrap();
+        // NOCOM(#sirver): report failure.
+
+        self.remote_procedures.insert(name.into(), remote_procedure);
     }
 }
 

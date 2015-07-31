@@ -1,14 +1,52 @@
-use super::Result;
+use serde::json;
 use std::io::{self, Read, Write};
+use super::Result;
 
 // NOCOM(#sirver): add documentation (using this lint that forbids not having documentation).
 
+#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
+pub enum RpcState {
+    Running,
+    Done,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct RpcReply {
+    pub context: String,
+    pub state: RpcState,
+    pub result: RpcResultKind,
+}
+
+// NOCOM(#sirver): more compact custom serialization?
+// NOCOM(#sirver): use actual result type?
+// NOCOM(#sirver): remove *Kind? at the end
+#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
+pub enum RpcResultKind {
+    Ok,
+    NoHandler,
+}
+
+// NOCOM(#sirver): most of the entries here can be Cow.
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub enum Message {
+    RpcCall {
+        function: String,
+        context: String,
+        args: json::Value,
+    },
+
+    // NOCOM(#sirver): I do not like Data - Update?
+    RpcData(RpcReply),
+    Broadcast(json::Value),
+}
+
+// NOCOM(#sirver): these could deal directly with thes structs.
 pub trait IpcRead {
-    fn read_message(&mut self, buffer: &mut Vec<u8>) -> Result<()>;
+    fn read_message(&mut self) -> Result<Message>;
 }
 
 pub trait IpcWrite {
-    fn write_message(&mut self, buffer: &[u8]) -> Result<()>;
+    fn write_message(&mut self, message: &Message) -> Result<()>;
 }
 
 fn read_all<T: Read>(reader: &mut T, buffer: &mut [u8]) -> io::Result<()> {
@@ -28,9 +66,11 @@ fn read_all<T: Read>(reader: &mut T, buffer: &mut [u8]) -> io::Result<()> {
 }
 
 impl<T: Read> IpcRead for T {
-    fn read_message(&mut self, buffer: &mut Vec<u8>) -> Result<()> {
+    fn read_message(&mut self) -> Result<Message> {
         let mut length: [u8; 4] = [0, 0, 0, 0];
         try!(read_all(self, &mut length));
+
+        let mut buffer = Vec::<u8>::new();
 
         let size =
             ((length[3] as usize) << 24) |
@@ -38,17 +78,25 @@ impl<T: Read> IpcRead for T {
             ((length[1] as usize) <<  8) |
             ((length[0] as usize) <<  0);
 
+        // NOCOM(#sirver): this can skip the buffer
         buffer.reserve(size);
         unsafe {
             buffer.set_len(size);
         }
-        try!(read_all(self, buffer));
-        Ok(())
+        try!(read_all(self, &mut buffer));
+
+        // NOCOM(#sirver): read directly into this string.
+        let msg = String::from_utf8(buffer).unwrap();
+
+        let message: Message = try!(json::from_str(&msg));
+        Ok(message)
     }
 }
 
 impl<T: Write> IpcWrite for T {
-    fn write_message(&mut self, buffer: &[u8]) -> Result<()> {
+    fn write_message(&mut self, message: &Message) -> Result<()> {
+        // NOCOM(#sirver): is that maximal efficient?
+        let buffer = json::to_string(message).unwrap();
         let len = [
             (buffer.len() >> 0) as u8,
             (buffer.len() >> 8) as u8,
@@ -56,7 +104,7 @@ impl<T: Write> IpcWrite for T {
             (buffer.len() >> 24) as u8 ];
 
         try!(self.write_all(&len));
-        try!(self.write_all(&buffer));
+        try!(self.write_all(buffer.as_bytes()));
         Ok(())
     }
 }

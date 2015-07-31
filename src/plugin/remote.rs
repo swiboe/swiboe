@@ -1,5 +1,6 @@
 use mio;
 use serde::json;
+use super::super::ipc;
 use super::super::ipc_bridge;
 use super::{PluginId, RemotePluginId, Plugin, FunctionCallContext, FunctionResult};
 
@@ -25,21 +26,20 @@ impl Plugin for RemotePlugin {
         self.id
     }
 
-    fn broadcast(&self, data: &json::value::Value) {
-        let msg = json::to_string(&data).unwrap();
+    fn broadcast(&self, message: &ipc::Message) {
         self.ipc_bridge_commands.send(
-            ipc_bridge::Command::SendData(self.remote_id(), msg)).unwrap();
+            ipc_bridge::Command::SendData(self.remote_id(), message.clone())).unwrap();
     }
 
     fn call(&self, context: FunctionCallContext) -> FunctionResult {
-        let data = json::builder::ObjectBuilder::new()
-                .insert("context".into(), &context.context)
-                .insert("function".into(), &context.function)
-                .insert("args".into(), &context.args)
-                .unwrap();
-        let msg = json::to_string(&data).unwrap();
+        // NOCOM(#sirver): context could contain this already. less copy.
+        let message = ipc::Message::RpcCall {
+            context: context.context,
+            function: context.function,
+            args: context.args,
+        };
         self.ipc_bridge_commands.send(
-            ipc_bridge::Command::SendData(self.remote_id(), msg)).unwrap();
+            ipc_bridge::Command::SendData(self.remote_id(), message)).unwrap();
         FunctionResult::Delegated
     }
 }

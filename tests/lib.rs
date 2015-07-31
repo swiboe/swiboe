@@ -5,8 +5,9 @@ extern crate uuid;
 use serde::json;
 use std::env;
 use std::path::{PathBuf};
-use switchboard::client::Client;
-use switchboard::server::{Server, RpcResultKind};
+use switchboard::client::{RemoteProcedure, Client};
+use switchboard::ipc::RpcResultKind;
+use switchboard::server::Server;
 use uuid::Uuid;
 
 // NOCOM(#sirver): use the name switchboard everywhere.
@@ -64,8 +65,8 @@ fn broadcast_works() {
         .insert("blub".into(), "blah")
         .unwrap();
 
-    let function_call = client1.call("core.broadcast", &test_msg);
-    assert_eq!(function_call.wait().unwrap(), RpcResultKind::Ok);
+    let rpc = client1.call("core.broadcast", &test_msg);
+    assert_eq!(rpc.wait().unwrap(), RpcResultKind::Ok);
 
     let broadcast_msg = client1.recv().unwrap();
     assert_eq!(test_msg, broadcast_msg);
@@ -73,3 +74,70 @@ fn broadcast_works() {
     let broadcast_msg = client2.recv().unwrap();
     assert_eq!(test_msg, broadcast_msg);
 }
+
+// NOCOM(#sirver): this test is not yet done.
+// #[test]
+// fn register_function() {
+    // let (_server, socket_name) = TestServer::new();
+
+    // struct TestCall;
+    // impl RemoteProcedure for TestCall {
+        // fn call(&mut self, client: &Client, args: json::Value) -> RpcResultKind {
+            // let rpc = client.call("core.broadcast", &args);
+            // rpc.wait().unwrap()
+        // }
+    // }
+
+    // let mut client1 = Client::connect(&socket_name.to_string_lossy());
+    // let client2 = Client::connect(&socket_name.to_string_lossy());
+
+    // println!("#sirver ALIVE {}:{}", file!(), line!());
+    // client1.register_function("testclient.test", Box::new(TestCall));
+    // println!("#sirver ALIVE {}:{}", file!(), line!());
+
+    // let test_msg = json::builder::ObjectBuilder::new()
+        // .insert("blub".into(), "blah")
+        // .unwrap();
+
+    // println!("#sirver ALIVE {}:{}", file!(), line!());
+    // let rpc = client2.call("testclient.test",
+                           // &test_msg);
+    // // assert_eq!(rpc.wait().unwrap(), RpcResultKind::Ok);
+    // println!("#sirver ALIVE {}:{}", file!(), line!());
+
+// NOCOM(#sirver): this should be done by the function.
+    // let broadcast_msg = client1.recv().unwrap();
+    // println!("#sirver broadcast_msg: {:#?}", broadcast_msg);
+
+
+    // let rpc = client1.call("core.broadcast", &test_msg);
+    // rpc.wait().unwrap();
+
+    // let broadcast_msg = client1.recv().unwrap();
+    // assert_eq!(test_msg, broadcast_msg);
+
+    // let broadcast_msg = client2.recv().unwrap();
+    // assert_eq!(test_msg, broadcast_msg);
+// }
+
+// NOCOM(#sirver): test is needed.
+// #[test]
+// fn waiting_for_call_does_not_mean_you_miss_data() {
+    // let (_server, socket_name) = TestServer::new();
+
+    // let client1 = Client::connect(&socket_name.to_string_lossy());
+    // let client2 = Client::connect(&socket_name.to_string_lossy());
+
+    // let test_msg = json::builder::ObjectBuilder::new()
+        // .insert("blub".into(), "blah")
+        // .unwrap();
+
+    // let rpc = client1.call("core.broadcast", &test_msg);
+    // assert_eq!(rpc.wait().unwrap(), RpcResultKind::Ok);
+
+    // let broadcast_msg = client1.recv().unwrap();
+    // assert_eq!(test_msg, broadcast_msg);
+
+    // let broadcast_msg = client2.recv().unwrap();
+    // assert_eq!(test_msg, broadcast_msg);
+// }

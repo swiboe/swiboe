@@ -1,10 +1,10 @@
 use mio;
-use serde::json;
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{channel, Sender, Receiver};
 use std::thread;
+use super::ipc;
 use super::ipc_bridge;
 use super::plugin::{PluginId, FunctionCallContext, Plugin, FunctionResult};
 use super::plugin_core;
@@ -15,7 +15,7 @@ pub enum Command {
     CallFunction(FunctionCallContext),
     PluginConnected(Box<Plugin>),
     PluginDisconnected(PluginId),
-    Broadcast(json::value::Value),
+    Broadcast(ipc::Message),
 }
 pub type CommandSender = Sender<Command>;
 
@@ -23,27 +23,6 @@ pub struct Switchboard {
     functions: HashMap<String, PluginId>,
     commands: Receiver<Command>,
     plugins: HashMap<PluginId, Box<Plugin>>,
-}
-
-// NOCOM(#sirver): more compact custom serialization?
-// NOCOM(#sirver): use actual result type?
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
-pub enum RpcResultKind {
-    Ok,
-    NoHandler,
-}
-
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
-pub enum RpcState {
-    Running,
-    Done,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct RpcReply {
-    pub context: String,
-    pub state: RpcState,
-    pub result: RpcResultKind,
 }
 
 impl Switchboard {
@@ -66,10 +45,11 @@ impl Switchboard {
                     match result {
                         FunctionResult::NotHandled => {
                             // NOCOM(#sirver): immediately try the next contender
-                            self.broadcast(&json::to_value(&RpcReply {
-                                context: context,
-                                state: RpcState::Done,
-                                result: RpcResultKind::NoHandler
+                            self.broadcast(&ipc::Message::RpcData(
+                                    ipc::RpcReply {
+                                        context: context,
+                                        state: ipc::RpcState::Done,
+                                        result: ipc::RpcResultKind::NoHandler
                             }));
                         },
                         FunctionResult::Delegated => {
@@ -77,15 +57,15 @@ impl Switchboard {
                             // contender.
                         }
                         FunctionResult::Handled => {
-                            self.broadcast(&json::to_value(&RpcReply {
+                            self.broadcast(&ipc::Message::RpcData(ipc::RpcReply {
                                 context: context,
-                                state: RpcState::Done,
-                                result: RpcResultKind::Ok
+                                state: ipc::RpcState::Done,
+                                result: ipc::RpcResultKind::Ok
                             }));
                         }
                     }
                 },
-                Command::Broadcast(args) => self.broadcast(&args),
+                Command::Broadcast(message) => self.broadcast(&message),
                 Command::PluginConnected(plugin) => {
                     // NOCOM(#sirver): make sure plugin is not yet known.
                     self.plugins.insert(plugin.id(), plugin);
@@ -98,26 +78,12 @@ impl Switchboard {
         }
     }
 
-    fn broadcast(&self, data: &json::Value) {
+    fn broadcast(&self, msg: &ipc::Message) {
         // NOCOM(#sirver): repeats serialization. :(
         for plugin in self.plugins.values() {
-            plugin.broadcast(&data);
+            plugin.broadcast(msg);
         }
     }
-
-    // NOCOM(#sirver): nuke?
-    // fn broadcast_rpc_result(&self, result: RpcResult, context: &str) {
-        // let result_str = match result {
-            // RpcResult::Ok => { "ok" },
-            // RpcResult::NoHandler => { "no_handler" },
-        // };
-
-        // let data = json::builder::ObjectBuilder::new()
-                // .insert("context".into(), context)
-                // .insert("result".into(), result_str)
-                // .unwrap();
-        // self.broadcast(&data);
-    // }
 }
 
 pub struct Server {

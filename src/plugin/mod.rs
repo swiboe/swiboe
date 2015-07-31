@@ -1,5 +1,6 @@
 use mio;
 use serde::json;
+use super::ipc;
 use super::server::{CommandSender};
 
 #[derive(PartialEq, Eq, Clone, Copy, Hash, Debug)]
@@ -37,7 +38,7 @@ pub enum FunctionResult {
 pub trait Plugin: Send {
     fn name(&self) -> &'static str;
     fn id(&self) -> PluginId;
-    fn broadcast(&self, data: &json::value::Value);
+    fn broadcast(&self, message: &ipc::Message);
     fn call(&self, context: FunctionCallContext) -> FunctionResult;
 }
 
