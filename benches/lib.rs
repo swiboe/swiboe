@@ -22,12 +22,13 @@ fn temporary_socket_name() -> PathBuf {
     dir
 }
 
+// On my macbook: 114,111 ns/iter (+/- 12,791).
 #[bench]
 fn bench_broadcast(b: &mut Bencher) {
     let socket_name = temporary_socket_name();
     let mut server = Server::launch(&socket_name);
 
-    // NOCOM(#sirver): making the num clients to high yields a crash?
+    // Increasing the number of clients makes my system run out of file descriptors really quickly.
     let clients: Vec<_> = (1..5)
         .map(|_| Client::connect(&socket_name.to_string_lossy())).collect();
 

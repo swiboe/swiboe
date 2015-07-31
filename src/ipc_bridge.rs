@@ -1,6 +1,5 @@
 use mio::unix::{UnixListener, UnixStream};
 use mio;
-use serde::json;
 use std::path::Path;
 // NOCOM(#sirver): rename IpcRead and IpcWrite to ipc::Read
 use super::ipc::{self, IpcRead, IpcWrite};
@@ -112,7 +111,7 @@ impl mio::Handler for IpcBridge {
                     // NOCOM(#sirver): should disconnect instead of crashing.
                     let message = conn.stream.read_message().expect("Could not read_message");;
                     match message {
-                        ipc::Message::RpcCall { function: function, context: context, args: args } => {
+                        ipc::Message::RpcCall { function, context, args } => {
                             let call_context = FunctionCallContext {
                                 context: context,
                                 function: function,

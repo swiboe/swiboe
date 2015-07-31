@@ -1,5 +1,4 @@
 use mio;
-use serde::json;
 use super::super::ipc;
 use super::super::ipc_bridge;
 use super::{PluginId, RemotePluginId, Plugin, FunctionCallContext, FunctionResult};
