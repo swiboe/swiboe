@@ -25,7 +25,7 @@ impl Plugin for RemotePlugin {
         self.id
     }
 
-    fn broadcast(&self, message: &ipc::Message) {
+    fn send(&self, message: &ipc::Message) {
         self.ipc_bridge_commands.send(
             ipc_bridge::Command::SendData(self.remote_id(), message.clone())).unwrap();
     }

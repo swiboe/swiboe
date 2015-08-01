@@ -23,6 +23,7 @@ pub struct Switchboard {
     functions: HashMap<String, PluginId>,
     commands: Receiver<Command>,
     plugins: HashMap<PluginId, Box<Plugin>>,
+    ipc_bridge_commands: mio::Sender<ipc_bridge::Command>,
 }
 
 impl Switchboard {
@@ -38,32 +39,42 @@ impl Switchboard {
                 Command::CallFunction(call_context) => {
                     let plugin_id = self.functions.get(&call_context.rpc_call.function as &str).unwrap();
                     let context = call_context.rpc_call.context.clone();
+                    let remote_id = match call_context.caller {
+                        PluginId::Remote(r) => r,
+                        _ => panic!("Local plugins should not call!"),
+                    };
+
                     let result = {
                         let owner = &mut self.plugins.get_mut(&plugin_id).unwrap();
                         owner.call(call_context)
                     };
+                    // NOCOM(#sirver): every plugin should be a remote_id now. Or we need a
+                    // backchannel.
                     match result {
                         FunctionResult::NotHandled => {
-                            // NOCOM(#sirver): this should not be broadcasted, but it does not
-                            // hurt.
                             // NOCOM(#sirver): immediately try the next contender
-                            self.broadcast(&ipc::Message::RpcReply(
-                                    ipc::RpcReply {
-                                        context: context,
-                                        state: ipc::RpcState::Done,
-                                        result: ipc::RpcResultKind::NoHandler
-                            }));
+                            self.ipc_bridge_commands.send(
+                                ipc_bridge::Command::SendData(
+                                    remote_id,
+                                    ipc::Message::RpcReply(
+                                        ipc::RpcReply {
+                                            context: context,
+                                            state: ipc::RpcState::Done,
+                                            result: ipc::RpcResultKind::NoHandler
+                                        }))).unwrap();
                         },
                         FunctionResult::Delegated => {
                             // NOCOM(#sirver): wait for a reply (or timeout), then call the next
                             // contender.
                         }
                         FunctionResult::Handled => {
-                            self.broadcast(&ipc::Message::RpcReply(ipc::RpcReply {
-                                context: context,
-                                state: ipc::RpcState::Done,
-                                result: ipc::RpcResultKind::Ok
-                            }));
+                            self.ipc_bridge_commands.send(ipc_bridge::Command::SendData(
+                                remote_id,
+                                ipc::Message::RpcReply(ipc::RpcReply {
+                                    context: context,
+                                    state: ipc::RpcState::Done,
+                                    result: ipc::RpcResultKind::Ok
+                            }))).unwrap();
                         }
                     }
                 },
@@ -78,12 +89,13 @@ impl Switchboard {
                 }
             }
         }
+        self.ipc_bridge_commands.send(ipc_bridge::Command::Quit).unwrap();
     }
 
     fn broadcast(&self, msg: &ipc::Message) {
-        // NOCOM(#sirver): repeats serialization. :(
+        // TODO(sirver): This repeats serialization for each plugin again unnecessarily.
         for plugin in self.plugins.values() {
-            plugin.broadcast(msg);
+            plugin.send(msg);
         }
     }
 }
@@ -103,18 +115,17 @@ impl Server {
         let mut ipc_brigde = ipc_bridge::IpcBridge::new(
             &mut event_loop, socket_name, tx.clone());
 
-        let mut s_server = Switchboard {
+        let mut switchboard = Switchboard {
             functions: HashMap::new(),
-            commands: rx,
             plugins: HashMap::new(),
+            commands: rx,
+            ipc_bridge_commands: event_loop.channel(),
         };
 
         plugin_core::register(&tx);
 
-        let ipc_bridge_commands = event_loop.channel();
         let switchboard_thread = thread::spawn(move || {
-            s_server.spin_forever();
-            ipc_bridge_commands.send(ipc_bridge::Command::Quit).unwrap();
+            switchboard.spin_forever();
         });
 
         let event_loop_thread = thread::spawn(move || {

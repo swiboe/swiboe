@@ -13,7 +13,7 @@ pub struct RegisterFunctionArgs {
 impl Plugin for CorePlugin {
     fn name(&self) -> &'static str { "core" }
     // NOCOM(#sirver): rethink this name.
-    fn broadcast(&self, _: &ipc::Message) {
+    fn send(&self, _: &ipc::Message) {
     }
     fn id(&self) -> PluginId {
         PluginId::Internal("core")

@@ -119,7 +119,7 @@ impl mio::Handler for IpcBridge {
                             };
                             self.commands.send(server::Command::CallFunction(call_context)).unwrap();
 
-                            // NOCOM(#sirver): need to keep track of how called this and how
+                            // NOCOM(#sirver): need to keep track of who called this and how
                         },
                         ipc::Message::RpcReply(_) => {
                             // NOCOM(#sirver): should not be broadcasted - only the caller is

@@ -75,9 +75,8 @@ fn broadcast_works() {
     assert_eq!(test_msg, broadcast_msg);
 }
 
-// NOCOM(#sirver): this test is not yet done.
 #[test]
-fn register_function() {
+fn register_function_and_call_it() {
     let (_server, socket_name) = TestServer::new();
 
     let client1 = Client::connect(&socket_name.to_string_lossy());

@@ -53,14 +53,14 @@ impl Rpc {
 
 pub struct Client<'a> {
     values: mpsc::Receiver<json::Value>,
-    event_loop_sender: mio::Sender<Command>,
+    event_loop_sender: mio::Sender<EventLoopThreadCommand>,
     _event_loop_thread_guard: thread::JoinGuard<'a, ()>,
 
     function_thread_sender: mpsc::Sender<FunctionThreadCommand>,
     _function_thread_guard: thread::JoinGuard<'a, ()>,
 }
 
-pub enum Command {
+pub enum EventLoopThreadCommand {
     Quit,
     Send(ipc::Message),
     Call(String, mpsc::Sender<ipc::RpcReply>),
@@ -76,18 +76,18 @@ struct Handler {
 
 impl mio::Handler for Handler {
     type Timeout = ();
-    type Message = Command;
+    type Message = EventLoopThreadCommand;
 
-    fn notify(&mut self, event_loop: &mut mio::EventLoop<Self>, command: Command) {
+    fn notify(&mut self, event_loop: &mut mio::EventLoop<Self>, command: EventLoopThreadCommand) {
         match command {
-            Command::Quit => event_loop.shutdown(),
-            Command::Send(message) => {
+            EventLoopThreadCommand::Quit => event_loop.shutdown(),
+            EventLoopThreadCommand::Send(message) => {
                 if let Err(err) = self.stream.write_message(&message) {
                     println!("Shutting down, since sending failed: {}", err);
-                    event_loop.channel().send(Command::Quit).unwrap();
+                    event_loop.channel().send(EventLoopThreadCommand::Quit).unwrap();
                 }
             },
-            Command::Call(context, tx) => {
+            EventLoopThreadCommand::Call(context, tx) => {
                 self.running_function_calls.insert(context, tx);
             },
         }
@@ -97,7 +97,7 @@ impl mio::Handler for Handler {
         match token {
             CLIENT => {
                 if events.is_hup() {
-                    event_loop.channel().send(Command::Quit).unwrap();
+                    event_loop.channel().send(EventLoopThreadCommand::Quit).unwrap();
                     return;
                 }
 
@@ -106,7 +106,7 @@ impl mio::Handler for Handler {
                         Ok(message) => message,
                         Err(err) => {
                             println!("Shutting down, since receiving failed: {}", err);
-                            event_loop.channel().send(Command::Quit).unwrap();
+                            event_loop.channel().send(EventLoopThreadCommand::Quit).unwrap();
                             return;
                         }
                     };
@@ -138,13 +138,12 @@ impl mio::Handler for Handler {
 
 // NOCOM(#sirver): urg... that is the real client.
 pub struct ClientHandle {
-    event_loop_sender: mio::Sender<Command>,
-    function_thread_sender: mpsc::Sender<FunctionThreadCommand>,
+    event_loop_sender: mio::Sender<EventLoopThreadCommand>,
 }
 
 impl ClientHandle {
     pub fn write(&self, message: ipc::Message) {
-        self.event_loop_sender.send(Command::Send(message)).unwrap();
+        self.event_loop_sender.send(EventLoopThreadCommand::Send(message)).unwrap();
     }
 
     // NOCOM(#sirver): Return a future? How about streaming functions?
@@ -157,7 +156,7 @@ impl ClientHandle {
         });
 
         let (tx, rx) = mpsc::channel();
-        self.event_loop_sender.send(Command::Call(context, tx)).unwrap();
+        self.event_loop_sender.send(EventLoopThreadCommand::Call(context, tx)).unwrap();
 
         self.write(message);
         Rpc::new(rx)
@@ -173,7 +172,7 @@ enum FunctionThreadCommand {
 struct FunctionThread {
     remote_procedures: HashMap<String, Box<RemoteProcedure>>,
     commands: mpsc::Receiver<FunctionThreadCommand>,
-    event_loop_sender: mio::Sender<Command>,
+    event_loop_sender: mio::Sender<EventLoopThreadCommand>,
 }
 
 impl FunctionThread {
@@ -188,7 +187,7 @@ impl FunctionThread {
                     if let Some(function) = self.remote_procedures.get_mut(&rpc_call.function) {
                         // NOCOM(#sirver): result value?
                         let result = function.call(rpc_call.args);
-                        self.event_loop_sender.send(Command::Send(
+                        self.event_loop_sender.send(EventLoopThreadCommand::Send(
                             ipc::Message::RpcReply(ipc::RpcReply {
                                 context: rpc_call.context,
                                 // NOCOM(#sirver): what about streaming rpcs?
@@ -257,7 +256,6 @@ impl<'a> Client<'a> {
     pub fn client_handle(&self) -> ClientHandle {
         ClientHandle {
             event_loop_sender: self.event_loop_sender.clone(),
-            function_thread_sender: self.function_thread_sender.clone(),
         }
     }
 
@@ -291,7 +289,7 @@ impl<'a> Drop for Client<'a> {
     fn drop(&mut self) {
         // The event loop is already shut down if the server disconnected us. Then this send will
         // fail, which is fine to be ignored in that case.
-        let _ = self.event_loop_sender.send(Command::Quit);
+        let _ = self.event_loop_sender.send(EventLoopThreadCommand::Quit);
         let _ = self.function_thread_sender.send(FunctionThreadCommand::Quit);
     }
 }
