@@ -19,18 +19,18 @@ impl Plugin for CorePlugin {
         PluginId::Internal("core")
     }
     fn call(&self, context: FunctionCallContext) -> FunctionResult {
-        match &context.function as &str {
+        match &context.rpc_call.function as &str {
             "core.exit" => {
                 context.commands.send(Command::Shutdown).unwrap();
                 FunctionResult::Handled
             },
             "core.broadcast" => {
-                context.commands.send(Command::Broadcast(ipc::Message::Broadcast(context.args))).unwrap();
+                context.commands.send(Command::Broadcast(ipc::Message::Broadcast(context.rpc_call.args))).unwrap();
                 FunctionResult::Handled
             },
             // NOCOM(#sirver): These args can be pulled out into Serializable structs.
             "core.register_function" => {
-                let args: RegisterFunctionArgs = match json::from_value(context.args) {
+                let args: RegisterFunctionArgs = match json::from_value(context.rpc_call.args) {
                     Ok(args) => args,
                     // NOCOM(#sirver): report errors somehow?
                     Err(_) => panic!("Invalid arguments"),
@@ -42,7 +42,7 @@ impl Plugin for CorePlugin {
             },
             // NOCOM(#sirver): maybe 'open'
             "core.load_into_buffer" => {
-                let uri: String = context.args.find("uri")
+                let uri: String = context.rpc_call.args.find("uri")
                     .and_then(|o| o.as_string())
                     .unwrap().into();
 
@@ -52,7 +52,7 @@ impl Plugin for CorePlugin {
                 println!("#sirver uri: {:#?}", uri);
                 FunctionResult::Handled
             }
-            _ => panic!("{} was called, but is not a core function.", context.function),
+            _ => panic!("{} was called, but is not a core function.", context.rpc_call.function),
         }
     }
 }

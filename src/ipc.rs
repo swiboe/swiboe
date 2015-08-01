@@ -33,18 +33,11 @@ pub struct RpcCall {
     pub args: json::Value,
 }
 
-// NOCOM(#sirver): most of the entries here can be Cow.
+// NOCOM(#sirver): most of the entries here could be Cow.
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum Message {
-    // NOCOM(#sirver): replace with the struct
-    RpcCall {
-        function: String,
-        context: String,
-        args: json::Value,
-    },
-
-    // NOCOM(#sirver): I do not like Data - Update?
-    RpcData(RpcReply),
+    RpcCall(RpcCall),
+    RpcReply(RpcReply),
     Broadcast(json::Value),
 }
 

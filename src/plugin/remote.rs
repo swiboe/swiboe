@@ -31,12 +31,7 @@ impl Plugin for RemotePlugin {
     }
 
     fn call(&self, context: FunctionCallContext) -> FunctionResult {
-        // NOCOM(#sirver): context could contain this already. less copy.
-        let message = ipc::Message::RpcCall {
-            context: context.context,
-            function: context.function,
-            args: context.args,
-        };
+        let message = ipc::Message::RpcCall(context.rpc_call);
         self.ipc_bridge_commands.send(
             ipc_bridge::Command::SendData(self.remote_id(), message)).unwrap();
         FunctionResult::Delegated

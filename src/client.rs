@@ -112,7 +112,7 @@ impl mio::Handler for Handler {
                     };
 
                     match message {
-                        ipc::Message::RpcData(rpc_data) => {
+                        ipc::Message::RpcReply(rpc_data) => {
                             // This will quietly drop any updates on functions that we no longer
                             // know/care about.
                             self.running_function_calls
@@ -121,13 +121,8 @@ impl mio::Handler for Handler {
                                     channel.send(rpc_data).unwrap();
                                 });
                         },
-                        ipc::Message::RpcCall { function, context, args } => {
-                            // NOCOM(#sirver): can a : a below be skipped?
-                            let command = FunctionThreadCommand::Call(ipc::RpcCall {
-                                function: function,
-                                context: context,
-                                args: args
-                            });
+                        ipc::Message::RpcCall(rpc_call) => {
+                            let command = FunctionThreadCommand::Call(rpc_call);
                             self.function_thread_sender.send(command).unwrap();
                         },
                         ipc::Message::Broadcast(data) => {
@@ -155,12 +150,11 @@ impl ClientHandle {
     // NOCOM(#sirver): Return a future? How about streaming functions?
     pub fn call(&self, function: &str, args: &json::Value) -> Rpc {
         let context = Uuid::new_v4().to_hyphenated_string();
-
-        let message = ipc::Message::RpcCall {
+        let message = ipc::Message::RpcCall(ipc::RpcCall {
             function: function.into(),
             context: context.clone(),
             args: args.clone(),
-        };
+        });
 
         let (tx, rx) = mpsc::channel();
         self.event_loop_sender.send(Command::Call(context, tx)).unwrap();
@@ -195,7 +189,7 @@ impl FunctionThread {
                         // NOCOM(#sirver): result value?
                         let result = function.call(rpc_call.args);
                         self.event_loop_sender.send(Command::Send(
-                            ipc::Message::RpcData(ipc::RpcReply {
+                            ipc::Message::RpcReply(ipc::RpcReply {
                                 context: rpc_call.context,
                                 // NOCOM(#sirver): what about streaming rpcs?
                                 state: ipc::RpcState::Done,

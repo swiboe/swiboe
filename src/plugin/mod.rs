@@ -17,9 +17,7 @@ pub enum PluginId {
 
 // TODO(sirver): Document all the structs.
 pub struct FunctionCallContext {
-    pub context: String,
-    pub function: String,
-    pub args: json::value::Value,
+    pub rpc_call: ipc::RpcCall,
     pub commands: CommandSender,
     pub caller: PluginId,
 }

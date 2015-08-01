@@ -111,11 +111,9 @@ impl mio::Handler for IpcBridge {
                     // NOCOM(#sirver): should disconnect instead of crashing.
                     let message = conn.stream.read_message().expect("Could not read_message");;
                     match message {
-                        ipc::Message::RpcCall { function, context, args } => {
+                        ipc::Message::RpcCall(rpc_call) => {
                             let call_context = FunctionCallContext {
-                                context: context,
-                                function: function,
-                                args: args,
+                                rpc_call: rpc_call,
                                 commands: self.commands.clone(),
                                 caller: PluginId::Remote(conn.remote_plugin_id),
                             };
@@ -123,7 +121,7 @@ impl mio::Handler for IpcBridge {
 
                             // NOCOM(#sirver): need to keep track of how called this and how
                         },
-                        ipc::Message::RpcData(_) => {
+                        ipc::Message::RpcReply(_) => {
                             // NOCOM(#sirver): should not be broadcasted - only the caller is
                             // interested in that.
                             self.commands.send(server::Command::Broadcast(message)).unwrap();

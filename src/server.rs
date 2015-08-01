@@ -36,8 +36,8 @@ impl Switchboard {
                     self.functions.insert(name, plugin_id);
                 },
                 Command::CallFunction(call_context) => {
-                    let plugin_id = self.functions.get(&call_context.function as &str).unwrap();
-                    let context = call_context.context.clone();
+                    let plugin_id = self.functions.get(&call_context.rpc_call.function as &str).unwrap();
+                    let context = call_context.rpc_call.context.clone();
                     let result = {
                         let owner = &mut self.plugins.get_mut(&plugin_id).unwrap();
                         owner.call(call_context)
@@ -47,7 +47,7 @@ impl Switchboard {
                             // NOCOM(#sirver): this should not be broadcasted, but it does not
                             // hurt.
                             // NOCOM(#sirver): immediately try the next contender
-                            self.broadcast(&ipc::Message::RpcData(
+                            self.broadcast(&ipc::Message::RpcReply(
                                     ipc::RpcReply {
                                         context: context,
                                         state: ipc::RpcState::Done,
@@ -59,7 +59,7 @@ impl Switchboard {
                             // contender.
                         }
                         FunctionResult::Handled => {
-                            self.broadcast(&ipc::Message::RpcData(ipc::RpcReply {
+                            self.broadcast(&ipc::Message::RpcReply(ipc::RpcReply {
                                 context: context,
                                 state: ipc::RpcState::Done,
                                 result: ipc::RpcResultKind::Ok
