@@ -120,7 +120,14 @@ impl mio::Handler for IpcBridge {
                                 caller: PluginId::Remote(conn.remote_plugin_id),
                             };
                             self.commands.send(server::Command::CallFunction(call_context)).unwrap();
+
+                            // NOCOM(#sirver): need to keep track of how called this and how
                         },
+                        ipc::Message::RpcData(_) => {
+                            // NOCOM(#sirver): should not be broadcasted - only the caller is
+                            // interested in that.
+                            self.commands.send(server::Command::Broadcast(message)).unwrap();
+                        }
                         _ => panic!("Client send unexpected commands."),
                     }
                 }

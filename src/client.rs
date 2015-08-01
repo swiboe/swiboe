@@ -16,8 +16,8 @@ use uuid::Uuid;
 
 const CLIENT: mio::Token = mio::Token(1);
 
-pub trait RemoteProcedure {
-    fn call(&mut self, client: &Client, args: json::Value) -> ipc::RpcResultKind;
+pub trait RemoteProcedure: Send {
+    fn call(&mut self, args: json::Value) -> ipc::RpcResultKind;
 }
 
 // NOCOM(#sirver): why is that pub?
@@ -53,9 +53,11 @@ impl Rpc {
 
 pub struct Client<'a> {
     values: mpsc::Receiver<json::Value>,
-    network_commands: mio::Sender<Command>,
-    remote_procedures: HashMap<String, Box<RemoteProcedure>>,
+    event_loop_sender: mio::Sender<Command>,
     _event_loop_thread_guard: thread::JoinGuard<'a, ()>,
+
+    function_thread_sender: mpsc::Sender<FunctionThreadCommand>,
+    _function_thread_guard: thread::JoinGuard<'a, ()>,
 }
 
 pub enum Command {
@@ -69,6 +71,7 @@ struct Handler {
     stream: UnixStream,
     values: mpsc::Sender<json::Value>,
     running_function_calls: HashMap<String, mpsc::Sender<ipc::RpcReply>>,
+    function_thread_sender: mpsc::Sender<FunctionThreadCommand>,
 }
 
 impl mio::Handler for Handler {
@@ -86,7 +89,7 @@ impl mio::Handler for Handler {
             },
             Command::Call(context, tx) => {
                 self.running_function_calls.insert(context, tx);
-            }
+            },
         }
     }
 
@@ -118,14 +121,93 @@ impl mio::Handler for Handler {
                                     channel.send(rpc_data).unwrap();
                                 });
                         },
+                        ipc::Message::RpcCall { function, context, args } => {
+                            // NOCOM(#sirver): can a : a below be skipped?
+                            let command = FunctionThreadCommand::Call(ipc::RpcCall {
+                                function: function,
+                                context: context,
+                                args: args
+                            });
+                            self.function_thread_sender.send(command).unwrap();
+                        },
                         ipc::Message::Broadcast(data) => {
                             self.values.send(data).unwrap();
                         },
-                        _ => panic!("Server send unexpected commands."),
                     }
                 }
             },
             client_token => panic!("Unexpected token: {:?}", client_token),
+        }
+    }
+}
+
+// NOCOM(#sirver): urg... that is the real client.
+pub struct ClientHandle {
+    event_loop_sender: mio::Sender<Command>,
+    function_thread_sender: mpsc::Sender<FunctionThreadCommand>,
+}
+
+impl ClientHandle {
+    pub fn write(&self, message: ipc::Message) {
+        self.event_loop_sender.send(Command::Send(message)).unwrap();
+    }
+
+    // NOCOM(#sirver): Return a future? How about streaming functions?
+    pub fn call(&self, function: &str, args: &json::Value) -> Rpc {
+        let context = Uuid::new_v4().to_hyphenated_string();
+
+        let message = ipc::Message::RpcCall {
+            function: function.into(),
+            context: context.clone(),
+            args: args.clone(),
+        };
+
+        let (tx, rx) = mpsc::channel();
+        self.event_loop_sender.send(Command::Call(context, tx)).unwrap();
+
+        self.write(message);
+        Rpc::new(rx)
+    }
+}
+
+enum FunctionThreadCommand {
+    Quit,
+    RegisterFunction(String, Box<RemoteProcedure>),
+    Call(ipc::RpcCall),
+}
+
+struct FunctionThread {
+    remote_procedures: HashMap<String, Box<RemoteProcedure>>,
+    commands: mpsc::Receiver<FunctionThreadCommand>,
+    event_loop_sender: mio::Sender<Command>,
+}
+
+impl FunctionThread {
+    pub fn spin_forever(mut self) {
+        while let Ok(command) = self.commands.recv() {
+            match command {
+                FunctionThreadCommand::Quit => break,
+                FunctionThreadCommand::RegisterFunction(name, remote_procedures) => {
+                    self.remote_procedures.insert(name, remote_procedures);
+                },
+                FunctionThreadCommand::Call(rpc_call) => {
+                    if let Some(function) = self.remote_procedures.get_mut(&rpc_call.function) {
+                        // NOCOM(#sirver): result value?
+                        let result = function.call(rpc_call.args);
+                        self.event_loop_sender.send(Command::Send(
+                            ipc::Message::RpcData(ipc::RpcReply {
+                                context: rpc_call.context,
+                                // NOCOM(#sirver): what about streaming rpcs?
+                                state: ipc::RpcState::Done,
+                                result: result,
+                            }))).unwrap();
+                    }
+                    // NOCOM(#sirver): return an error - though if that has happened the
+                    // server messed up too.
+
+                    // NOCOM(#sirver): implement
+                }
+            }
         }
     }
 }
@@ -144,26 +226,45 @@ impl<'a> Client<'a> {
                             mio::PollOpt::level()).unwrap();
 
         let (client_tx, values) = mpsc::channel();
-        let network_commands = event_loop.channel();
+        let event_loop_sender = event_loop.channel();
+        let (commands_tx, commands_rx) = mpsc::channel();
+        // NOCOM(#sirver): the Handler could maybe dispatch all commands between threads?
+        let event_loop_function_thread_sender = commands_tx.clone();
         let event_loop_thread_guard = thread::scoped(move || {
             event_loop.run(&mut Handler {
                 stream: stream,
                 values: client_tx,
                 running_function_calls: HashMap::new(),
+                function_thread_sender: event_loop_function_thread_sender,
             }).unwrap();
+        });
+
+        let function_thread_event_loop_sender = event_loop_sender.clone();
+        let function_thread_guard = thread::scoped(move || {
+            let thread = FunctionThread {
+                remote_procedures: HashMap::new(),
+                commands: commands_rx,
+                event_loop_sender: function_thread_event_loop_sender,
+            };
+            thread.spin_forever();
         });
 
         let client = Client {
             values: values,
-            network_commands: network_commands,
-            remote_procedures: HashMap::new(),
+            event_loop_sender: event_loop_sender,
             _event_loop_thread_guard: event_loop_thread_guard,
+
+            function_thread_sender: commands_tx,
+            _function_thread_guard: function_thread_guard,
         };
         client
     }
 
-    pub fn write(&self, message: ipc::Message) {
-        self.network_commands.send(Command::Send(message)).unwrap();
+    pub fn client_handle(&self) -> ClientHandle {
+        ClientHandle {
+            event_loop_sender: self.event_loop_sender.clone(),
+            function_thread_sender: self.function_thread_sender.clone(),
+        }
     }
 
     pub fn recv(&self) -> Result<json::Value> {
@@ -173,24 +274,12 @@ impl<'a> Client<'a> {
         }
     }
 
-    // NOCOM(#sirver): Return a future? How about streaming functions?
+    // NOCOM(#sirver): now, that seems really stupid..
     pub fn call(&self, function: &str, args: &json::Value) -> Rpc {
-        let context = Uuid::new_v4().to_hyphenated_string();
-
-        let message = ipc::Message::RpcCall {
-            function: function.into(),
-            context: context.clone(),
-            args: args.clone(),
-        };
-
-        let (tx, rx) = mpsc::channel();
-        self.network_commands.send(Command::Call(context, tx)).unwrap();
-
-        self.write(message);
-        Rpc::new(rx)
+        self.client_handle().call(function, args)
     }
 
-    pub fn register_function(&mut self, name: &str, remote_procedure: Box<RemoteProcedure>) {
+    pub fn register_function(&self, name: &str, remote_procedure: Box<RemoteProcedure>) {
         // NOCOM(#sirver): what happens when this is already inserted? crash probably
         // NOCOM(#sirver): rethink 'register_function' maybe, register_rpc
         let rpc = self.call("core.register_function", &json::to_value(&RegisterFunctionArgs {
@@ -199,7 +288,8 @@ impl<'a> Client<'a> {
         let success = rpc.wait().unwrap();
         // NOCOM(#sirver): report failure.
 
-        self.remote_procedures.insert(name.into(), remote_procedure);
+        self.function_thread_sender.send(FunctionThreadCommand::RegisterFunction(
+                name.into(), remote_procedure)).unwrap();
     }
 }
 
@@ -207,6 +297,7 @@ impl<'a> Drop for Client<'a> {
     fn drop(&mut self) {
         // The event loop is already shut down if the server disconnected us. Then this send will
         // fail, which is fine to be ignored in that case.
-        let _ = self.network_commands.send(Command::Quit);
+        let _ = self.event_loop_sender.send(Command::Quit);
+        let _ = self.function_thread_sender.send(FunctionThreadCommand::Quit);
     }
 }

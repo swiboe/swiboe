@@ -44,6 +44,8 @@ impl Switchboard {
                     };
                     match result {
                         FunctionResult::NotHandled => {
+                            // NOCOM(#sirver): this should not be broadcasted, but it does not
+                            // hurt.
                             // NOCOM(#sirver): immediately try the next contender
                             self.broadcast(&ipc::Message::RpcData(
                                     ipc::RpcReply {

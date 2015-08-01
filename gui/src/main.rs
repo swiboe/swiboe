@@ -47,7 +47,6 @@ impl SwitchboardGtkGui {
         // NOCOM(#sirver): bring back
         // glib::source::timeout_add(100, move || {
             // while let Some(msg) = client.poll() {
-                // println!("#sirver msg: {:#?}", msg);
             // }
             // glib::source::Continue(true)
         // });

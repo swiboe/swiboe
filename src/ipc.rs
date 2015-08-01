@@ -26,9 +26,17 @@ pub enum RpcResultKind {
     NoHandler,
 }
 
+#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
+pub struct RpcCall {
+    pub function: String,
+    pub context: String,
+    pub args: json::Value,
+}
+
 // NOCOM(#sirver): most of the entries here can be Cow.
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum Message {
+    // NOCOM(#sirver): replace with the struct
     RpcCall {
         function: String,
         context: String,
