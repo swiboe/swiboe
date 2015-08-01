@@ -42,7 +42,7 @@ fn shutdown_server_with_clients_connected() {
     let socket_name = temporary_socket_name();
     let mut server = Server::launch(&socket_name);
 
-    let _client = Client::connect(&socket_name.to_string_lossy());
+    let _client = Client::connect(&socket_name);
 
     server.shutdown();
 }
@@ -51,15 +51,15 @@ fn shutdown_server_with_clients_connected() {
 fn shutdown_server_with_no_clients_connected() {
     let (_server, socket_name) = TestServer::new();
 
-    let _client = Client::connect(&socket_name.to_string_lossy());
+    let _client = Client::connect(&socket_name);
 }
 
 #[test]
 fn broadcast_works() {
     let (_server, socket_name) = TestServer::new();
 
-    let client1 = Client::connect(&socket_name.to_string_lossy());
-    let client2 = Client::connect(&socket_name.to_string_lossy());
+    let client1 = Client::connect(&socket_name);
+    let client2 = Client::connect(&socket_name);
 
     let test_msg = json::builder::ObjectBuilder::new()
         .insert("blub".into(), "blah")
@@ -79,8 +79,8 @@ fn broadcast_works() {
 fn register_function_and_call_it() {
     let (_server, socket_name) = TestServer::new();
 
-    let client1 = Client::connect(&socket_name.to_string_lossy());
-    let client2 = Client::connect(&socket_name.to_string_lossy());
+    let client1 = Client::connect(&socket_name);
+    let client2 = Client::connect(&socket_name);
 
     struct TestCall {
         client_handle: client::ClientHandle,
@@ -118,8 +118,8 @@ fn register_function_and_call_it() {
 // fn waiting_for_call_does_not_mean_you_miss_data() {
     // let (_server, socket_name) = TestServer::new();
 
-    // let client1 = Client::connect(&socket_name.to_string_lossy());
-    // let client2 = Client::connect(&socket_name.to_string_lossy());
+    // let client1 = Client::connect(&socket_name);
+    // let client2 = Client::connect(&socket_name);
 
     // let test_msg = json::builder::ObjectBuilder::new()
         // .insert("blub".into(), "blah")

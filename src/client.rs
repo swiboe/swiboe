@@ -1,12 +1,10 @@
 #![allow(deprecated)]
 
-use serde::json;
-
-// NOCOM(#sirver): use a custom enum for error codes even in json.
-
 use mio::unix::UnixStream;
 use mio;
+use serde::json;
 use std::collections::HashMap;
+use std::path;
 use std::sync::mpsc;
 use std::thread;
 use super::ipc::{self, IpcWrite, IpcRead};
@@ -206,10 +204,8 @@ impl FunctionThread {
 }
 
 impl<'a> Client<'a> {
-    // NOCOM(#sirver): socket_name should be a path
-    pub fn connect(socket_name: &str) -> Self {
-        let stream =
-            UnixStream::connect(socket_name).unwrap();
+    pub fn connect(socket_name: &path::Path) -> Self {
+        let stream = UnixStream::connect(socket_name).unwrap();
 
         let mut event_loop = mio::EventLoop::new().unwrap();
         event_loop.register_opt(

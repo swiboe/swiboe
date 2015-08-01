@@ -57,6 +57,7 @@ impl Plugin for CorePlugin {
     }
 }
 
+// NOCOM(#sirver): this should use client.
 pub fn register(command_sender: &CommandSender) {
     let core = CorePlugin;
     let id = core.id();
