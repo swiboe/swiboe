@@ -2,7 +2,7 @@
 
 use mio::unix::UnixStream;
 use mio;
-use serde::json;
+use serde::{json, Serialize};
 use std::collections::HashMap;
 use std::path;
 use std::sync::mpsc;
@@ -145,12 +145,13 @@ impl ClientHandle {
     }
 
     // NOCOM(#sirver): Return a future? How about streaming functions?
-    pub fn call(&self, function: &str, args: &json::Value) -> Rpc {
+    pub fn call<T: Serialize>(&self, function: &str, args: &T) -> Rpc {
+        let args = json::to_value(&args);
         let context = Uuid::new_v4().to_hyphenated_string();
         let message = ipc::Message::RpcCall(ipc::RpcCall {
             function: function.into(),
             context: context.clone(),
-            args: args.clone(),
+            args: args,
         });
 
         let (tx, rx) = mpsc::channel();
@@ -263,16 +264,16 @@ impl<'a> Client<'a> {
     }
 
     // NOCOM(#sirver): now, that seems really stupid..
-    pub fn call(&self, function: &str, args: &json::Value) -> Rpc {
+    pub fn call<T: Serialize>(&self, function: &str, args: &T) -> Rpc {
         self.client_handle().call(function, args)
     }
 
     pub fn register_function(&self, name: &str, remote_procedure: Box<RemoteProcedure + 'a>) {
         // NOCOM(#sirver): what happens when this is already inserted? crash probably
         // NOCOM(#sirver): rethink 'register_function' maybe, register_rpc
-        let rpc = self.call("core.register_function", &json::to_value(&RegisterFunctionArgs {
+        let rpc = self.call("core.register_function", &RegisterFunctionArgs {
             name: name.into(),
-        }));
+        });
         let success = rpc.wait().unwrap();
         // NOCOM(#sirver): report failure.
 

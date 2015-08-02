@@ -11,12 +11,12 @@ pub struct NewRequest;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub struct NewResponse {
-    buffer_index: usize,
+    pub buffer_index: usize,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub struct NewBuffer {
-    buffer_index: usize,
+    pub buffer_index: usize,
 }
 
 struct New {
@@ -60,9 +60,9 @@ impl BuffersManager {
 
         self.buffers.insert(current_buffer_index, String::new());
         // NOCOM(#sirver): having a broadcast function would be nice.
-        self.client_handle.call("core.broadcast", &json::to_value(&NewBuffer {
+        self.client_handle.call("core.broadcast", &NewBuffer {
             buffer_index: current_buffer_index,
-        })).wait();
+        }).wait();
         current_buffer_index
     }
 }

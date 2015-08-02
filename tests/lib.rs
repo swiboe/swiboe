@@ -120,11 +120,16 @@ fn buffer_new() {
 
     let request = plugin_buffer::NewRequest;
 
-    let rpc = client.call("buffer.new", &json::to_value(&request));
+    let rpc = client.call("buffer.new", &request);
     assert_eq!(rpc.wait().unwrap(), RpcResultKind::Ok);
 
-    let broadcast_msg = client.recv().unwrap();
-    println!("#sirver broadcast_msg: {:#?}", broadcast_msg);
+    // NOCOM(#sirver): this rpc should contain information about the created buffer.
+
+    let broadcast_msg: plugin_buffer::NewBuffer =
+        json::from_value(client.recv().unwrap()).unwrap();
+    assert_eq!(plugin_buffer::NewBuffer {
+        buffer_index: 0,
+    }, broadcast_msg);
 }
 
 // NOCOM(#sirver): test is needed.
