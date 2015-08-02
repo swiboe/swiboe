@@ -8,6 +8,7 @@ use super::ipc;
 use super::ipc_bridge;
 use super::plugin::{PluginId, FunctionCallContext, Plugin, FunctionResult};
 use super::plugin_core;
+use super::plugin_buffer;
 
 pub enum Command {
     Shutdown,
@@ -100,20 +101,26 @@ impl Switchboard {
     }
 }
 
-pub struct Server {
-    event_loop_thread: Option<thread::JoinHandle<()>>,
-    commands: CommandSender,
+pub struct Server<'a> {
     socket_name: PathBuf,
+    commands: CommandSender,
+    event_loop_thread: Option<thread::JoinHandle<()>>,
+    buffer_plugin: Option<plugin_buffer::BufferPlugin<'a>>,
 }
 
-impl Server {
+impl<'a> Server<'a> {
     pub fn launch(socket_name: &Path) -> Self {
+        let (tx, rx) = channel();
+
+        let mut server = Server {
+            socket_name: socket_name.to_path_buf(),
+            commands: tx,
+            event_loop_thread: None,
+            buffer_plugin: None,
+        };
+
         // TODO(sirver): grep for unwrap and remove
         let mut event_loop = mio::EventLoop::new().unwrap();
-
-        let (tx, rx) = channel();
-        let mut ipc_brigde = ipc_bridge::IpcBridge::new(
-            &mut event_loop, socket_name, tx.clone());
 
         let mut switchboard = Switchboard {
             functions: HashMap::new(),
@@ -122,22 +129,23 @@ impl Server {
             ipc_bridge_commands: event_loop.channel(),
         };
 
-        plugin_core::register(&tx);
+        let mut ipc_brigde = ipc_bridge::IpcBridge::new(
+            &mut event_loop, &server.socket_name, server.commands.clone());
 
         let switchboard_thread = thread::spawn(move || {
             switchboard.spin_forever();
         });
 
-        let event_loop_thread = thread::spawn(move || {
+        server.event_loop_thread = Some(thread::spawn(move || {
             event_loop.run(&mut ipc_brigde).unwrap();
             switchboard_thread.join().unwrap();
-        });
+        }));
 
-        Server {
-            event_loop_thread: Some(event_loop_thread),
-            commands: tx,
-            socket_name: socket_name.to_path_buf(),
-        }
+        plugin_core::register(&server.commands);
+
+        server.buffer_plugin = Some(
+            plugin_buffer::BufferPlugin::new(&server.socket_name));
+        server
     }
 
     pub fn shutdown(&mut self) {

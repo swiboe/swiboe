@@ -22,7 +22,7 @@ fn temporary_socket_name() -> PathBuf {
     dir
 }
 
-// On my macbook: 114,111 ns/iter (+/- 12,791).
+// On my macbook: 101,100 ns/iter (+/- 7,259)
 #[bench]
 fn bench_broadcast(b: &mut Bencher) {
     let socket_name = temporary_socket_name();
@@ -30,7 +30,7 @@ fn bench_broadcast(b: &mut Bencher) {
 
     // Increasing the number of clients makes my system run out of file descriptors really quickly.
     let clients: Vec<_> = (1..5)
-        .map(|_| Client::connect(&socket_name.to_string_lossy())).collect();
+        .map(|_| Client::connect(&socket_name)).collect();
 
     let test_msg = json::builder::ObjectBuilder::new()
         .insert("blub".into(), "blah")

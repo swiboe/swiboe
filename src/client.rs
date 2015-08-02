@@ -54,7 +54,7 @@ pub struct Client<'a> {
     event_loop_sender: mio::Sender<EventLoopThreadCommand>,
     _event_loop_thread_guard: thread::JoinGuard<'a, ()>,
 
-    function_thread_sender: mpsc::Sender<FunctionThreadCommand>,
+    function_thread_sender: mpsc::Sender<FunctionThreadCommand<'a>>,
     _function_thread_guard: thread::JoinGuard<'a, ()>,
 }
 
@@ -65,14 +65,14 @@ pub enum EventLoopThreadCommand {
 }
 
 // NOCOM(#sirver): bad name
-struct Handler {
+struct Handler<'a> {
     stream: UnixStream,
     values: mpsc::Sender<json::Value>,
     running_function_calls: HashMap<String, mpsc::Sender<ipc::RpcReply>>,
-    function_thread_sender: mpsc::Sender<FunctionThreadCommand>,
+    function_thread_sender: mpsc::Sender<FunctionThreadCommand<'a>>,
 }
 
-impl mio::Handler for Handler {
+impl<'a> mio::Handler for Handler<'a> {
     type Timeout = ();
     type Message = EventLoopThreadCommand;
 
@@ -161,19 +161,19 @@ impl ClientHandle {
     }
 }
 
-enum FunctionThreadCommand {
+enum FunctionThreadCommand<'a> {
     Quit,
-    RegisterFunction(String, Box<RemoteProcedure>),
+    RegisterFunction(String, Box<RemoteProcedure + 'a>),
     Call(ipc::RpcCall),
 }
 
-struct FunctionThread {
-    remote_procedures: HashMap<String, Box<RemoteProcedure>>,
-    commands: mpsc::Receiver<FunctionThreadCommand>,
+struct FunctionThread<'a> {
+    remote_procedures: HashMap<String, Box<RemoteProcedure + 'a>>,
+    commands: mpsc::Receiver<FunctionThreadCommand<'a>>,
     event_loop_sender: mio::Sender<EventLoopThreadCommand>,
 }
 
-impl FunctionThread {
+impl<'a> FunctionThread<'a> {
     pub fn spin_forever(mut self) {
         while let Ok(command) = self.commands.recv() {
             match command {
@@ -267,7 +267,7 @@ impl<'a> Client<'a> {
         self.client_handle().call(function, args)
     }
 
-    pub fn register_function(&self, name: &str, remote_procedure: Box<RemoteProcedure>) {
+    pub fn register_function(&self, name: &str, remote_procedure: Box<RemoteProcedure + 'a>) {
         // NOCOM(#sirver): what happens when this is already inserted? crash probably
         // NOCOM(#sirver): rethink 'register_function' maybe, register_rpc
         let rpc = self.call("core.register_function", &json::to_value(&RegisterFunctionArgs {

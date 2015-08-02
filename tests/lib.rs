@@ -8,15 +8,16 @@ use std::path::{PathBuf};
 use switchboard::client::{self, RemoteProcedure, Client};
 use switchboard::ipc::RpcResultKind;
 use switchboard::server::Server;
+use switchboard::plugin_buffer;
 use uuid::Uuid;
 
 // NOCOM(#sirver): use the name switchboard everywhere.
 
-struct TestServer {
-    server: Option<Server>,
+struct TestServer<'a> {
+    server: Option<Server<'a>>,
 }
 
-impl TestServer {
+impl<'a> TestServer<'a> {
     fn new() -> (Self, PathBuf) {
         let socket_name = temporary_socket_name();
         let server = Server::launch(&socket_name);
@@ -25,7 +26,7 @@ impl TestServer {
     }
 }
 
-impl Drop for TestServer {
+impl<'a> Drop for TestServer<'a> {
     fn drop(&mut self) {
         self.server.take().unwrap().shutdown();
     }
@@ -98,7 +99,6 @@ fn register_function_and_call_it() {
         client_handle: client_handle,
     }));
 
-
     let test_msg = json::builder::ObjectBuilder::new()
         .insert("blub".into(), "blah")
         .unwrap();
@@ -111,6 +111,20 @@ fn register_function_and_call_it() {
 
     let broadcast_msg = client2.recv().unwrap();
     assert_eq!(test_msg, broadcast_msg);
+}
+
+#[test]
+fn buffer_new() {
+    let (_server, socket_name) = TestServer::new();
+    let client = Client::connect(&socket_name);
+
+    let request = plugin_buffer::NewRequest;
+
+    let rpc = client.call("buffer.new", &json::to_value(&request));
+    assert_eq!(rpc.wait().unwrap(), RpcResultKind::Ok);
+
+    let broadcast_msg = client.recv().unwrap();
+    println!("#sirver broadcast_msg: {:#?}", broadcast_msg);
 }
 
 // NOCOM(#sirver): test is needed.

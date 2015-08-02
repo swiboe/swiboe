@@ -126,7 +126,7 @@ impl mio::Handler for IpcBridge {
                             // interested in that.
                             self.commands.send(server::Command::Broadcast(message)).unwrap();
                         }
-                        _ => panic!("Client send unexpected commands."),
+                        _ => panic!("Client send unexpected command: {:?}", message),
                     }
                 }
             }
