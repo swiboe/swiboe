@@ -1,4 +1,3 @@
-// NOCOM(#sirver): is that needed?
 #![feature(test)]
 
 extern crate serde;
@@ -15,12 +14,11 @@ use switchboard::plugin_buffer;
 use test::Bencher;
 
 
-// On my macbook: 210,033 ns/iter (+/- 20,747)
+// On my macbook: 415,791 ns/iter (+/- 32,292)
 #[bench]
 fn bench_broadcast(b: &mut Bencher) {
     let (_server, socket_name) = TestServer::new();
 
-    // Increasing the number of clients makes my system run out of file descriptors really quickly.
     let clients: Vec<_> = (1..50)
         .map(|_| Client::connect(&socket_name)).collect();
 
@@ -37,6 +35,7 @@ fn bench_broadcast(b: &mut Bencher) {
     });
 }
 
+// On my macbook: 412,692 ns/iter (+/- 33,380)
 #[bench]
 fn bench_create_and_delete_buffers(b: &mut Bencher) {
     let (_server, socket_name) = TestServer::new();

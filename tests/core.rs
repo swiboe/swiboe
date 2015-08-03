@@ -4,8 +4,6 @@ use switchboard::client::{self, RemoteProcedure, Client};
 use switchboard::ipc::RpcResultKind;
 use switchboard::server::Server;
 
-// NOCOM(#sirver): use the name switchboard everywhere.
-
 #[test]
 fn shutdown_server_with_clients_connected() {
     let socket_name = temporary_socket_name();
