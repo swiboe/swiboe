@@ -1,3 +1,4 @@
+// NOCOM(#sirver): is that needed?
 #![feature(test)]
 
 extern crate serde;

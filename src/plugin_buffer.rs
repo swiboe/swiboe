@@ -3,7 +3,6 @@ use std::path;
 use std::sync::{RwLock, Arc};
 use std::collections::HashMap;
 use super::Result;
-use super::ipc::{self};
 use super::client::{self, Client, RemoteProcedure};
 use super::ipc::RpcResultKind;
 
@@ -97,7 +96,7 @@ impl BuffersManager {
         // NOCOM(#sirver): having a broadcast function would be nice.
         self.client_handle.call("core.broadcast", &BufferCreated {
             buffer_index: current_buffer_index,
-        }).wait();
+        }).wait().unwrap();
         current_buffer_index
     }
 
@@ -106,7 +105,7 @@ impl BuffersManager {
         // NOCOM(#sirver): having a broadcast function would be nice.
         self.client_handle.call("core.broadcast", &BufferDeleted {
             buffer_index: buffer_index,
-        }).wait();
+        }).wait().unwrap();
         Ok(())
     }
 }
@@ -121,7 +120,7 @@ impl<'a> BufferPlugin<'a> {
     pub fn new(socket_name: &path::Path) -> Self {
         let client = Client::connect(socket_name);
 
-        let mut plugin = BufferPlugin {
+        let plugin = BufferPlugin {
             buffers: Arc::new(RwLock::new(BuffersManager::new(client.client_handle()))),
             client: client,
         };

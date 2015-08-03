@@ -1,12 +1,7 @@
-extern crate serde;
 extern crate uuid;
 
-use serde::json;
 use std::env;
 use std::path::{PathBuf};
-use super::client::{self, RemoteProcedure, Client};
-use super::ipc::RpcResultKind;
-use super::plugin_buffer;
 use super::server::Server;
 use uuid::Uuid;
 
