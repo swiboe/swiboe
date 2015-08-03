@@ -3,7 +3,10 @@
 
 extern crate serde;
 extern crate switchboard;
+extern crate uuid;
 extern crate test;
+
+#[path="../tests/support/mod.rs"] mod support;
 
 use serde::json;
 use support::TestServer;
@@ -18,7 +21,7 @@ fn bench_broadcast(b: &mut Bencher) {
     let (_server, socket_name) = TestServer::new();
 
     // Increasing the number of clients makes my system run out of file descriptors really quickly.
-    let clients: Vec<_> = (1..5)
+    let clients: Vec<_> = (1..50)
         .map(|_| Client::connect(&socket_name)).collect();
 
     let test_msg = json::builder::ObjectBuilder::new()
