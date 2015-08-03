@@ -24,7 +24,11 @@ const SERVER_TOKEN: mio::Token = mio::Token(0);
 impl IpcBridge {
     pub fn new(event_loop: &mut mio::EventLoop<Self>, socket_name: &Path, server_commands: server::CommandSender) -> Self {
         let server = UnixListener::bind(socket_name).unwrap();
-        event_loop.register(&server, SERVER_TOKEN).unwrap();
+        event_loop.register_opt(
+            &server,
+            SERVER_TOKEN,
+            mio::EventSet::readable(),
+            mio::PollOpt::level()).unwrap();
         IpcBridge {
             unix_listener: server,
             connections: mio::util::Slab::new_starting_at(mio::Token(1), 1024),
