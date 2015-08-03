@@ -16,4 +16,4 @@ script:
 
 env:
   global:
-    - TRAVIS_CARGO_NIGHTLY_FEATURE=
+    - TRAVIS_CARGO_NIGHTLY_FEATURE="nightly"
