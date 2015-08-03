@@ -1,11 +1,8 @@
-extern crate serde;
-extern crate switchboard;
-
 use serde::json;
+use support::{TestServer, temporary_socket_name};
 use switchboard::client::{self, RemoteProcedure, Client};
 use switchboard::ipc::RpcResultKind;
 use switchboard::server::Server;
-use switchboard::testing::{TestServer, temporary_socket_name};
 
 // NOCOM(#sirver): use the name switchboard everywhere.
 

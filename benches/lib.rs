@@ -6,9 +6,9 @@ extern crate switchboard;
 extern crate test;
 
 use serde::json;
+use support::TestServer;
 use switchboard::client::Client;
 use switchboard::plugin_buffer;
-use switchboard::testing::TestServer;
 use test::Bencher;
 
 

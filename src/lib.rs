@@ -17,7 +17,4 @@ pub mod plugin_buffer;
 pub mod plugin_core;
 pub mod server;
 
-pub mod testing;
-
-
 pub use error::{Error, ErrorKind, Result};

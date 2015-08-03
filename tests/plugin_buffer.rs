@@ -1,11 +1,8 @@
-extern crate serde;
-extern crate switchboard;
-
 use serde::json;
+use support::TestServer;
 use switchboard::client::{RemoteProcedure, Client};
 use switchboard::ipc::RpcResultKind;
 use switchboard::plugin_buffer;
-use switchboard::testing::TestServer;
 
 fn create_buffer(client: &Client, expected_index: usize) {
     let request = plugin_buffer::NewRequest;

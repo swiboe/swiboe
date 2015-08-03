@@ -3,10 +3,19 @@ name = "switchboard"
 version = "0.1.0"
 dependencies = [
  "libc 0.1.8 (registry+https://github.com/rust-lang/crates.io-index)",
- "mio 0.4.1 (git+https://github.com/carllerche/mio.git)",
+ "mio 0.5.0-pre (git+https://github.com/carllerche/mio.git)",
  "serde 0.4.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_macros 0.4.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "uuid 0.1.17 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "advapi32-sys"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+dependencies = [
+ "winapi 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "winapi-build 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -22,7 +31,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 [[package]]
 name = "bytes"
 version = "0.2.10"
-source = "registry+https://github.com/rust-lang/crates.io-index"
+source = "git+https://github.com/carllerche/bytes#b4abd1431a553be131c757b9b366c71dfd6461af"
 
 [[package]]
 name = "clock_ticks"
@@ -47,10 +56,10 @@ dependencies = [
 
 [[package]]
 name = "mio"
-version = "0.4.1"
-source = "git+https://github.com/carllerche/mio.git#478cef3f66716bd8584620b09838a177028edda9"
+version = "0.5.0-pre"
+source = "git+https://github.com/carllerche/mio.git#18fc66c3ca3aeab65101ec51c668d1471f8ba369"
 dependencies = [
- "bytes 0.2.10 (registry+https://github.com/rust-lang/crates.io-index)",
+ "bytes 0.2.10 (git+https://github.com/carllerche/bytes)",
  "clock_ticks 0.0.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "libc 0.1.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -73,7 +82,7 @@ name = "num"
 version = "0.1.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
- "rand 0.3.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rand 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "rustc-serialize 0.3.15 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -100,10 +109,12 @@ dependencies = [
 
 [[package]]
 name = "rand"
-version = "0.3.8"
+version = "0.3.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
+ "advapi32-sys 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "libc 0.1.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "winapi 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -147,7 +158,7 @@ name = "uuid"
 version = "0.1.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
- "rand 0.3.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rand 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "rustc-serialize 0.3.15 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -158,4 +169,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "libc 0.1.8 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
+
+[[package]]
+name = "winapi"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[[package]]
+name = "winapi-build"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
 

@@ -1,8 +1,6 @@
-extern crate uuid;
-
 use std::env;
 use std::path::{PathBuf};
-use super::server::Server;
+use switchboard::server::Server;
 use uuid::Uuid;
 
 pub struct TestServer<'a> {
