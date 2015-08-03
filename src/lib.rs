@@ -3,6 +3,8 @@
 #![feature(scoped)]
 #![plugin(serde_macros)]
 
+// NOCOM(#sirver): move travis configuration into shell scripts like in UltiSnips.
+
 extern crate libc;
 extern crate mio;
 extern crate serde;
