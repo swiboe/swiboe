@@ -2,6 +2,7 @@
 name = "switchboard"
 version = "0.1.0"
 dependencies = [
+ "libc 0.1.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "mio 0.4.1 (git+https://github.com/carllerche/mio.git)",
  "serde 0.4.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_macros 0.4.4 (registry+https://github.com/rust-lang/crates.io-index)",

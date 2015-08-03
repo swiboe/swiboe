@@ -3,6 +3,7 @@
 #![feature(scoped)]
 #![plugin(serde_macros)]
 
+extern crate libc;
 extern crate mio;
 extern crate serde;
 extern crate uuid;

@@ -4,6 +4,7 @@ version = "0.1.0"
 authors = ["Holger Rapp <HolgerRapp@gmx.net>"]
 
 [dependencies]
+libc = "0.1.8"
 serde = "0.4.3"
 serde_macros = "0.4.3"
 uuid = "0.1"

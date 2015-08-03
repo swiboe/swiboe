@@ -1,7 +1,8 @@
+// NOCOM(#sirver): rename IpcRead and IpcWrite to ipc::Read
+
 use mio::unix::{UnixListener, UnixStream};
 use mio;
 use std::path::Path;
-// NOCOM(#sirver): rename IpcRead and IpcWrite to ipc::Read
 use super::ipc::{self, IpcRead, IpcWrite};
 use super::plugin::remote::{RemotePlugin};
 use super::plugin::{RemotePluginId, PluginId, FunctionCallContext};

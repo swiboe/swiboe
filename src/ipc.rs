@@ -1,3 +1,4 @@
+use libc::consts::os::posix88;
 use serde::json;
 use std::io::{self, Read, Write};
 use super::Result;
@@ -50,14 +51,15 @@ pub trait IpcWrite {
     fn write_message(&mut self, message: &Message) -> Result<()>;
 }
 
+// TODO(hrapp): This kinda defeats the purpose of MIO a bit, but it makes it very convenient to
+// read always a full message. No buffering of our own is needed then.
 fn read_all<T: Read>(reader: &mut T, buffer: &mut [u8]) -> io::Result<()> {
     let mut num_read = 0;
     while num_read < buffer.len() {
         match reader.read(&mut buffer[num_read..]) {
             Ok(len) => num_read += len,
             Err(err) => {
-                // NOCOM(#sirver): hardly compatible
-                if err.raw_os_error() != Some(35) {
+                if err.raw_os_error() != Some(posix88::EAGAIN) {
                     return Err(err);
                 }
             }
