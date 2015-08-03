@@ -1,5 +1,5 @@
 use serde::json;
-use support::{TestServer, temporary_socket_name};
+use support::{TestHarness, temporary_socket_name};
 use switchboard::client::{self, RemoteProcedure, Client};
 use switchboard::ipc::RpcResultKind;
 use switchboard::server::Server;
@@ -16,16 +16,16 @@ fn shutdown_server_with_clients_connected() {
 
 #[test]
 fn shutdown_server_with_no_clients_connected() {
-    let (_server, socket_name) = TestServer::new();
-    let _client = Client::connect(&socket_name);
+    let t = TestHarness::new();
+    let _client = Client::connect(&t.socket_name);
 }
 
 #[test]
 fn broadcast_works() {
-    let (_server, socket_name) = TestServer::new();
+    let t = TestHarness::new();
 
-    let client1 = Client::connect(&socket_name);
-    let client2 = Client::connect(&socket_name);
+    let client1 = Client::connect(&t.socket_name);
+    let client2 = Client::connect(&t.socket_name);
 
     let test_msg = json::builder::ObjectBuilder::new()
         .insert("blub".into(), "blah")
@@ -43,10 +43,10 @@ fn broadcast_works() {
 
 #[test]
 fn register_function_and_call_it() {
-    let (_server, socket_name) = TestServer::new();
+    let t = TestHarness::new();
 
-    let client1 = Client::connect(&socket_name);
-    let client2 = Client::connect(&socket_name);
+    let client1 = Client::connect(&t.socket_name);
+    let client2 = Client::connect(&t.socket_name);
 
     struct TestCall {
         client_handle: client::ClientHandle,
@@ -81,7 +81,7 @@ fn register_function_and_call_it() {
 // NOCOM(#sirver): test is needed.
 // #[test]
 // fn waiting_for_call_does_not_mean_you_miss_data() {
-    // let (_server, socket_name) = TestServer::new();
+    // let t = TestHarness::new();
 
     // let client1 = Client::connect(&socket_name);
     // let client2 = Client::connect(&socket_name);

@@ -2,13 +2,14 @@
 
 extern crate serde;
 extern crate switchboard;
-extern crate uuid;
+extern crate tempdir;
 extern crate test;
+extern crate uuid;
 
 #[path="../tests/support/mod.rs"] mod support;
 
 use serde::json;
-use support::TestServer;
+use support::TestHarness;
 use switchboard::client::Client;
 use switchboard::plugin_buffer;
 use test::Bencher;
@@ -17,10 +18,10 @@ use test::Bencher;
 // On my macbook: 415,791 ns/iter (+/- 32,292)
 #[bench]
 fn bench_broadcast(b: &mut Bencher) {
-    let (_server, socket_name) = TestServer::new();
+    let t = TestHarness::new();
 
     let clients: Vec<_> = (1..50)
-        .map(|_| Client::connect(&socket_name)).collect();
+        .map(|_| Client::connect(&t.socket_name)).collect();
 
     let test_msg = json::builder::ObjectBuilder::new()
         .insert("blub".into(), "blah")
@@ -38,8 +39,8 @@ fn bench_broadcast(b: &mut Bencher) {
 // On my macbook: 412,692 ns/iter (+/- 33,380)
 #[bench]
 fn bench_create_and_delete_buffers(b: &mut Bencher) {
-    let (_server, socket_name) = TestServer::new();
-    let client = Client::connect(&socket_name);
+    let t = TestHarness::new();
+    let client = Client::connect(&t.socket_name);
 
     b.iter(|| {
         client.call("buffer.new", &plugin_buffer::NewRequest).wait().unwrap();

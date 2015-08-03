@@ -1,5 +1,5 @@
 use serde::json;
-use support::TestServer;
+use support::TestHarness;
 use switchboard::client::{RemoteProcedure, Client};
 use switchboard::ipc::RpcResultKind;
 use switchboard::plugin_buffer;
@@ -19,15 +19,15 @@ fn create_buffer(client: &Client, expected_index: usize) {
 
 #[test]
 fn buffer_new() {
-    let (_server, socket_name) = TestServer::new();
-    let client = Client::connect(&socket_name);
+    let t = TestHarness::new();
+    let client = Client::connect(&t.socket_name);
     create_buffer(&client, 0);
 }
 
 #[test]
 fn buffer_delete() {
-    let (_server, socket_name) = TestServer::new();
-    let client = Client::connect(&socket_name);
+    let t = TestHarness::new();
+    let client = Client::connect(&t.socket_name);
     create_buffer(&client, 0);
 
     let request = plugin_buffer::DeleteRequest {
