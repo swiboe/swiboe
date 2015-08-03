@@ -3,30 +3,18 @@
 extern crate serde;
 extern crate switchboard;
 extern crate test;
-extern crate uuid;
 
 use serde::json;
-use std::env;
-use std::path::{PathBuf};
 use switchboard::client::Client;
-use switchboard::server::{Server};
+use switchboard::plugin_buffer;
+use switchboard::testing::TestServer;
 use test::Bencher;
-use uuid::Uuid;
 
-// NOCOM(#sirver): use the name switchboard everywhere.
 
-// NOCOM(#sirver): duplicated - pull out stuff into a library
-fn temporary_socket_name() -> PathBuf {
-    let mut dir = env::temp_dir();
-    dir.push(format!("{}.socket", Uuid::new_v4().to_string()));
-    dir
-}
-
-// On my macbook: 101,100 ns/iter (+/- 7,259)
+// On my macbook: 210,033 ns/iter (+/- 20,747)
 #[bench]
 fn bench_broadcast(b: &mut Bencher) {
-    let socket_name = temporary_socket_name();
-    let mut server = Server::launch(&socket_name);
+    let (_server, socket_name) = TestServer::new();
 
     // Increasing the number of clients makes my system run out of file descriptors really quickly.
     let clients: Vec<_> = (1..5)
@@ -39,12 +27,28 @@ fn bench_broadcast(b: &mut Bencher) {
     b.iter(|| {
         let function_call = clients[0].call("core.broadcast", &test_msg);
         function_call.wait().unwrap();
-        let msg = clients[0].recv().unwrap();
-        for client in &clients[1..] {
-            let msg1 = client.recv().unwrap();
-            assert_eq!(msg, msg1);
+        for client in &clients {
+            assert_eq!(test_msg, client.recv().unwrap());
         }
     });
+}
 
-    server.shutdown();
+#[bench]
+fn bench_create_and_delete_buffers(b: &mut Bencher) {
+    let (_server, socket_name) = TestServer::new();
+    let client = Client::connect(&socket_name);
+
+    b.iter(|| {
+        client.call("buffer.new", &plugin_buffer::NewRequest).wait().unwrap();
+
+        let buffer_created: plugin_buffer::BufferCreated =
+            json::from_value(client.recv().unwrap()).unwrap();
+        client.call("buffer.delete", &plugin_buffer::DeleteRequest {
+            buffer_index: buffer_created.buffer_index
+        }).wait().unwrap();
+
+        assert_eq!(plugin_buffer::BufferDeleted {
+            buffer_index: buffer_created.buffer_index,
+        }, json::from_value(client.recv().unwrap()).unwrap());
+    });
 }

@@ -1,16 +1,11 @@
 extern crate serde;
 extern crate switchboard;
-extern crate uuid;
 
 use serde::json;
-use std::env;
-use std::path::{PathBuf};
 use switchboard::client::{self, RemoteProcedure, Client};
 use switchboard::ipc::RpcResultKind;
-use switchboard::plugin_buffer;
 use switchboard::server::Server;
 use switchboard::testing::{TestServer, temporary_socket_name};
-use uuid::Uuid;
 
 // NOCOM(#sirver): use the name switchboard everywhere.
 
