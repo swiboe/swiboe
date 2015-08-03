@@ -1,0 +1,15 @@
+language: rust
+
+# TODO(sirver): support beta, stable, 1.0.0 also.
+rust:
+  - nightly
+
+before_script:
+  - pip install 'travis-cargo<0.2' --user && export PATH=$HOME/.local/bin:$PATH
+
+# TODO(sirver): build & publish docs somewhere.
+script:
+  - |
+      travis-cargo build &&
+      travis-cargo test &&
+      travis-cargo bench 
