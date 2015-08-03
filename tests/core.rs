@@ -7,36 +7,12 @@ use std::env;
 use std::path::{PathBuf};
 use switchboard::client::{self, RemoteProcedure, Client};
 use switchboard::ipc::RpcResultKind;
-use switchboard::server::Server;
 use switchboard::plugin_buffer;
+use switchboard::server::Server;
+use switchboard::testing::{TestServer, temporary_socket_name};
 use uuid::Uuid;
 
 // NOCOM(#sirver): use the name switchboard everywhere.
-
-struct TestServer<'a> {
-    server: Option<Server<'a>>,
-}
-
-impl<'a> TestServer<'a> {
-    fn new() -> (Self, PathBuf) {
-        let socket_name = temporary_socket_name();
-        let server = Server::launch(&socket_name);
-
-        (TestServer { server: Some(server), }, socket_name)
-    }
-}
-
-impl<'a> Drop for TestServer<'a> {
-    fn drop(&mut self) {
-        self.server.take().unwrap().shutdown();
-    }
-}
-
-fn temporary_socket_name() -> PathBuf {
-    let mut dir = env::temp_dir();
-    dir.push(format!("{}.socket", Uuid::new_v4().to_string()));
-    dir
-}
 
 #[test]
 fn shutdown_server_with_clients_connected() {
@@ -51,7 +27,6 @@ fn shutdown_server_with_clients_connected() {
 #[test]
 fn shutdown_server_with_no_clients_connected() {
     let (_server, socket_name) = TestServer::new();
-
     let _client = Client::connect(&socket_name);
 }
 
@@ -111,25 +86,6 @@ fn register_function_and_call_it() {
 
     let broadcast_msg = client2.recv().unwrap();
     assert_eq!(test_msg, broadcast_msg);
-}
-
-#[test]
-fn buffer_new() {
-    let (_server, socket_name) = TestServer::new();
-    let client = Client::connect(&socket_name);
-
-    let request = plugin_buffer::NewRequest;
-
-    let rpc = client.call("buffer.new", &request);
-    assert_eq!(rpc.wait().unwrap(), RpcResultKind::Ok);
-
-    // NOCOM(#sirver): this rpc should contain information about the created buffer.
-
-    let broadcast_msg: plugin_buffer::NewBuffer =
-        json::from_value(client.recv().unwrap()).unwrap();
-    assert_eq!(plugin_buffer::NewBuffer {
-        buffer_index: 0,
-    }, broadcast_msg);
 }
 
 // NOCOM(#sirver): test is needed.
