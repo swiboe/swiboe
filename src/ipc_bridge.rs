@@ -119,17 +119,20 @@ impl mio::Handler for IpcBridge {
                         ipc::Message::RpcCall(rpc_call) => {
                             let call_context = FunctionCallContext {
                                 rpc_call: rpc_call,
+                                // NOCOM(#sirver): commands is only a backchannel for sending. Pull
+                                // out an interface?
                                 commands: self.commands.clone(),
                                 caller: PluginId::Remote(conn.remote_plugin_id),
                             };
+                            // NOCOM(#sirver): call function should be Rpc
                             self.commands.send(server::Command::CallFunction(call_context)).unwrap();
 
                             // NOCOM(#sirver): need to keep track of who called this and how
                         },
-                        ipc::Message::RpcReply(_) => {
-                            // NOCOM(#sirver): should not be broadcasted - only the caller is
-                            // interested in that.
-                            self.commands.send(server::Command::Broadcast(message)).unwrap();
+                        ipc::Message::RpcReply(rpc_reply) => {
+                            // NOCOM(#sirver): should be RpcReply
+                            // NOCOM(#sirver): be consistent with Reply and Response.
+                            self.commands.send(server::Command::FunctionReply(rpc_reply)).unwrap();
                         }
                         _ => panic!("Client send unexpected command: {:?}", message),
                     }

@@ -6,11 +6,13 @@ use super::Result;
 // NOCOM(#sirver): add documentation (using this lint that forbids not having documentation).
 
 
+// NOCOM(#sirver): I think this can be killed.
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 pub enum RpcState {
     Running,
     Done,
 }
+
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct RpcReply {
@@ -26,7 +28,7 @@ pub struct RpcReply {
 pub enum RpcResult {
     // NOCOM(#sirver): mention success as a convenient creating for this.
     Ok(json::Value),
-    NoHandler,
+    NotHandled,
 }
 
 impl RpcResult {

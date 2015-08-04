@@ -48,6 +48,17 @@ fn broadcast_works() {
     assert_eq!(test_msg, broadcast_msg);
 }
 
+struct TestCall {
+    priority: u16,
+    result: RpcResult,
+}
+
+impl RemoteProcedure for TestCall {
+    fn priority(&self) -> u16 { self.priority }
+    fn call(&mut self, _: json::Value) -> RpcResult { self.result.clone() }
+}
+
+
 #[test]
 fn register_function() {
     let t = TestHarness::new();
@@ -55,16 +66,12 @@ fn register_function() {
     let client1 = Client::connect(&t.socket_name);
     let client2 = Client::connect(&t.socket_name);
 
-    struct TestCall;
-    impl RemoteProcedure for TestCall {
-        fn call(&mut self, args: json::Value) -> RpcResult {
-            RpcResult::Ok(args)
-        }
-    }
+    let test_msg: json::Value = json::from_str(r#"{ "blub": "blah" }"#).unwrap();
 
-    client1.register_function("test.test", Box::new(TestCall));
-
-    let test_msg = json::from_str(r#"{ "blub": "blah" }"#).unwrap();
+    client1.register_function("test.test", Box::new(TestCall {
+        priority: 0,
+        result: RpcResult::Ok(test_msg.clone()),
+    }));
 
     let rpc = client2.call("test.test", &test_msg);
     assert_eq!(rpc.wait().unwrap(), RpcResult::Ok(test_msg));
@@ -74,27 +81,42 @@ fn register_function() {
 fn register_function_with_priority() {
     let t = TestHarness::new();
 
-    struct TestCall1;
-    impl RemoteProcedure for TestCall1 {
-        fn priority(&self) -> u16 { 100 }
-        fn call(&mut self, _: json::Value) -> RpcResult {
-            RpcResult::Ok(json::from_str(r#"{ "from": "client1" }"#).unwrap())
-        }
-    }
     let client1 = Client::connect(&t.socket_name);
-    client1.register_function("test.test", Box::new(TestCall1));
+    client1.register_function("test.test", Box::new(TestCall {
+        priority: 100,
+        result: RpcResult::Ok(json::from_str(r#"{ "from": "client1" }"#).unwrap()),
+    }));
 
-    struct TestCall2;
-    impl RemoteProcedure for TestCall2 {
-        fn priority(&self) -> u16 { 50 }
-        fn call(&mut self, _: json::Value) -> RpcResult {
-            RpcResult::Ok(json::from_str(r#"{ "from": "client2" }"#).unwrap())
-        }
-    }
+
     let client2 = Client::connect(&t.socket_name);
-    client2.register_function("test.test", Box::new(TestCall2));
+    client2.register_function("test.test", Box::new(TestCall {
+        priority: 50,
+        result: RpcResult::Ok(json::from_str(r#"{ "from": "client2" }"#).unwrap()),
+    }));
 
     let client3 = Client::connect(&t.socket_name);
     let rpc = client3.call("test.test", &json::from_str::<json::Value>(r#"{}"#).unwrap());
     assert_eq!(RpcResult::Ok(json::from_str(r#"{ "from": "client2" }"#).unwrap()), rpc.wait().unwrap());
+}
+
+#[test]
+fn register_function_with_priority_first_does_not_handle() {
+    let t = TestHarness::new();
+
+    let client1 = Client::connect(&t.socket_name);
+    client1.register_function("test.test", Box::new(TestCall {
+        priority: 100,
+        result: RpcResult::Ok(json::from_str(r#"{ "from": "client1" }"#).unwrap()),
+    }));
+
+
+    let client2 = Client::connect(&t.socket_name);
+    client2.register_function("test.test", Box::new(TestCall {
+        priority: 50,
+        result: RpcResult::NotHandled,
+    }));
+
+    let client3 = Client::connect(&t.socket_name);
+    let rpc = client3.call("test.test", &json::from_str::<json::Value>(r#"{}"#).unwrap());
+    assert_eq!(RpcResult::Ok(json::from_str(r#"{ "from": "client1" }"#).unwrap()), rpc.wait().unwrap());
 }
