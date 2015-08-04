@@ -124,12 +124,12 @@ impl<'a> BufferPlugin<'a> {
         let new = Box::new(New {
             buffers: plugin.buffers.clone(),
         });
-        plugin.client.register_function("buffer.new", new);
+        plugin.client.new_rpc("buffer.new", new);
 
         let delete = Box::new(Delete {
             buffers: plugin.buffers.clone(),
         });
-        plugin.client.register_function("buffer.delete", delete);
+        plugin.client.new_rpc("buffer.delete", delete);
         plugin
     }
 }

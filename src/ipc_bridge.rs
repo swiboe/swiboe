@@ -113,13 +113,10 @@ impl mio::Handler for IpcBridge {
                     let message = conn.stream.read_message().expect("Could not read_message");;
                     match message {
                         ipc::Message::RpcCall(rpc_call) => {
-                            // NOCOM(#sirver): call function should be Rpc
-                            self.commands.send(server::Command::CallFunction(conn.client_id, rpc_call)).unwrap();
+                            self.commands.send(server::Command::RpcCall(conn.client_id, rpc_call)).unwrap();
                         },
-                        ipc::Message::RpcReply(rpc_reply) => {
-                            // NOCOM(#sirver): should be RpcReply
-                            // NOCOM(#sirver): be consistent with Reply and Response.
-                            self.commands.send(server::Command::FunctionReply(rpc_reply)).unwrap();
+                        ipc::Message::RpcResponse(rpc_response) => {
+                            self.commands.send(server::Command::RpcResponse(rpc_response)).unwrap();
                         }
                     }
                 }

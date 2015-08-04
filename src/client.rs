@@ -8,7 +8,7 @@ use std::path;
 use std::sync::mpsc;
 use std::thread;
 use super::ipc::{self, IpcWrite, IpcRead};
-use super::plugin_core::RegisterFunctionArgs;
+use super::plugin_core::NewRpcRequest;
 use super::Result;
 use uuid::Uuid;
 
@@ -21,11 +21,11 @@ pub trait RemoteProcedure: Send {
 
 pub struct Rpc {
     // NOCOM(#sirver): something more structured?
-    pub values: mpsc::Receiver<ipc::RpcReply>,
+    pub values: mpsc::Receiver<ipc::RpcResponse>,
 }
 
 impl Rpc {
-    fn new(values: mpsc::Receiver<ipc::RpcReply>) -> Self {
+    fn new(values: mpsc::Receiver<ipc::RpcResponse>) -> Self {
         // NOCOM(#sirver): implement drop so that we can cancel an RPC.
         Rpc {
             values: values,
@@ -33,14 +33,14 @@ impl Rpc {
     }
 
     // NOCOM(#sirver): timeout?
-    fn recv(&self) -> Result<ipc::RpcReply> {
+    fn recv(&self) -> Result<ipc::RpcResponse> {
         Ok(try!(self.values.recv()))
     }
 
     pub fn wait(self) -> Result<ipc::RpcResult> {
         // NOCOM(#sirver): how does streaming work?
-        let rpc_reply = try!(self.recv());
-        Ok(rpc_reply.result)
+        let rpc_response = try!(self.recv());
+        Ok(rpc_response.result)
     }
 }
 
@@ -55,13 +55,13 @@ pub struct Client<'a> {
 pub enum EventLoopThreadCommand {
     Quit,
     Send(ipc::Message),
-    Call(String, mpsc::Sender<ipc::RpcReply>),
+    Call(String, mpsc::Sender<ipc::RpcResponse>),
 }
 
 // NOCOM(#sirver): bad name
 struct Handler<'a> {
     stream: UnixStream,
-    running_function_calls: HashMap<String, mpsc::Sender<ipc::RpcReply>>,
+    running_function_calls: HashMap<String, mpsc::Sender<ipc::RpcResponse>>,
     function_thread_sender: mpsc::Sender<FunctionThreadCommand<'a>>,
 }
 
@@ -103,7 +103,7 @@ impl<'a> mio::Handler for Handler<'a> {
                     };
 
                     match message {
-                        ipc::Message::RpcReply(rpc_data) => {
+                        ipc::Message::RpcResponse(rpc_data) => {
                             // This will quietly drop any updates on functions that we no longer
                             // know/care about.
                             self.running_function_calls
@@ -126,7 +126,7 @@ impl<'a> mio::Handler for Handler<'a> {
 
 enum FunctionThreadCommand<'a> {
     Quit,
-    RegisterFunction(String, Box<RemoteProcedure + 'a>),
+    NewRpc(String, Box<RemoteProcedure + 'a>),
     Call(ipc::RpcCall),
 }
 
@@ -141,7 +141,7 @@ impl<'a> FunctionThread<'a> {
         while let Ok(command) = self.commands.recv() {
             match command {
                 FunctionThreadCommand::Quit => break,
-                FunctionThreadCommand::RegisterFunction(name, remote_procedures) => {
+                FunctionThreadCommand::NewRpc(name, remote_procedures) => {
                     self.remote_procedures.insert(name, remote_procedures);
                 },
                 FunctionThreadCommand::Call(rpc_call) => {
@@ -149,7 +149,7 @@ impl<'a> FunctionThread<'a> {
                         // NOCOM(#sirver): result value?
                         let result = function.call(rpc_call.args);
                         self.event_loop_sender.send(EventLoopThreadCommand::Send(
-                            ipc::Message::RpcReply(ipc::RpcReply {
+                            ipc::Message::RpcResponse(ipc::RpcResponse {
                                 context: rpc_call.context,
                                 // NOCOM(#sirver): what about streaming rpcs?
                                 state: ipc::RpcState::Done,
@@ -226,17 +226,16 @@ impl<'a> Client<'a> {
         Rpc::new(rx)
     }
 
-    pub fn register_function(&self, name: &str, remote_procedure: Box<RemoteProcedure + 'a>) {
+    pub fn new_rpc(&self, name: &str, remote_procedure: Box<RemoteProcedure + 'a>) {
         // NOCOM(#sirver): what happens when this is already inserted? crash probably
-        // NOCOM(#sirver): rethink 'register_function' maybe, register_rpc
-        let rpc = self.call("core.register_function", &RegisterFunctionArgs {
+        let rpc = self.call("core.new_rpc", &NewRpcRequest {
             priority: remote_procedure.priority(),
             name: name.into(),
         });
         let success = rpc.wait().unwrap();
         // NOCOM(#sirver): report failure.
 
-        self.function_thread_sender.send(FunctionThreadCommand::RegisterFunction(
+        self.function_thread_sender.send(FunctionThreadCommand::NewRpc(
                 name.into(), remote_procedure)).unwrap();
     }
 }

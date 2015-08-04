@@ -4,7 +4,7 @@ use super::ipc_bridge;
 use super::server;
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct RegisterFunctionArgs {
+pub struct NewRpcRequest {
     pub priority: u16,
     pub name: String,
 }
@@ -27,15 +27,15 @@ impl CorePlugin {
                 ipc::RpcResult::success(())
             },
             // NOCOM(#sirver): These args can be pulled out into Serializable structs.
-            "core.register_function" => {
-                let args: RegisterFunctionArgs = match json::from_value(rpc_call.args.clone()) {
+            "core.new_rpc" => {
+                let args: NewRpcRequest = match json::from_value(rpc_call.args.clone()) {
                     Ok(args) => args,
                     // NOCOM(#sirver): report errors somehow?
                     Err(_) => panic!("Invalid arguments"),
                 };
 
                 self.commands.send(
-                    server::Command::RegisterFunction(caller, args.name, args.priority)).unwrap();
+                    server::Command::NewRpc(caller, args.name, args.priority)).unwrap();
                 ipc::RpcResult::success(())
             },
             // NOCOM(#sirver): this should not panic, but return an error.

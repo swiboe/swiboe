@@ -15,7 +15,7 @@ pub enum RpcState {
 
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct RpcReply {
+pub struct RpcResponse {
     pub context: String,
     pub state: RpcState,
     pub result: RpcResult,
@@ -48,7 +48,7 @@ pub struct RpcCall {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum Message {
     RpcCall(RpcCall),
-    RpcReply(RpcReply),
+    RpcResponse(RpcResponse),
 }
 
 pub trait IpcRead {

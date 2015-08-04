@@ -15,9 +15,9 @@ const CORE_FUNCTIONS_PREFIX: &'static str = "core.";
 
 pub enum Command {
     Shutdown,
-    RegisterFunction(ipc_bridge::ClientId, String, u16),
-    CallFunction(ipc_bridge::ClientId, ipc::RpcCall),
-    FunctionReply(ipc::RpcReply),
+    NewRpc(ipc_bridge::ClientId, String, u16),
+    RpcCall(ipc_bridge::ClientId, ipc::RpcCall),
+    RpcResponse(ipc::RpcResponse),
     ClientConnected(ipc_bridge::ClientId),
     ClientDisconnected(ipc_bridge::ClientId),
 }
@@ -49,7 +49,7 @@ impl Switchboard {
         while let Ok(command) = self.commands.recv() {
             match command {
                 Command::Shutdown => break,
-                Command::RegisterFunction(client_id, name, priority) => {
+                Command::NewRpc(client_id, name, priority) => {
                     // NOCOM(#sirver): deny everything starting with 'core'
                     // NOCOM(#sirver): make sure the client_id is known.
                     // NOCOM(#sirver): make sure the client has not already registered this
@@ -67,7 +67,7 @@ impl Switchboard {
                         priority: priority,
                     });
                 },
-                Command::CallFunction(client_id, rpc_call) => {
+                Command::RpcCall(client_id, rpc_call) => {
                     // NOCOM(#sirver): make sure this is not already in running_rpcs.
                     // NOCOM(#sirver): function name might not be in there.
 
@@ -76,7 +76,7 @@ impl Switchboard {
                         let result = self.plugin_core.call(client_id, &rpc_call);
                         self.ipc_bridge_commands.send(ipc_bridge::Command::SendData(
                                 client_id,
-                                ipc::Message::RpcReply(ipc::RpcReply {
+                                ipc::Message::RpcResponse(ipc::RpcResponse {
                                     context: rpc_call.context.clone(),
                                     state: ipc::RpcState::Done,
                                     result: result,
@@ -99,10 +99,8 @@ impl Switchboard {
                         // NOCOM(#sirver): we ignore timeouts.
                     }
                 },
-                Command::FunctionReply(rpc_reply) => {
-
-                    // NOCOM(#sirver): maybe not remove, but mutate?
-                    let mut running_rpc = match self.running_rpcs.entry(rpc_reply.context.clone()) {
+                Command::RpcResponse(rpc_response) => {
+                    let mut running_rpc = match self.running_rpcs.entry(rpc_response.context.clone()) {
                         Entry::Occupied(running_rpc) => running_rpc,
                         Entry::Vacant(_) => {
                             // NOCOM(#sirver): what if the context is unknown? drop the client?
@@ -110,14 +108,13 @@ impl Switchboard {
                         }
                     };
 
-                    match rpc_reply.result {
+                    match rpc_response.result {
                         // NOCOM(#sirver): same for errors.
                         ipc::RpcResult::Ok(_) => {
                             let running_rpc = running_rpc.remove();
-                            // NOCOM(#sirver): done, remove this call.
                             self.ipc_bridge_commands.send(ipc_bridge::Command::SendData(
                                     running_rpc.caller,
-                                    ipc::Message::RpcReply(rpc_reply))).unwrap();
+                                    ipc::Message::RpcResponse(rpc_response))).unwrap();
                         },
                         ipc::RpcResult::NotHandled => {
                             // TODO(sirver): If a new function has been registered or been deleted since we
@@ -126,7 +123,7 @@ impl Switchboard {
                             let running_rpc = running_rpc.get_mut();
                             let function = {
                                 running_rpc.last_index += 1;
-                                // NOCOM(#sirver): quite some code duplication with CallFunction
+                                // NOCOM(#sirver): quite some code duplication with RpcCall
                                 let vec = self.functions.get(&running_rpc.rpc_call.function as &str).unwrap();
                                 match vec.get(running_rpc.last_index) {
                                     Some(function) => function,

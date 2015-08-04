@@ -41,7 +41,7 @@ impl RemoteProcedure for TestCall {
 
 
 #[test]
-fn register_function() {
+fn new_rpc() {
     let t = TestHarness::new();
 
     let client1 = Client::connect(&t.socket_name);
@@ -49,7 +49,7 @@ fn register_function() {
 
     let test_msg: json::Value = json::from_str(r#"{ "blub": "blah" }"#).unwrap();
 
-    client1.register_function("test.test", Box::new(TestCall {
+    client1.new_rpc("test.test", Box::new(TestCall {
         priority: 0,
         result: RpcResult::Ok(test_msg.clone()),
     }));
@@ -59,18 +59,18 @@ fn register_function() {
 }
 
 #[test]
-fn register_function_with_priority() {
+fn new_rpc_with_priority() {
     let t = TestHarness::new();
 
     let client1 = Client::connect(&t.socket_name);
-    client1.register_function("test.test", Box::new(TestCall {
+    client1.new_rpc("test.test", Box::new(TestCall {
         priority: 100,
         result: RpcResult::Ok(json::from_str(r#"{ "from": "client1" }"#).unwrap()),
     }));
 
 
     let client2 = Client::connect(&t.socket_name);
-    client2.register_function("test.test", Box::new(TestCall {
+    client2.new_rpc("test.test", Box::new(TestCall {
         priority: 50,
         result: RpcResult::Ok(json::from_str(r#"{ "from": "client2" }"#).unwrap()),
     }));
@@ -81,18 +81,18 @@ fn register_function_with_priority() {
 }
 
 #[test]
-fn register_function_with_priority_first_does_not_handle() {
+fn new_rpc_with_priority_first_does_not_handle() {
     let t = TestHarness::new();
 
     let client1 = Client::connect(&t.socket_name);
-    client1.register_function("test.test", Box::new(TestCall {
+    client1.new_rpc("test.test", Box::new(TestCall {
         priority: 100,
         result: RpcResult::Ok(json::from_str(r#"{ "from": "client1" }"#).unwrap()),
     }));
 
 
     let client2 = Client::connect(&t.socket_name);
-    client2.register_function("test.test", Box::new(TestCall {
+    client2.new_rpc("test.test", Box::new(TestCall {
         priority: 50,
         result: RpcResult::NotHandled,
     }));
