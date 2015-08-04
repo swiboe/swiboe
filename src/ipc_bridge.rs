@@ -5,12 +5,12 @@ use mio;
 use std::path::Path;
 use super::ipc::{self, IpcRead, IpcWrite};
 use super::plugin::remote::{RemotePlugin};
-use super::plugin::{RemotePluginId, PluginId, FunctionCallContext};
+use super::plugin::{PluginId, FunctionCallContext};
 use super::server;
 
 struct Connection {
     stream: UnixStream,
-    remote_plugin_id: RemotePluginId,
+    plugin_id: PluginId,
 }
 
 pub struct IpcBridge {
@@ -41,7 +41,7 @@ impl IpcBridge {
 
 pub enum Command {
     Quit,
-    SendData(RemotePluginId, ipc::Message),
+    SendData(PluginId, ipc::Message),
 }
 
 impl mio::Handler for IpcBridge {
@@ -54,7 +54,7 @@ impl mio::Handler for IpcBridge {
             Command::SendData(receiver, message) => {
                 // NOCOM(#sirver): what if that is no longer valid?
                 let conn = &mut self.connections[receiver.token];
-                if conn.remote_plugin_id == receiver {
+                if conn.plugin_id == receiver {
                     if let Some(err) = conn.stream.write_message(&message).err() {
                         println!("Could not send message to {:?}: {}", receiver, err);
                     }
@@ -72,17 +72,17 @@ impl mio::Handler for IpcBridge {
                 let commands = self.commands.clone();
                 self.next_serial += 1;
                 match self.connections.insert_with(|token| {
-                    let remote_plugin_id = RemotePluginId {
+                    let plugin_id = PluginId {
                         serial: serial,
                         token: token,
                     };
                     let plugin = RemotePlugin {
-                        id: PluginId::Remote(remote_plugin_id),
+                        id: plugin_id,
                         ipc_bridge_commands: event_loop.channel(),
                     };
                     let connection = Connection {
                         stream: stream,
-                        remote_plugin_id: remote_plugin_id,
+                        plugin_id: plugin_id,
                     };
                     commands.send(server::Command::PluginConnected(Box::new(plugin))).unwrap();
                     connection
@@ -92,7 +92,7 @@ impl mio::Handler for IpcBridge {
                         let conn = &mut self.connections[token];
                         event_loop.register_opt(
                             &conn.stream,
-                            conn.remote_plugin_id.token,
+                            conn.plugin_id.token,
                             mio::EventSet::readable(),
                             mio::PollOpt::level()).unwrap();
                     },
@@ -106,12 +106,8 @@ impl mio::Handler for IpcBridge {
                 if events.is_hup() {
                     let connection = self.connections.remove(client_token).unwrap();
                     self.commands.send(
-                        server::Command::PluginDisconnected(
-                            PluginId::Remote(connection.remote_plugin_id))).unwrap();
-                    return;
-                }
-
-                if events.is_readable() {
+                        server::Command::PluginDisconnected(connection.plugin_id)).unwrap();
+                } else if events.is_readable() {
                     let conn = &mut self.connections[token];
                     // NOCOM(#sirver): should disconnect instead of crashing.
                     let message = conn.stream.read_message().expect("Could not read_message");;
@@ -119,10 +115,7 @@ impl mio::Handler for IpcBridge {
                         ipc::Message::RpcCall(rpc_call) => {
                             let call_context = FunctionCallContext {
                                 rpc_call: rpc_call,
-                                // NOCOM(#sirver): commands is only a backchannel for sending. Pull
-                                // out an interface?
-                                commands: self.commands.clone(),
-                                caller: PluginId::Remote(conn.remote_plugin_id),
+                                caller: conn.plugin_id,
                             };
                             // NOCOM(#sirver): call function should be Rpc
                             self.commands.send(server::Command::CallFunction(call_context)).unwrap();

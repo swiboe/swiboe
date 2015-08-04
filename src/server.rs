@@ -10,6 +10,8 @@ use super::plugin::{PluginId, FunctionCallContext, Plugin, FunctionResult};
 use super::plugin_core;
 use super::plugin_buffer;
 
+const CORE_FUNCTIONS_PREFIX: &'static str = "core.";
+
 pub enum Command {
     Shutdown,
     RegisterFunction(PluginId, String, u16),
@@ -38,6 +40,7 @@ pub struct Switchboard {
     plugins: HashMap<PluginId, Box<Plugin>>,
     ipc_bridge_commands: mio::Sender<ipc_bridge::Command>,
     running_rpcs: HashMap<String, RunningRpc>,
+    plugin_core: plugin_core::CorePlugin,
 }
 
 impl Switchboard {
@@ -46,6 +49,7 @@ impl Switchboard {
             match command {
                 Command::Shutdown => break,
                 Command::RegisterFunction(plugin_id, name, priority) => {
+                    // NOCOM(#sirver): kill everything starting with 'core'
                     // NOCOM(#sirver): make sure the plugin_id is known.
                     // NOCOM(#sirver): make sure the plugin has not already registered this
                     // function.
@@ -61,41 +65,38 @@ impl Switchboard {
                         plugin_id: plugin_id,
                         priority: priority,
                     });
-                    println!("#sirver vec: {:#?}", vec);
                 },
                 Command::CallFunction(call_context) => {
                     // NOCOM(#sirver): make sure this is not already in running_rpcs.
                     // NOCOM(#sirver): function name might not be in there.
 
-                    let remote_id = match &call_context.caller {
-                        &PluginId::Remote(r) => r,
-                        _ => panic!("Local plugins should not call!"),
-                    };
+                    // Special case 'core.'. We handle them immediately.
+                    if call_context.rpc_call.function.starts_with(CORE_FUNCTIONS_PREFIX) {
+                        let result = self.plugin_core.call(&call_context);
+                        self.ipc_bridge_commands.send(ipc_bridge::Command::SendData(
+                                call_context.caller,
+                                ipc::Message::RpcReply(ipc::RpcReply {
+                                    context: call_context.rpc_call.context.clone(),
+                                    state: ipc::RpcState::Done,
+                                    result: result,
+                                }))).unwrap();
+                    } else {
+                        let vec = self.functions.get(&call_context.rpc_call.function as &str).unwrap();
+                        let function = &vec[0];
+                        let result = {
+                            let owner = &mut self.plugins.get_mut(&function.plugin_id).unwrap();
+                            owner.call(&call_context)
+                        };
 
-                    let vec = self.functions.get(&call_context.rpc_call.function as &str).unwrap();
-                    let function = &vec[0];
-                    let result = {
-                        let owner = &mut self.plugins.get_mut(&function.plugin_id).unwrap();
-                        owner.call(&call_context)
-                    };
-                    // NOCOM(#sirver): every plugin should be a remote_id now. Or we need a
-                    // backchannel.
-                    match result {
-                        FunctionResult::Delegated => {
-                            self.running_rpcs.insert(call_context.rpc_call.context.clone(), RunningRpc {
-                                last_index: 0,
-                                call_context: call_context,
-                            });
-                            // NOCOM(#sirver): we ignore timeouts.
-                        }
-                        FunctionResult::Handled => {
-                            self.ipc_bridge_commands.send(ipc_bridge::Command::SendData(
-                                    remote_id,
-                                    ipc::Message::RpcReply(ipc::RpcReply {
-                                        context: call_context.rpc_call.context,
-                                        state: ipc::RpcState::Done,
-                                        result: ipc::RpcResult::success(()),
-                                    }))).unwrap();
+                        match result {
+                            // NOCOM(#sirver): kill Delegated
+                            FunctionResult::Delegated => {
+                                self.running_rpcs.insert(call_context.rpc_call.context.clone(), RunningRpc {
+                                    last_index: 0,
+                                    call_context: call_context,
+                                });
+                                // NOCOM(#sirver): we ignore timeouts.
+                            }
                         }
                     }
                 },
@@ -105,17 +106,12 @@ impl Switchboard {
                     // NOCOM(#sirver): maybe not remove, but mutate?
                     let mut running_rpc = self.running_rpcs.remove(&rpc_reply.context).unwrap();
 
-                    let remote_id = match running_rpc.call_context.caller {
-                        PluginId::Remote(r) => r,
-                        _ => panic!("Local plugins should not call!"),
-                    };
-
                     match rpc_reply.result {
                         // NOCOM(#sirver): same for errors.
                         ipc::RpcResult::Ok(_) => {
                             // NOCOM(#sirver): done, remove this call.
                             self.ipc_bridge_commands.send(ipc_bridge::Command::SendData(
-                                    remote_id,
+                                    running_rpc.call_context.caller,
                                     ipc::Message::RpcReply(rpc_reply))).unwrap();
                         },
                         ipc::RpcResult::NotHandled => {
@@ -145,15 +141,6 @@ impl Switchboard {
                                 FunctionResult::Delegated => {
                                     self.running_rpcs.insert(running_rpc.call_context.rpc_call.context.clone(), running_rpc);
                                     // NOCOM(#sirver): we ignore timeouts.
-                                }
-                                FunctionResult::Handled => {
-                                    self.ipc_bridge_commands.send(ipc_bridge::Command::SendData(
-                                            remote_id,
-                                            ipc::Message::RpcReply(ipc::RpcReply {
-                                                context: running_rpc.call_context.rpc_call.context,
-                                                state: ipc::RpcState::Done,
-                                                result: ipc::RpcResult::success(()),
-                                            }))).unwrap();
                                 }
                             }
 
@@ -206,9 +193,10 @@ impl<'a> Server<'a> {
         let mut switchboard = Switchboard {
             functions: HashMap::new(),
             plugins: HashMap::new(),
+            running_rpcs: HashMap::new(),
             commands: rx,
             ipc_bridge_commands: event_loop.channel(),
-            running_rpcs: HashMap::new(),
+            plugin_core: plugin_core::CorePlugin::new(server.commands.clone()),
         };
 
         let mut ipc_bridge = ipc_bridge::IpcBridge::new(
@@ -222,8 +210,6 @@ impl<'a> Server<'a> {
             event_loop.run(&mut ipc_bridge).unwrap();
             switchboard_thread.join().unwrap();
         }));
-
-        plugin_core::register(&server.commands);
 
         server.buffer_plugin = Some(
             plugin_buffer::BufferPlugin::new(&server.socket_name));

@@ -1,9 +1,7 @@
 use serde::json;
 use super::ipc;
-use super::plugin::{FunctionResult, Plugin, FunctionCallContext, PluginId};
-use super::server::{CommandSender, Command};
-
-struct CorePlugin;
+use super::plugin;
+use super::server;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct RegisterFunctionArgs {
@@ -11,23 +9,27 @@ pub struct RegisterFunctionArgs {
     pub name: String,
 }
 
-impl Plugin for CorePlugin {
-    fn name(&self) -> &'static str { "core" }
-    // NOCOM(#sirver): rethink this name.
-    fn send(&self, _: &ipc::Message) {
+pub struct CorePlugin {
+    commands: server::CommandSender,
+}
+
+impl CorePlugin {
+    pub fn new(commands: server::CommandSender) -> Self {
+        CorePlugin {
+            commands: commands,
+        }
     }
-    fn id(&self) -> PluginId {
-        PluginId::Internal("core")
-    }
-    fn call(&self, context: &FunctionCallContext) -> FunctionResult {
+
+    pub fn call(&self, context: &plugin::FunctionCallContext) -> ipc::RpcResult {
         match &context.rpc_call.function as &str {
             "core.exit" => {
-                context.commands.send(Command::Shutdown).unwrap();
-                FunctionResult::Handled
+                self.commands.send(server::Command::Shutdown).unwrap();
+                ipc::RpcResult::success(())
             },
             "core.broadcast" => {
-                context.commands.send(Command::Broadcast(ipc::Message::Broadcast(context.rpc_call.args.clone()))).unwrap();
-                FunctionResult::Handled
+                self.commands.send(server::Command::Broadcast(
+                        ipc::Message::Broadcast(context.rpc_call.args.clone()))).unwrap();
+                ipc::RpcResult::success(())
             },
             // NOCOM(#sirver): These args can be pulled out into Serializable structs.
             "core.register_function" => {
@@ -37,25 +39,13 @@ impl Plugin for CorePlugin {
                     Err(_) => panic!("Invalid arguments"),
                 };
 
-                context.commands.send(
-                    Command::RegisterFunction(context.caller, args.name, args.priority)).unwrap();
-                FunctionResult::Handled
+                self.commands.send(
+                    server::Command::RegisterFunction(context.caller, args.name, args.priority)).unwrap();
+                ipc::RpcResult::success(())
             },
             _ => panic!("{} was called, but is not a core function.", context.rpc_call.function),
         }
     }
 }
 
-// NOCOM(#sirver): this should use client.
-pub fn register(command_sender: &CommandSender) {
-    let core = CorePlugin;
-    let id = core.id();
-
-    command_sender.send(Command::PluginConnected(Box::new(CorePlugin))).unwrap();
-
-    // NOCOM(#sirver): ugly repetition.
-    command_sender.send(Command::RegisterFunction(id, "core.exit".into(), 0)).unwrap();
-    // NOCOM(#sirver): kill broadcast
-    command_sender.send(Command::RegisterFunction(id, "core.broadcast".into(), 0)).unwrap();
-    command_sender.send(Command::RegisterFunction(id, "core.register_function".into(), 0)).unwrap();
-}
+// NOCOM(#sirver): kill broadcast
