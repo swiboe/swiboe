@@ -114,7 +114,6 @@ pub struct BufferPlugin<'a> {
 }
 
 impl<'a> BufferPlugin<'a> {
-    // NOCOM(#sirver): is 'b needed?
     pub fn new(socket_name: &path::Path) -> Self {
         let client = Client::connect(socket_name);
 
