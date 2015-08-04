@@ -15,7 +15,8 @@ use uuid::Uuid;
 const CLIENT: mio::Token = mio::Token(1);
 
 pub trait RemoteProcedure: Send {
-    fn call(&mut self, args: json::Value) -> ipc::RpcResultKind;
+    fn priority(&self) -> u16 { u16::max_value() }
+    fn call(&mut self, args: json::Value) -> ipc::RpcResult;
 }
 
 // NOCOM(#sirver): why is that pub?
@@ -37,7 +38,7 @@ impl Rpc {
         Ok(try!(self.values.recv()))
     }
 
-    pub fn wait(self) -> Result<ipc::RpcResultKind> {
+    pub fn wait(self) -> Result<ipc::RpcResult> {
         loop {
             let rpc_reply = try!(self.recv());
             if rpc_reply.state == ipc::RpcState::Done {
@@ -272,6 +273,7 @@ impl<'a> Client<'a> {
         // NOCOM(#sirver): what happens when this is already inserted? crash probably
         // NOCOM(#sirver): rethink 'register_function' maybe, register_rpc
         let rpc = self.call("core.register_function", &RegisterFunctionArgs {
+            priority: remote_procedure.priority(),
             name: name.into(),
         });
         let success = rpc.wait().unwrap();

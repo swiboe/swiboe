@@ -1,9 +1,10 @@
 use libc::consts::os::posix88;
-use serde::json;
+use serde::{self, json};
 use std::io::{self, Read, Write};
 use super::Result;
 
 // NOCOM(#sirver): add documentation (using this lint that forbids not having documentation).
+
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 pub enum RpcState {
@@ -15,16 +16,23 @@ pub enum RpcState {
 pub struct RpcReply {
     pub context: String,
     pub state: RpcState,
-    pub result: RpcResultKind,
+    pub result: RpcResult,
 }
 
 // NOCOM(#sirver): more compact custom serialization?
 // NOCOM(#sirver): use actual result type?
 // NOCOM(#sirver): remove *Kind? at the end
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
-pub enum RpcResultKind {
-    Ok,
+pub enum RpcResult {
+    // NOCOM(#sirver): mention success as a convenient creating for this.
+    Ok(json::Value),
     NoHandler,
+}
+
+impl RpcResult {
+    pub fn success<T: serde::Serialize>(value: T) -> RpcResult {
+        RpcResult::Ok(json::to_value(&value))
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]

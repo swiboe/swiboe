@@ -1,5 +1,5 @@
 use mio;
-use std::collections::HashMap;
+use std::collections::{HashMap, BTreeMap};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{channel, Sender, Receiver};
@@ -12,7 +12,7 @@ use super::plugin_buffer;
 
 pub enum Command {
     Shutdown,
-    RegisterFunction(PluginId, String),
+    RegisterFunction(PluginId, String, u16),
     CallFunction(FunctionCallContext),
     PluginConnected(Box<Plugin>),
     PluginDisconnected(PluginId),
@@ -21,7 +21,7 @@ pub enum Command {
 pub type CommandSender = Sender<Command>;
 
 pub struct Switchboard {
-    functions: HashMap<String, PluginId>,
+    functions: HashMap<String, BTreeMap<u16, PluginId>>,
     commands: Receiver<Command>,
     plugins: HashMap<PluginId, Box<Plugin>>,
     ipc_bridge_commands: mio::Sender<ipc_bridge::Command>,
@@ -32,50 +32,44 @@ impl Switchboard {
         while let Ok(command) = self.commands.recv() {
             match command {
                 Command::Shutdown => break,
-                Command::RegisterFunction(plugin_id, name) => {
+                Command::RegisterFunction(plugin_id, name, priority) => {
                     // NOCOM(#sirver): make sure the plugin_id is known.
-                    // TODO(sirver): add priority.
-                    self.functions.insert(name, plugin_id);
+                    let list = self.functions.entry(name)
+                        .or_insert(BTreeMap::new());
+                    list.insert(priority, plugin_id);
                 },
                 Command::CallFunction(call_context) => {
-                    let plugin_id = self.functions.get(&call_context.rpc_call.function as &str).unwrap();
-                    let context = call_context.rpc_call.context.clone();
-                    let remote_id = match call_context.caller {
-                        PluginId::Remote(r) => r,
-                        _ => panic!("Local plugins should not call!"),
-                    };
+                    // NOCOM(#sirver): function name might not be in there.
+                    let function_list = self.functions.get(&call_context.rpc_call.function as &str).unwrap();
 
-                    let result = {
-                        let owner = &mut self.plugins.get_mut(&plugin_id).unwrap();
-                        owner.call(call_context)
-                    };
-                    // NOCOM(#sirver): every plugin should be a remote_id now. Or we need a
-                    // backchannel.
-                    match result {
-                        FunctionResult::NotHandled => {
-                            // NOCOM(#sirver): immediately try the next contender
-                            self.ipc_bridge_commands.send(
-                                ipc_bridge::Command::SendData(
-                                    remote_id,
-                                    ipc::Message::RpcReply(
-                                        ipc::RpcReply {
+                    for plugin_id in function_list.values() {
+                        let context = call_context.rpc_call.context.clone();
+                        let remote_id = match call_context.caller {
+                            PluginId::Remote(r) => r,
+                            _ => panic!("Local plugins should not call!"),
+                        };
+
+                        let result = {
+                            let owner = &mut self.plugins.get_mut(&plugin_id).unwrap();
+                            // NOCOM(#sirver): this actually blocks the server.
+                            owner.call(&call_context)
+                        };
+                        // NOCOM(#sirver): every plugin should be a remote_id now. Or we need a
+                        // backchannel.
+                        match result {
+                            FunctionResult::Delegated => {
+                                // NOCOM(#sirver): wait for a reply (or timeout), then call the next
+                                // contender.
+                            }
+                            FunctionResult::Handled => {
+                                self.ipc_bridge_commands.send(ipc_bridge::Command::SendData(
+                                        remote_id,
+                                        ipc::Message::RpcReply(ipc::RpcReply {
                                             context: context,
                                             state: ipc::RpcState::Done,
-                                            result: ipc::RpcResultKind::NoHandler
+                                            result: ipc::RpcResult::success(()),
                                         }))).unwrap();
-                        },
-                        FunctionResult::Delegated => {
-                            // NOCOM(#sirver): wait for a reply (or timeout), then call the next
-                            // contender.
-                        }
-                        FunctionResult::Handled => {
-                            self.ipc_bridge_commands.send(ipc_bridge::Command::SendData(
-                                remote_id,
-                                ipc::Message::RpcReply(ipc::RpcReply {
-                                    context: context,
-                                    state: ipc::RpcState::Done,
-                                    result: ipc::RpcResultKind::Ok
-                            }))).unwrap();
+                            }
                         }
                     }
                 },

@@ -30,8 +30,10 @@ impl Plugin for RemotePlugin {
             ipc_bridge::Command::SendData(self.remote_id(), message.clone())).unwrap();
     }
 
-    fn call(&self, context: FunctionCallContext) -> FunctionResult {
-        let message = ipc::Message::RpcCall(context.rpc_call);
+    fn call(&self, context: &FunctionCallContext) -> FunctionResult {
+        // NOCOM(#sirver): eventually, when we keep proper track of our rpc calls, this should be
+        // able to move again.
+        let message = ipc::Message::RpcCall(context.rpc_call.clone());
         self.ipc_bridge_commands.send(
             ipc_bridge::Command::SendData(self.remote_id(), message)).unwrap();
         FunctionResult::Delegated

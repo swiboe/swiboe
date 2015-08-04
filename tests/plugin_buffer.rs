@@ -1,15 +1,15 @@
 use serde::json;
 use support::TestHarness;
 use switchboard::client::{RemoteProcedure, Client};
-use switchboard::ipc::RpcResultKind;
+use switchboard::ipc::RpcResult;
 use switchboard::plugin_buffer;
 
 fn create_buffer(client: &Client, expected_index: usize) {
     let request = plugin_buffer::NewRequest;
     let rpc = client.call("buffer.new", &request);
-    assert_eq!(rpc.wait().unwrap(), RpcResultKind::Ok);
-
-    // NOCOM(#sirver): this rpc should contain information about the created buffer.
+    assert_eq!(rpc.wait().unwrap(), RpcResult::success(plugin_buffer::NewResponse {
+        buffer_index: expected_index,
+    }));
 
     let broadcast_msg = json::from_value(client.recv().unwrap()).unwrap();
     assert_eq!(plugin_buffer::BufferCreated {
@@ -34,7 +34,7 @@ fn buffer_delete() {
         buffer_index: 0,
     };
     let rpc = client.call("buffer.delete", &request);
-    assert_eq!(rpc.wait().unwrap(), RpcResultKind::Ok);
+    assert_eq!(rpc.wait().unwrap(), RpcResult::success(()));
 
     let broadcast_msg = json::from_value(client.recv().unwrap()).unwrap();
     assert_eq!(plugin_buffer::BufferDeleted {

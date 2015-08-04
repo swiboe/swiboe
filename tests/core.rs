@@ -1,7 +1,7 @@
 use serde::json;
 use support::{TestHarness, temporary_socket_name};
 use switchboard::client::{self, RemoteProcedure, Client};
-use switchboard::ipc::RpcResultKind;
+use switchboard::ipc::RpcResult;
 use switchboard::server::Server;
 
 #[test]
@@ -32,7 +32,7 @@ fn broadcast_works() {
         .unwrap();
 
     let rpc = client1.call("core.broadcast", &test_msg);
-    assert_eq!(rpc.wait().unwrap(), RpcResultKind::Ok);
+    assert_eq!(rpc.wait().unwrap(), RpcResult::success(()));
 
     let broadcast_msg = client1.recv().unwrap();
     assert_eq!(test_msg, broadcast_msg);
@@ -54,7 +54,7 @@ fn register_function_and_call_it() {
 
     impl RemoteProcedure for TestCall {
         // NOCOM(#sirver): the client handle should be passed in.
-        fn call(&mut self, args: json::Value) -> RpcResultKind {
+        fn call(&mut self, args: json::Value) -> RpcResult {
             let rpc = self.client_handle.call("core.broadcast", &args);
             rpc.wait().unwrap()
         }
@@ -69,7 +69,7 @@ fn register_function_and_call_it() {
         .unwrap();
 
     let rpc = client2.call("testclient.test", &test_msg);
-    assert_eq!(rpc.wait().unwrap(), RpcResultKind::Ok);
+    assert_eq!(rpc.wait().unwrap(), RpcResult::success(()));
 
     let broadcast_msg = client1.recv().unwrap();
     assert_eq!(test_msg, broadcast_msg);
@@ -77,25 +77,3 @@ fn register_function_and_call_it() {
     let broadcast_msg = client2.recv().unwrap();
     assert_eq!(test_msg, broadcast_msg);
 }
-
-// NOCOM(#sirver): test is needed.
-// #[test]
-// fn waiting_for_call_does_not_mean_you_miss_data() {
-    // let t = TestHarness::new();
-
-    // let client1 = Client::connect(&socket_name);
-    // let client2 = Client::connect(&socket_name);
-
-    // let test_msg = json::builder::ObjectBuilder::new()
-        // .insert("blub".into(), "blah")
-        // .unwrap();
-
-    // let rpc = client1.call("core.broadcast", &test_msg);
-    // assert_eq!(rpc.wait().unwrap(), RpcResultKind::Ok);
-
-    // let broadcast_msg = client1.recv().unwrap();
-    // assert_eq!(test_msg, broadcast_msg);
-
-    // let broadcast_msg = client2.recv().unwrap();
-    // assert_eq!(test_msg, broadcast_msg);
-// }

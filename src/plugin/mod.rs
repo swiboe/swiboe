@@ -25,9 +25,6 @@ pub enum FunctionResult {
     /// The function has handled the call. No other function should try to handle it.
     Handled,
 
-    /// This function cannot handle this call. Another function can try.
-    NotHandled,
-
     /// The function has delegated the call to another plugin which will handle it.
     Delegated,
 }
@@ -36,7 +33,7 @@ pub trait Plugin: Send {
     fn name(&self) -> &'static str;
     fn id(&self) -> PluginId;
     fn send(&self, message: &ipc::Message);
-    fn call(&self, context: FunctionCallContext) -> FunctionResult;
+    fn call(&self, context: &FunctionCallContext) -> FunctionResult;
 }
 
 pub mod remote;

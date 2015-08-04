@@ -33,6 +33,7 @@ impl<'a> Drop for TestHarness<'a> {
     }
 }
 
+#[cfg(not(bench))]
 pub fn temporary_socket_name() -> PathBuf {
     let mut dir = env::temp_dir();
     dir.push(format!("{}.socket", Uuid::new_v4().to_string()));

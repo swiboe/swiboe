@@ -4,7 +4,9 @@ use std::sync::{RwLock, Arc};
 use std::collections::HashMap;
 use super::Result;
 use super::client::{self, Client, RemoteProcedure};
-use super::ipc::RpcResultKind;
+use super::ipc;
+
+// NOCOM(#sirver): make a new package rpc and move some stuff itno that?
 
 // NOCOM(#sirver): messages must contain an indication of the type or so.
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
@@ -31,7 +33,7 @@ struct New {
 }
 
 impl<'a> RemoteProcedure for New {
-    fn call(&mut self, args: json::Value) -> RpcResultKind {
+    fn call(&mut self, args: json::Value) -> ipc::RpcResult {
         // NOCOM(#sirver): need some: on bad request results
         // NOCOM(#sirver): needs some understanding what happens on extra values.
         let request: NewRequest = json::from_value(args).unwrap();
@@ -40,8 +42,7 @@ impl<'a> RemoteProcedure for New {
         let response = NewResponse {
             buffer_index: buffers.create_buffer(),
         };
-        // NOCOM(#sirver): return the response.
-        RpcResultKind::Ok
+        ipc::RpcResult::success(response)
     }
 }
 
@@ -59,7 +60,7 @@ struct Delete {
 }
 
 impl<'a> RemoteProcedure for Delete {
-    fn call(&mut self, args: json::Value) -> RpcResultKind {
+    fn call(&mut self, args: json::Value) -> ipc::RpcResult {
         // NOCOM(#sirver): need some: on bad request results
         // NOCOM(#sirver): needs some understanding what happens on extra values.
         let request: DeleteRequest = json::from_value(args).unwrap();
@@ -68,8 +69,7 @@ impl<'a> RemoteProcedure for Delete {
         buffers.delete_buffer(request.buffer_index).unwrap();
 
         let response = DeleteResponse;
-        // NOCOM(#sirver): send the response.
-        RpcResultKind::Ok
+        ipc::RpcResult::success(response)
     }
 }
 
