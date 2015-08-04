@@ -17,7 +17,7 @@ pub enum Command {
     RegisterFunction(ipc_bridge::ClientId, String, u16),
     CallFunction(FunctionCallContext),
     FunctionReply(ipc::RpcReply),
-    ClientConnected(Box<Plugin>),
+    ClientConnected(Plugin),
     PluginDisconnected(ipc_bridge::ClientId),
     Broadcast(ipc::Message),
 }
@@ -37,7 +37,7 @@ struct RunningRpc {
 pub struct Switchboard {
     functions: HashMap<String, Vec<RegisteredFunction>>,
     commands: Receiver<Command>,
-    plugins: HashMap<ipc_bridge::ClientId, Box<Plugin>>,
+    plugins: HashMap<ipc_bridge::ClientId, Plugin>,
     ipc_bridge_commands: mio::Sender<ipc_bridge::Command>,
     running_rpcs: HashMap<String, RunningRpc>,
     plugin_core: plugin_core::CorePlugin,

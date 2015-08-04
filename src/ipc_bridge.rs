@@ -4,8 +4,7 @@ use mio::unix::{UnixListener, UnixStream};
 use mio;
 use std::path::Path;
 use super::ipc::{self, IpcRead, IpcWrite};
-use super::plugin::remote::{RemotePlugin};
-use super::plugin::{FunctionCallContext};
+use super::plugin;
 use super::server;
 
 #[derive(PartialEq, Eq, Clone, Copy, Hash, Debug)]
@@ -82,7 +81,7 @@ impl mio::Handler for IpcBridge {
                         serial: serial,
                         token: token,
                     };
-                    let plugin = RemotePlugin {
+                    let plugin = plugin::Plugin {
                         client_id: client_id,
                         ipc_bridge_commands: event_loop.channel(),
                     };
@@ -90,7 +89,7 @@ impl mio::Handler for IpcBridge {
                         stream: stream,
                         client_id: client_id,
                     };
-                    commands.send(server::Command::ClientConnected(Box::new(plugin))).unwrap();
+                    commands.send(server::Command::ClientConnected(plugin)).unwrap();
                     connection
                 }) {
                     Some(token) => {
@@ -119,7 +118,7 @@ impl mio::Handler for IpcBridge {
                     let message = conn.stream.read_message().expect("Could not read_message");;
                     match message {
                         ipc::Message::RpcCall(rpc_call) => {
-                            let call_context = FunctionCallContext {
+                            let call_context = plugin::FunctionCallContext {
                                 rpc_call: rpc_call,
                                 caller: conn.client_id,
                             };
