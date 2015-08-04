@@ -1,5 +1,5 @@
 use mio;
-use std::collections::{HashMap, BTreeMap};
+use std::collections::{HashMap};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{channel, Sender, Receiver};
@@ -20,8 +20,14 @@ pub enum Command {
 }
 pub type CommandSender = Sender<Command>;
 
+#[derive(Debug)]
+struct RegisteredFunction {
+    plugin_id: PluginId,
+    priority: u16,
+}
+
 pub struct Switchboard {
-    functions: HashMap<String, BTreeMap<u16, PluginId>>,
+    functions: HashMap<String, Vec<RegisteredFunction>>,
     commands: Receiver<Command>,
     plugins: HashMap<PluginId, Box<Plugin>>,
     ipc_bridge_commands: mio::Sender<ipc_bridge::Command>,
@@ -34,15 +40,25 @@ impl Switchboard {
                 Command::Shutdown => break,
                 Command::RegisterFunction(plugin_id, name, priority) => {
                     // NOCOM(#sirver): make sure the plugin_id is known.
-                    let list = self.functions.entry(name)
-                        .or_insert(BTreeMap::new());
-                    list.insert(priority, plugin_id);
+                    let vec = self.functions.entry(name)
+                        .or_insert(Vec::new());
+
+                    let index = match vec.binary_search_by(|probe| probe.priority.cmp(&priority)) {
+                        Ok(idx) => idx,
+                        Err(idx) => idx,
+                    };
+
+                    vec.insert(index, RegisteredFunction {
+                        plugin_id: plugin_id,
+                        priority: priority,
+                    });
+                    println!("#sirver vec: {:#?}", vec);
                 },
                 Command::CallFunction(call_context) => {
                     // NOCOM(#sirver): function name might not be in there.
-                    let function_list = self.functions.get(&call_context.rpc_call.function as &str).unwrap();
+                    let vec = self.functions.get(&call_context.rpc_call.function as &str).unwrap();
 
-                    for plugin_id in function_list.values() {
+                    for registered_function in vec {
                         let context = call_context.rpc_call.context.clone();
                         let remote_id = match call_context.caller {
                             PluginId::Remote(r) => r,
@@ -50,7 +66,7 @@ impl Switchboard {
                         };
 
                         let result = {
-                            let owner = &mut self.plugins.get_mut(&plugin_id).unwrap();
+                            let owner = &mut self.plugins.get_mut(&registered_function.plugin_id).unwrap();
                             // NOCOM(#sirver): this actually blocks the server.
                             owner.call(&call_context)
                         };
@@ -60,6 +76,7 @@ impl Switchboard {
                             FunctionResult::Delegated => {
                                 // NOCOM(#sirver): wait for a reply (or timeout), then call the next
                                 // contender.
+                                break;
                             }
                             FunctionResult::Handled => {
                                 self.ipc_bridge_commands.send(ipc_bridge::Command::SendData(

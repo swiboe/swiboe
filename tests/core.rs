@@ -36,7 +36,7 @@ fn broadcast_works() {
     let client1 = Client::connect(&t.socket_name);
     let client2 = Client::connect(&t.socket_name);
 
-    let test_msg: json::Value = json::from_str(r#"{ "blub": "blah" } "#).unwrap();
+    let test_msg: json::Value = json::from_str(r#"{ "blub": "blah" }"#).unwrap();
 
     let rpc = client1.call("core.broadcast", &test_msg);
     assert_eq!(rpc.wait().unwrap(), RpcResult::success(()));
@@ -49,7 +49,7 @@ fn broadcast_works() {
 }
 
 #[test]
-fn register_function_and_call_it() {
+fn register_function() {
     let t = TestHarness::new();
 
     let client1 = Client::connect(&t.socket_name);
@@ -62,10 +62,39 @@ fn register_function_and_call_it() {
         }
     }
 
-    client1.register_function("testclient.test", Box::new(TestCall));
+    client1.register_function("test.test", Box::new(TestCall));
 
-    let test_msg = json::from_str(r#"{ "blub": "blah" } "#).unwrap();
+    let test_msg = json::from_str(r#"{ "blub": "blah" }"#).unwrap();
 
-    let rpc = client2.call("testclient.test", &test_msg);
+    let rpc = client2.call("test.test", &test_msg);
     assert_eq!(rpc.wait().unwrap(), RpcResult::Ok(test_msg));
+}
+
+#[test]
+fn register_function_with_priority() {
+    let t = TestHarness::new();
+
+    struct TestCall1;
+    impl RemoteProcedure for TestCall1 {
+        fn priority(&self) -> u16 { 100 }
+        fn call(&mut self, _: json::Value) -> RpcResult {
+            RpcResult::Ok(json::from_str(r#"{ "from": "client1" }"#).unwrap())
+        }
+    }
+    let client1 = Client::connect(&t.socket_name);
+    client1.register_function("test.test", Box::new(TestCall1));
+
+    struct TestCall2;
+    impl RemoteProcedure for TestCall2 {
+        fn priority(&self) -> u16 { 50 }
+        fn call(&mut self, _: json::Value) -> RpcResult {
+            RpcResult::Ok(json::from_str(r#"{ "from": "client2" }"#).unwrap())
+        }
+    }
+    let client2 = Client::connect(&t.socket_name);
+    client2.register_function("test.test", Box::new(TestCall2));
+
+    let client3 = Client::connect(&t.socket_name);
+    let rpc = client3.call("test.test", &json::from_str::<json::Value>(r#"{}"#).unwrap());
+    assert_eq!(RpcResult::Ok(json::from_str(r#"{ "from": "client2" }"#).unwrap()), rpc.wait().unwrap());
 }
