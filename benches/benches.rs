@@ -4,7 +4,6 @@ extern crate serde;
 extern crate switchboard;
 extern crate tempdir;
 extern crate test;
-extern crate uuid;
 
 #[path="../tests/support/mod.rs"] mod support;
 
@@ -23,10 +22,7 @@ fn bench_broadcast(b: &mut Bencher) {
     let clients: Vec<_> = (1..50)
         .map(|_| Client::connect(&t.socket_name)).collect();
 
-    let test_msg = json::builder::ObjectBuilder::new()
-        .insert("blub".into(), "blah")
-        .unwrap();
-
+    let test_msg: json::Value = json::from_str(r#"{ "blub": "blah" } "#).unwrap();
     b.iter(|| {
         let function_call = clients[0].call("core.broadcast", &test_msg);
         function_call.wait().unwrap();

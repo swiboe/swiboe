@@ -1,8 +1,17 @@
 use serde::json;
-use support::{TestHarness, temporary_socket_name};
-use switchboard::client::{self, RemoteProcedure, Client};
+use std::env;
+use std::path;
+use support::TestHarness;
+use switchboard::client::{RemoteProcedure, Client};
 use switchboard::ipc::RpcResult;
 use switchboard::server::Server;
+use uuid::Uuid;
+
+fn temporary_socket_name() -> path::PathBuf {
+    let mut dir = env::temp_dir();
+    dir.push(format!("{}.socket", Uuid::new_v4().to_string()));
+    dir
+}
 
 #[test]
 fn shutdown_server_with_clients_connected() {
@@ -27,9 +36,7 @@ fn broadcast_works() {
     let client1 = Client::connect(&t.socket_name);
     let client2 = Client::connect(&t.socket_name);
 
-    let test_msg = json::builder::ObjectBuilder::new()
-        .insert("blub".into(), "blah")
-        .unwrap();
+    let test_msg: json::Value = json::from_str(r#"{ "blub": "blah" } "#).unwrap();
 
     let rpc = client1.call("core.broadcast", &test_msg);
     assert_eq!(rpc.wait().unwrap(), RpcResult::success(()));
@@ -48,32 +55,17 @@ fn register_function_and_call_it() {
     let client1 = Client::connect(&t.socket_name);
     let client2 = Client::connect(&t.socket_name);
 
-    struct TestCall {
-        client_handle: client::ClientHandle,
-    };
-
+    struct TestCall;
     impl RemoteProcedure for TestCall {
-        // NOCOM(#sirver): the client handle should be passed in.
         fn call(&mut self, args: json::Value) -> RpcResult {
-            let rpc = self.client_handle.call("core.broadcast", &args);
-            rpc.wait().unwrap()
+            RpcResult::Ok(args)
         }
     }
-    let client_handle = client1.client_handle();
-    client1.register_function("testclient.test", Box::new(TestCall {
-        client_handle: client_handle,
-    }));
 
-    let test_msg = json::builder::ObjectBuilder::new()
-        .insert("blub".into(), "blah")
-        .unwrap();
+    client1.register_function("testclient.test", Box::new(TestCall));
+
+    let test_msg = json::from_str(r#"{ "blub": "blah" } "#).unwrap();
 
     let rpc = client2.call("testclient.test", &test_msg);
-    assert_eq!(rpc.wait().unwrap(), RpcResult::success(()));
-
-    let broadcast_msg = client1.recv().unwrap();
-    assert_eq!(test_msg, broadcast_msg);
-
-    let broadcast_msg = client2.recv().unwrap();
-    assert_eq!(test_msg, broadcast_msg);
+    assert_eq!(rpc.wait().unwrap(), RpcResult::Ok(test_msg));
 }

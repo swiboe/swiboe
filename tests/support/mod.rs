@@ -1,8 +1,6 @@
-use std::env;
 use std::path::PathBuf;
 use switchboard::server::Server;
 use tempdir::TempDir;
-use uuid::Uuid;
 
 pub struct TestHarness<'a> {
     server: Option<Server<'a>>,
@@ -31,11 +29,4 @@ impl<'a> Drop for TestHarness<'a> {
     fn drop(&mut self) {
         self.server.take().unwrap().shutdown();
     }
-}
-
-#[cfg(not(bench))]
-pub fn temporary_socket_name() -> PathBuf {
-    let mut dir = env::temp_dir();
-    dir.push(format!("{}.socket", Uuid::new_v4().to_string()));
-    dir
 }
