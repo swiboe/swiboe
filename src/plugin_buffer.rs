@@ -8,7 +8,6 @@ use super::ipc;
 
 // NOCOM(#sirver): make a new package rpc and move some stuff itno that?
 
-// NOCOM(#sirver): messages must contain an indication of the type or so.
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub struct BufferCreated {
     pub buffer_index: usize,
