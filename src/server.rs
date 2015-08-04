@@ -1,4 +1,5 @@
 use mio;
+use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -6,8 +7,8 @@ use std::sync::mpsc::{channel, Sender, Receiver};
 use std::thread;
 use super::ipc;
 use super::ipc_bridge;
-use super::plugin_core;
 use super::plugin_buffer;
+use super::plugin_core;
 
 // NOCOM(#sirver): document everything.
 const CORE_FUNCTIONS_PREFIX: &'static str = "core.";
@@ -99,14 +100,20 @@ impl Switchboard {
                     }
                 },
                 Command::FunctionReply(rpc_reply) => {
-                    // NOCOM(#sirver): what if the context is unknown? drop the client?
 
                     // NOCOM(#sirver): maybe not remove, but mutate?
-                    let mut running_rpc = self.running_rpcs.remove(&rpc_reply.context).unwrap();
+                    let mut running_rpc = match self.running_rpcs.entry(rpc_reply.context.clone()) {
+                        Entry::Occupied(running_rpc) => running_rpc,
+                        Entry::Vacant(_) => {
+                            // NOCOM(#sirver): what if the context is unknown? drop the client?
+                            unimplemented!();
+                        }
+                    };
 
                     match rpc_reply.result {
                         // NOCOM(#sirver): same for errors.
                         ipc::RpcResult::Ok(_) => {
+                            let running_rpc = running_rpc.remove();
                             // NOCOM(#sirver): done, remove this call.
                             self.ipc_bridge_commands.send(ipc_bridge::Command::SendData(
                                     running_rpc.caller,
@@ -116,6 +123,7 @@ impl Switchboard {
                             // TODO(sirver): If a new function has been registered or been deleted since we
                             // last saw this context, this might skip a handler or call one twice. We need
                             // a better way to keep track where we are in the list of handlers.
+                            let running_rpc = running_rpc.get_mut();
                             let function = {
                                 running_rpc.last_index += 1;
                                 // NOCOM(#sirver): quite some code duplication with CallFunction
@@ -136,7 +144,7 @@ impl Switchboard {
                                     ipc::Message::RpcCall(running_rpc.rpc_call.clone())
                             )).unwrap();
 
-                            self.running_rpcs.insert(running_rpc.rpc_call.context.clone(), running_rpc);
+                            // self.running_rpcs.insert(running_rpc.rpc_call.context.clone(), running_rpc);
                             // NOCOM(#sirver): we ignore timeouts.
                         }
                     }

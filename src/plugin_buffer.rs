@@ -1,9 +1,9 @@
 use serde::json;
+use std::collections::HashMap;
 use std::path;
 use std::sync::{RwLock, Arc};
-use std::collections::HashMap;
 use super::Result;
-use super::client::{self, Client, RemoteProcedure};
+use super::client;
 use super::ipc;
 
 // NOCOM(#sirver): make a new package rpc and move some stuff itno that?
@@ -31,7 +31,7 @@ struct New {
     buffers: Arc<RwLock<BuffersManager>>,
 }
 
-impl<'a> RemoteProcedure for New {
+impl<'a> client::RemoteProcedure for New {
     fn call(&mut self, args: json::Value) -> ipc::RpcResult {
         // NOCOM(#sirver): need some: on bad request results
         // NOCOM(#sirver): needs some understanding what happens on extra values.
@@ -57,7 +57,7 @@ struct Delete {
     buffers: Arc<RwLock<BuffersManager>>,
 }
 
-impl<'a> RemoteProcedure for Delete {
+impl<'a> client::RemoteProcedure for Delete {
     fn call(&mut self, args: json::Value) -> ipc::RpcResult {
         // NOCOM(#sirver): need some: on bad request results
         // NOCOM(#sirver): needs some understanding what happens on extra values.
@@ -109,13 +109,13 @@ impl BuffersManager {
 }
 
 pub struct BufferPlugin<'a> {
-    client: Client<'a>,
+    client: client::Client<'a>,
     buffers: Arc<RwLock<BuffersManager>>,
 }
 
 impl<'a> BufferPlugin<'a> {
     pub fn new(socket_name: &path::Path) -> Self {
-        let client = Client::connect(socket_name);
+        let client = client::Client::connect(socket_name);
 
         let plugin = BufferPlugin {
             buffers: Arc::new(RwLock::new(BuffersManager::new())),
