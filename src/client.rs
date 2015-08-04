@@ -38,14 +38,9 @@ impl Rpc {
     }
 
     pub fn wait(self) -> Result<ipc::RpcResult> {
-        loop {
-            let rpc_reply = try!(self.recv());
-            if rpc_reply.state == ipc::RpcState::Done {
-                return Ok(rpc_reply.result);
-            }
-            unimplemented!();
-            // NOCOM(#sirver): put data into queue.
-        }
+        // NOCOM(#sirver): how does streaming work?
+        let rpc_reply = try!(self.recv());
+        Ok(rpc_reply.result)
     }
 }
 

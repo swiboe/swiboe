@@ -1,24 +1,24 @@
 use mio;
-use std::collections::{HashMap};
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{channel, Sender, Receiver};
 use std::thread;
 use super::ipc;
 use super::ipc_bridge;
-use super::plugin::{FunctionCallContext, Plugin};
 use super::plugin_core;
 use super::plugin_buffer;
 
+// NOCOM(#sirver): document everything.
 const CORE_FUNCTIONS_PREFIX: &'static str = "core.";
 
 pub enum Command {
     Shutdown,
     RegisterFunction(ipc_bridge::ClientId, String, u16),
-    CallFunction(FunctionCallContext),
+    CallFunction(ipc_bridge::ClientId, ipc::RpcCall),
     FunctionReply(ipc::RpcReply),
-    ClientConnected(Plugin),
-    PluginDisconnected(ipc_bridge::ClientId),
+    ClientConnected(ipc_bridge::ClientId),
+    ClientDisconnected(ipc_bridge::ClientId),
 }
 pub type CommandSender = Sender<Command>;
 
@@ -29,14 +29,15 @@ struct RegisteredFunction {
 }
 
 struct RunningRpc {
-    call_context: FunctionCallContext,
+    caller: ipc_bridge::ClientId,
+    rpc_call: ipc::RpcCall,
     last_index: usize,
 }
 
 pub struct Switchboard {
     functions: HashMap<String, Vec<RegisteredFunction>>,
     commands: Receiver<Command>,
-    plugins: HashMap<ipc_bridge::ClientId, Plugin>,
+    clients: HashSet<ipc_bridge::ClientId>,
     ipc_bridge_commands: mio::Sender<ipc_bridge::Command>,
     running_rpcs: HashMap<String, RunningRpc>,
     plugin_core: plugin_core::CorePlugin,
@@ -50,7 +51,7 @@ impl Switchboard {
                 Command::RegisterFunction(client_id, name, priority) => {
                     // NOCOM(#sirver): deny everything starting with 'core'
                     // NOCOM(#sirver): make sure the client_id is known.
-                    // NOCOM(#sirver): make sure the plugin has not already registered this
+                    // NOCOM(#sirver): make sure the client has not already registered this
                     // function.
                     let vec = self.functions.entry(name)
                         .or_insert(Vec::new());
@@ -65,29 +66,34 @@ impl Switchboard {
                         priority: priority,
                     });
                 },
-                Command::CallFunction(call_context) => {
+                Command::CallFunction(client_id, rpc_call) => {
                     // NOCOM(#sirver): make sure this is not already in running_rpcs.
                     // NOCOM(#sirver): function name might not be in there.
 
                     // Special case 'core.'. We handle them immediately.
-                    if call_context.rpc_call.function.starts_with(CORE_FUNCTIONS_PREFIX) {
-                        let result = self.plugin_core.call(&call_context);
+                    if rpc_call.function.starts_with(CORE_FUNCTIONS_PREFIX) {
+                        let result = self.plugin_core.call(client_id, &rpc_call);
                         self.ipc_bridge_commands.send(ipc_bridge::Command::SendData(
-                                call_context.caller,
+                                client_id,
                                 ipc::Message::RpcReply(ipc::RpcReply {
-                                    context: call_context.rpc_call.context.clone(),
+                                    context: rpc_call.context.clone(),
                                     state: ipc::RpcState::Done,
                                     result: result,
                                 }))).unwrap();
                     } else {
-                        let vec = self.functions.get(&call_context.rpc_call.function as &str).unwrap();
+                        let vec = self.functions.get(&rpc_call.function as &str).unwrap();
                         let function = &vec[0];
 
-                        let owner = &mut self.plugins.get_mut(&function.client_id).unwrap();
-                        owner.call(&call_context);
-                        self.running_rpcs.insert(call_context.rpc_call.context.clone(), RunningRpc {
+                        // NOCOM(#sirver): eventually, when we keep proper track of our rpc calls, this should be
+                        // able to move again.
+                        self.ipc_bridge_commands.send(ipc_bridge::Command::SendData(
+                                function.client_id,
+                                ipc::Message::RpcCall(rpc_call.clone())
+                        )).unwrap();
+                        self.running_rpcs.insert(rpc_call.context.clone(), RunningRpc {
                             last_index: 0,
-                            call_context: call_context,
+                            rpc_call: rpc_call,
+                            caller: client_id,
                         });
                         // NOCOM(#sirver): we ignore timeouts.
                     }
@@ -103,7 +109,7 @@ impl Switchboard {
                         ipc::RpcResult::Ok(_) => {
                             // NOCOM(#sirver): done, remove this call.
                             self.ipc_bridge_commands.send(ipc_bridge::Command::SendData(
-                                    running_rpc.call_context.caller,
+                                    running_rpc.caller,
                                     ipc::Message::RpcReply(rpc_reply))).unwrap();
                         },
                         ipc::RpcResult::NotHandled => {
@@ -113,7 +119,7 @@ impl Switchboard {
                             let function = {
                                 running_rpc.last_index += 1;
                                 // NOCOM(#sirver): quite some code duplication with CallFunction
-                                let vec = self.functions.get(&running_rpc.call_context.rpc_call.function as &str).unwrap();
+                                let vec = self.functions.get(&running_rpc.rpc_call.function as &str).unwrap();
                                 match vec.get(running_rpc.last_index) {
                                     Some(function) => function,
                                     None => {
@@ -123,19 +129,24 @@ impl Switchboard {
                                 }
                             };
 
-                            let owner = &mut self.plugins.get_mut(&function.client_id).unwrap();
-                            owner.call(&running_rpc.call_context);
-                            self.running_rpcs.insert(running_rpc.call_context.rpc_call.context.clone(), running_rpc);
+                            // NOCOM(#sirver): eventually, when we keep proper track of our rpc calls, this should be
+                            // able to move again.
+                            self.ipc_bridge_commands.send(ipc_bridge::Command::SendData(
+                                    function.client_id,
+                                    ipc::Message::RpcCall(running_rpc.rpc_call.clone())
+                            )).unwrap();
+
+                            self.running_rpcs.insert(running_rpc.rpc_call.context.clone(), running_rpc);
                             // NOCOM(#sirver): we ignore timeouts.
                         }
                     }
                 },
-                Command::ClientConnected(plugin) => {
-                    // NOCOM(#sirver): make sure plugin is not yet known.
-                    self.plugins.insert(plugin.client_id(), plugin);
+                Command::ClientConnected(client_id) => {
+                    // NOCOM(#sirver): make sure client_id is not yet known.
+                    self.clients.insert(client_id);
                 },
-                Command::PluginDisconnected(plugin) => {
-                    self.plugins.remove(&plugin).unwrap();
+                Command::ClientDisconnected(client_id) => {
+                    self.clients.remove(&client_id);
                     // NOCOM(#sirver): needs to remove all associated functions
                 }
             }
@@ -167,7 +178,7 @@ impl<'a> Server<'a> {
 
         let mut switchboard = Switchboard {
             functions: HashMap::new(),
-            plugins: HashMap::new(),
+            clients: HashSet::new(),
             running_rpcs: HashMap::new(),
             commands: rx,
             ipc_bridge_commands: event_loop.channel(),

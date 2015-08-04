@@ -4,7 +4,6 @@ use mio::unix::{UnixListener, UnixStream};
 use mio;
 use std::path::Path;
 use super::ipc::{self, IpcRead, IpcWrite};
-use super::plugin;
 use super::server;
 
 #[derive(PartialEq, Eq, Clone, Copy, Hash, Debug)]
@@ -81,15 +80,11 @@ impl mio::Handler for IpcBridge {
                         serial: serial,
                         token: token,
                     };
-                    let plugin = plugin::Plugin {
-                        client_id: client_id,
-                        ipc_bridge_commands: event_loop.channel(),
-                    };
                     let connection = Connection {
                         stream: stream,
                         client_id: client_id,
                     };
-                    commands.send(server::Command::ClientConnected(plugin)).unwrap();
+                    commands.send(server::Command::ClientConnected(client_id)).unwrap();
                     connection
                 }) {
                     Some(token) => {
@@ -111,21 +106,15 @@ impl mio::Handler for IpcBridge {
                 if events.is_hup() {
                     let connection = self.connections.remove(client_token).unwrap();
                     self.commands.send(
-                        server::Command::PluginDisconnected(connection.client_id)).unwrap();
+                        server::Command::ClientDisconnected(connection.client_id)).unwrap();
                 } else if events.is_readable() {
                     let conn = &mut self.connections[token];
                     // NOCOM(#sirver): should disconnect instead of crashing.
                     let message = conn.stream.read_message().expect("Could not read_message");;
                     match message {
                         ipc::Message::RpcCall(rpc_call) => {
-                            let call_context = plugin::FunctionCallContext {
-                                rpc_call: rpc_call,
-                                caller: conn.client_id,
-                            };
                             // NOCOM(#sirver): call function should be Rpc
-                            self.commands.send(server::Command::CallFunction(call_context)).unwrap();
-
-                            // NOCOM(#sirver): need to keep track of who called this and how
+                            self.commands.send(server::Command::CallFunction(conn.client_id, rpc_call)).unwrap();
                         },
                         ipc::Message::RpcReply(rpc_reply) => {
                             // NOCOM(#sirver): should be RpcReply

@@ -11,7 +11,6 @@ extern crate serde;
 extern crate uuid;
 
 mod ipc_bridge;
-mod plugin;
 pub mod client;
 pub mod error;
 pub mod ipc;

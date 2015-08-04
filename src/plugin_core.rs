@@ -1,6 +1,6 @@
 use serde::json;
 use super::ipc;
-use super::plugin;
+use super::ipc_bridge;
 use super::server;
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -20,25 +20,26 @@ impl CorePlugin {
         }
     }
 
-    pub fn call(&self, context: &plugin::FunctionCallContext) -> ipc::RpcResult {
-        match &context.rpc_call.function as &str {
+    pub fn call(&self, caller: ipc_bridge::ClientId, rpc_call: &ipc::RpcCall) -> ipc::RpcResult {
+        match &rpc_call.function as &str {
             "core.exit" => {
                 self.commands.send(server::Command::Shutdown).unwrap();
                 ipc::RpcResult::success(())
             },
             // NOCOM(#sirver): These args can be pulled out into Serializable structs.
             "core.register_function" => {
-                let args: RegisterFunctionArgs = match json::from_value(context.rpc_call.args.clone()) {
+                let args: RegisterFunctionArgs = match json::from_value(rpc_call.args.clone()) {
                     Ok(args) => args,
                     // NOCOM(#sirver): report errors somehow?
                     Err(_) => panic!("Invalid arguments"),
                 };
 
                 self.commands.send(
-                    server::Command::RegisterFunction(context.caller, args.name, args.priority)).unwrap();
+                    server::Command::RegisterFunction(caller, args.name, args.priority)).unwrap();
                 ipc::RpcResult::success(())
             },
-            _ => panic!("{} was called, but is not a core function.", context.rpc_call.function),
+            // NOCOM(#sirver): this should not panic, but return an error.
+            _ => panic!("{} was called, but is not a core function.", rpc_call.function),
         }
     }
 }

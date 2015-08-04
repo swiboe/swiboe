@@ -51,7 +51,6 @@ pub enum Message {
     RpcReply(RpcReply),
 }
 
-// NOCOM(#sirver): these could deal directly with thes structs.
 pub trait IpcRead {
     fn read_message(&mut self) -> Result<Message>;
 }
