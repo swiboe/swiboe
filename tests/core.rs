@@ -29,25 +29,6 @@ fn shutdown_server_with_no_clients_connected() {
     let _client = Client::connect(&t.socket_name);
 }
 
-#[test]
-fn broadcast_works() {
-    let t = TestHarness::new();
-
-    let client1 = Client::connect(&t.socket_name);
-    let client2 = Client::connect(&t.socket_name);
-
-    let test_msg: json::Value = json::from_str(r#"{ "blub": "blah" }"#).unwrap();
-
-    let rpc = client1.call("core.broadcast", &test_msg);
-    assert_eq!(rpc.wait().unwrap(), RpcResult::success(()));
-
-    let broadcast_msg = client1.recv().unwrap();
-    assert_eq!(test_msg, broadcast_msg);
-
-    let broadcast_msg = client2.recv().unwrap();
-    assert_eq!(test_msg, broadcast_msg);
-}
-
 struct TestCall {
     priority: u16,
     result: RpcResult,

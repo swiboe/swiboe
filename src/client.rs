@@ -9,7 +9,7 @@ use std::sync::mpsc;
 use std::thread;
 use super::ipc::{self, IpcWrite, IpcRead};
 use super::plugin_core::RegisterFunctionArgs;
-use super::{Error, Result, ErrorKind};
+use super::Result;
 use uuid::Uuid;
 
 const CLIENT: mio::Token = mio::Token(1);
@@ -19,7 +19,6 @@ pub trait RemoteProcedure: Send {
     fn call(&mut self, args: json::Value) -> ipc::RpcResult;
 }
 
-// NOCOM(#sirver): why is that pub?
 pub struct Rpc {
     // NOCOM(#sirver): something more structured?
     pub values: mpsc::Receiver<ipc::RpcReply>,
@@ -51,7 +50,6 @@ impl Rpc {
 }
 
 pub struct Client<'a> {
-    values: mpsc::Receiver<json::Value>,
     event_loop_sender: mio::Sender<EventLoopThreadCommand>,
     _event_loop_thread_guard: thread::JoinGuard<'a, ()>,
 
@@ -68,7 +66,6 @@ pub enum EventLoopThreadCommand {
 // NOCOM(#sirver): bad name
 struct Handler<'a> {
     stream: UnixStream,
-    values: mpsc::Sender<json::Value>,
     running_function_calls: HashMap<String, mpsc::Sender<ipc::RpcReply>>,
     function_thread_sender: mpsc::Sender<FunctionThreadCommand<'a>>,
 }
@@ -123,9 +120,6 @@ impl<'a> mio::Handler for Handler<'a> {
                         ipc::Message::RpcCall(rpc_call) => {
                             let command = FunctionThreadCommand::Call(rpc_call);
                             self.function_thread_sender.send(command).unwrap();
-                        },
-                        ipc::Message::Broadcast(data) => {
-                            self.values.send(data).unwrap();
                         },
                     }
                 }
@@ -216,7 +210,6 @@ impl<'a> Client<'a> {
                             mio::EventSet::readable(),
                             mio::PollOpt::level()).unwrap();
 
-        let (client_tx, values) = mpsc::channel();
         let event_loop_sender = event_loop.channel();
         let (commands_tx, commands_rx) = mpsc::channel();
         // NOCOM(#sirver): the Handler could maybe dispatch all commands between threads?
@@ -224,7 +217,6 @@ impl<'a> Client<'a> {
         let event_loop_thread_guard = thread::scoped(move || {
             event_loop.run(&mut Handler {
                 stream: stream,
-                values: client_tx,
                 running_function_calls: HashMap::new(),
                 function_thread_sender: event_loop_function_thread_sender,
             }).unwrap();
@@ -241,7 +233,6 @@ impl<'a> Client<'a> {
         });
 
         let client = Client {
-            values: values,
             event_loop_sender: event_loop_sender,
             _event_loop_thread_guard: event_loop_thread_guard,
 
@@ -254,13 +245,6 @@ impl<'a> Client<'a> {
     pub fn client_handle(&self) -> ClientHandle {
         ClientHandle {
             event_loop_sender: self.event_loop_sender.clone(),
-        }
-    }
-
-    pub fn recv(&self) -> Result<json::Value> {
-        match self.values.recv() {
-            Ok(value) => Ok(value),
-            Err(err) => Err(Error::new(ErrorKind::Disconnected(err))),
         }
     }
 

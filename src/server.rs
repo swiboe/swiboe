@@ -19,7 +19,6 @@ pub enum Command {
     FunctionReply(ipc::RpcReply),
     ClientConnected(Plugin),
     PluginDisconnected(ipc_bridge::ClientId),
-    Broadcast(ipc::Message),
 }
 pub type CommandSender = Sender<Command>;
 
@@ -131,7 +130,6 @@ impl Switchboard {
                         }
                     }
                 },
-                Command::Broadcast(message) => self.broadcast(&message),
                 Command::ClientConnected(plugin) => {
                     // NOCOM(#sirver): make sure plugin is not yet known.
                     self.plugins.insert(plugin.client_id(), plugin);
@@ -143,13 +141,6 @@ impl Switchboard {
             }
         }
         self.ipc_bridge_commands.send(ipc_bridge::Command::Quit).unwrap();
-    }
-
-    fn broadcast(&self, msg: &ipc::Message) {
-        // TODO(sirver): This repeats serialization for each plugin again unnecessarily.
-        for plugin in self.plugins.values() {
-            plugin.send(msg);
-        }
     }
 }
 

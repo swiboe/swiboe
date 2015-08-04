@@ -26,11 +26,6 @@ impl CorePlugin {
                 self.commands.send(server::Command::Shutdown).unwrap();
                 ipc::RpcResult::success(())
             },
-            "core.broadcast" => {
-                self.commands.send(server::Command::Broadcast(
-                        ipc::Message::Broadcast(context.rpc_call.args.clone()))).unwrap();
-                ipc::RpcResult::success(())
-            },
             // NOCOM(#sirver): These args can be pulled out into Serializable structs.
             "core.register_function" => {
                 let args: RegisterFunctionArgs = match json::from_value(context.rpc_call.args.clone()) {
@@ -47,5 +42,3 @@ impl CorePlugin {
         }
     }
 }
-
-// NOCOM(#sirver): kill broadcast

@@ -132,7 +132,6 @@ impl mio::Handler for IpcBridge {
                             // NOCOM(#sirver): be consistent with Reply and Response.
                             self.commands.send(server::Command::FunctionReply(rpc_reply)).unwrap();
                         }
-                        _ => panic!("Client send unexpected command: {:?}", message),
                     }
                 }
             }

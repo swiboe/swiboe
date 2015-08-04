@@ -49,7 +49,6 @@ pub struct RpcCall {
 pub enum Message {
     RpcCall(RpcCall),
     RpcReply(RpcReply),
-    Broadcast(json::Value),
 }
 
 // NOCOM(#sirver): these could deal directly with thes structs.

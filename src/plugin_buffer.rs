@@ -93,19 +93,21 @@ impl BuffersManager {
         self.next_buffer_index += 1;
 
         self.buffers.insert(current_buffer_index, String::new());
-        // NOCOM(#sirver): having a broadcast function would be nice.
-        self.client_handle.call("core.broadcast", &BufferCreated {
-            buffer_index: current_buffer_index,
-        }).wait().unwrap();
+
+        // NOCOM(#sirver): should call a callback instead
+        // self.client_handle.call("core.broadcast", &BufferCreated {
+            // buffer_index: current_buffer_index,
+        // }).wait().unwrap();
         current_buffer_index
     }
 
     fn delete_buffer(&mut self, buffer_index: usize) -> Result<()> {
         self.buffers.remove(&buffer_index);
-        // NOCOM(#sirver): having a broadcast function would be nice.
-        self.client_handle.call("core.broadcast", &BufferDeleted {
-            buffer_index: buffer_index,
-        }).wait().unwrap();
+
+        // NOCOM(#sirver): should call a callback instead
+        // self.client_handle.call("core.broadcast", &BufferDeleted {
+            // buffer_index: buffer_index,
+        // }).wait().unwrap();
         Ok(())
     }
 }

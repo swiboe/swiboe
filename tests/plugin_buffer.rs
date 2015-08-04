@@ -11,10 +11,7 @@ fn create_buffer(client: &Client, expected_index: usize) {
         buffer_index: expected_index,
     }));
 
-    let broadcast_msg = json::from_value(client.recv().unwrap()).unwrap();
-    assert_eq!(plugin_buffer::BufferCreated {
-        buffer_index: expected_index,
-    }, broadcast_msg);
+    // NOCOM(#sirver): check for callback call.
 }
 
 #[test]
@@ -36,10 +33,7 @@ fn buffer_delete() {
     let rpc = client.call("buffer.delete", &request);
     assert_eq!(rpc.wait().unwrap(), RpcResult::success(()));
 
-    let broadcast_msg = json::from_value(client.recv().unwrap()).unwrap();
-    assert_eq!(plugin_buffer::BufferDeleted {
-        buffer_index: 0,
-    }, broadcast_msg);
+    // NOCOM(#sirver): check for callback call.
 
     // NOCOM(#sirver): add a test for non existing buffer
 
