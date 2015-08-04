@@ -6,7 +6,7 @@ use std::sync::mpsc::{channel, Sender, Receiver};
 use std::thread;
 use super::ipc;
 use super::ipc_bridge;
-use super::plugin::{PluginId, FunctionCallContext, Plugin};
+use super::plugin::{FunctionCallContext, Plugin};
 use super::plugin_core;
 use super::plugin_buffer;
 
@@ -14,18 +14,18 @@ const CORE_FUNCTIONS_PREFIX: &'static str = "core.";
 
 pub enum Command {
     Shutdown,
-    RegisterFunction(PluginId, String, u16),
+    RegisterFunction(ipc_bridge::ClientId, String, u16),
     CallFunction(FunctionCallContext),
     FunctionReply(ipc::RpcReply),
-    PluginConnected(Box<Plugin>),
-    PluginDisconnected(PluginId),
+    ClientConnected(Box<Plugin>),
+    PluginDisconnected(ipc_bridge::ClientId),
     Broadcast(ipc::Message),
 }
 pub type CommandSender = Sender<Command>;
 
 #[derive(Debug)]
 struct RegisteredFunction {
-    plugin_id: PluginId,
+    client_id: ipc_bridge::ClientId,
     priority: u16,
 }
 
@@ -37,7 +37,7 @@ struct RunningRpc {
 pub struct Switchboard {
     functions: HashMap<String, Vec<RegisteredFunction>>,
     commands: Receiver<Command>,
-    plugins: HashMap<PluginId, Box<Plugin>>,
+    plugins: HashMap<ipc_bridge::ClientId, Box<Plugin>>,
     ipc_bridge_commands: mio::Sender<ipc_bridge::Command>,
     running_rpcs: HashMap<String, RunningRpc>,
     plugin_core: plugin_core::CorePlugin,
@@ -48,9 +48,9 @@ impl Switchboard {
         while let Ok(command) = self.commands.recv() {
             match command {
                 Command::Shutdown => break,
-                Command::RegisterFunction(plugin_id, name, priority) => {
+                Command::RegisterFunction(client_id, name, priority) => {
                     // NOCOM(#sirver): deny everything starting with 'core'
-                    // NOCOM(#sirver): make sure the plugin_id is known.
+                    // NOCOM(#sirver): make sure the client_id is known.
                     // NOCOM(#sirver): make sure the plugin has not already registered this
                     // function.
                     let vec = self.functions.entry(name)
@@ -62,7 +62,7 @@ impl Switchboard {
                     };
 
                     vec.insert(index, RegisteredFunction {
-                        plugin_id: plugin_id,
+                        client_id: client_id,
                         priority: priority,
                     });
                 },
@@ -84,7 +84,7 @@ impl Switchboard {
                         let vec = self.functions.get(&call_context.rpc_call.function as &str).unwrap();
                         let function = &vec[0];
 
-                        let owner = &mut self.plugins.get_mut(&function.plugin_id).unwrap();
+                        let owner = &mut self.plugins.get_mut(&function.client_id).unwrap();
                         owner.call(&call_context);
                         self.running_rpcs.insert(call_context.rpc_call.context.clone(), RunningRpc {
                             last_index: 0,
@@ -124,7 +124,7 @@ impl Switchboard {
                                 }
                             };
 
-                            let owner = &mut self.plugins.get_mut(&function.plugin_id).unwrap();
+                            let owner = &mut self.plugins.get_mut(&function.client_id).unwrap();
                             owner.call(&running_rpc.call_context);
                             self.running_rpcs.insert(running_rpc.call_context.rpc_call.context.clone(), running_rpc);
                             // NOCOM(#sirver): we ignore timeouts.
@@ -132,9 +132,9 @@ impl Switchboard {
                     }
                 },
                 Command::Broadcast(message) => self.broadcast(&message),
-                Command::PluginConnected(plugin) => {
+                Command::ClientConnected(plugin) => {
                     // NOCOM(#sirver): make sure plugin is not yet known.
-                    self.plugins.insert(plugin.id(), plugin);
+                    self.plugins.insert(plugin.client_id(), plugin);
                 },
                 Command::PluginDisconnected(plugin) => {
                     self.plugins.remove(&plugin).unwrap();

@@ -5,12 +5,18 @@ use mio;
 use std::path::Path;
 use super::ipc::{self, IpcRead, IpcWrite};
 use super::plugin::remote::{RemotePlugin};
-use super::plugin::{PluginId, FunctionCallContext};
+use super::plugin::{FunctionCallContext};
 use super::server;
+
+#[derive(PartialEq, Eq, Clone, Copy, Hash, Debug)]
+pub struct ClientId {
+    pub serial: u64,
+    pub token: mio::Token,
+}
 
 struct Connection {
     stream: UnixStream,
-    plugin_id: PluginId,
+    client_id: ClientId,
 }
 
 pub struct IpcBridge {
@@ -41,7 +47,7 @@ impl IpcBridge {
 
 pub enum Command {
     Quit,
-    SendData(PluginId, ipc::Message),
+    SendData(ClientId, ipc::Message),
 }
 
 impl mio::Handler for IpcBridge {
@@ -54,7 +60,7 @@ impl mio::Handler for IpcBridge {
             Command::SendData(receiver, message) => {
                 // NOCOM(#sirver): what if that is no longer valid?
                 let conn = &mut self.connections[receiver.token];
-                if conn.plugin_id == receiver {
+                if conn.client_id == receiver {
                     if let Some(err) = conn.stream.write_message(&message).err() {
                         println!("Could not send message to {:?}: {}", receiver, err);
                     }
@@ -72,19 +78,19 @@ impl mio::Handler for IpcBridge {
                 let commands = self.commands.clone();
                 self.next_serial += 1;
                 match self.connections.insert_with(|token| {
-                    let plugin_id = PluginId {
+                    let client_id = ClientId {
                         serial: serial,
                         token: token,
                     };
                     let plugin = RemotePlugin {
-                        id: plugin_id,
+                        client_id: client_id,
                         ipc_bridge_commands: event_loop.channel(),
                     };
                     let connection = Connection {
                         stream: stream,
-                        plugin_id: plugin_id,
+                        client_id: client_id,
                     };
-                    commands.send(server::Command::PluginConnected(Box::new(plugin))).unwrap();
+                    commands.send(server::Command::ClientConnected(Box::new(plugin))).unwrap();
                     connection
                 }) {
                     Some(token) => {
@@ -92,7 +98,7 @@ impl mio::Handler for IpcBridge {
                         let conn = &mut self.connections[token];
                         event_loop.register_opt(
                             &conn.stream,
-                            conn.plugin_id.token,
+                            conn.client_id.token,
                             mio::EventSet::readable(),
                             mio::PollOpt::level()).unwrap();
                     },
@@ -106,7 +112,7 @@ impl mio::Handler for IpcBridge {
                 if events.is_hup() {
                     let connection = self.connections.remove(client_token).unwrap();
                     self.commands.send(
-                        server::Command::PluginDisconnected(connection.plugin_id)).unwrap();
+                        server::Command::PluginDisconnected(connection.client_id)).unwrap();
                 } else if events.is_readable() {
                     let conn = &mut self.connections[token];
                     // NOCOM(#sirver): should disconnect instead of crashing.
@@ -115,7 +121,7 @@ impl mio::Handler for IpcBridge {
                         ipc::Message::RpcCall(rpc_call) => {
                             let call_context = FunctionCallContext {
                                 rpc_call: rpc_call,
-                                caller: conn.plugin_id,
+                                caller: conn.client_id,
                             };
                             // NOCOM(#sirver): call function should be Rpc
                             self.commands.send(server::Command::CallFunction(call_context)).unwrap();
