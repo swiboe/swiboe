@@ -6,7 +6,7 @@ use std::sync::mpsc::{channel, Sender, Receiver};
 use std::thread;
 use super::ipc;
 use super::ipc_bridge;
-use super::plugin::{PluginId, FunctionCallContext, Plugin, FunctionResult};
+use super::plugin::{PluginId, FunctionCallContext, Plugin};
 use super::plugin_core;
 use super::plugin_buffer;
 
@@ -49,7 +49,7 @@ impl Switchboard {
             match command {
                 Command::Shutdown => break,
                 Command::RegisterFunction(plugin_id, name, priority) => {
-                    // NOCOM(#sirver): kill everything starting with 'core'
+                    // NOCOM(#sirver): deny everything starting with 'core'
                     // NOCOM(#sirver): make sure the plugin_id is known.
                     // NOCOM(#sirver): make sure the plugin has not already registered this
                     // function.
@@ -83,21 +83,14 @@ impl Switchboard {
                     } else {
                         let vec = self.functions.get(&call_context.rpc_call.function as &str).unwrap();
                         let function = &vec[0];
-                        let result = {
-                            let owner = &mut self.plugins.get_mut(&function.plugin_id).unwrap();
-                            owner.call(&call_context)
-                        };
 
-                        match result {
-                            // NOCOM(#sirver): kill Delegated
-                            FunctionResult::Delegated => {
-                                self.running_rpcs.insert(call_context.rpc_call.context.clone(), RunningRpc {
-                                    last_index: 0,
-                                    call_context: call_context,
-                                });
-                                // NOCOM(#sirver): we ignore timeouts.
-                            }
-                        }
+                        let owner = &mut self.plugins.get_mut(&function.plugin_id).unwrap();
+                        owner.call(&call_context);
+                        self.running_rpcs.insert(call_context.rpc_call.context.clone(), RunningRpc {
+                            last_index: 0,
+                            call_context: call_context,
+                        });
+                        // NOCOM(#sirver): we ignore timeouts.
                     }
                 },
                 Command::FunctionReply(rpc_reply) => {
@@ -131,19 +124,10 @@ impl Switchboard {
                                 }
                             };
 
-                            let result = {
-                                let owner = &mut self.plugins.get_mut(&function.plugin_id).unwrap();
-                                owner.call(&running_rpc.call_context)
-                            };
-                            // NOCOM(#sirver): every plugin should be a remote_id now. Or we need a
-                            // backchannel.
-                            match result {
-                                FunctionResult::Delegated => {
-                                    self.running_rpcs.insert(running_rpc.call_context.rpc_call.context.clone(), running_rpc);
-                                    // NOCOM(#sirver): we ignore timeouts.
-                                }
-                            }
-
+                            let owner = &mut self.plugins.get_mut(&function.plugin_id).unwrap();
+                            owner.call(&running_rpc.call_context);
+                            self.running_rpcs.insert(running_rpc.call_context.rpc_call.context.clone(), running_rpc);
+                            // NOCOM(#sirver): we ignore timeouts.
                         }
                     }
                 },

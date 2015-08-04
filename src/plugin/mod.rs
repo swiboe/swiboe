@@ -16,16 +16,11 @@ pub struct FunctionCallContext {
     pub caller: PluginId,
 }
 
-pub enum FunctionResult {
-    /// The function has delegated the call to another plugin which will handle it.
-    Delegated,
-}
-
 pub trait Plugin: Send {
     fn name(&self) -> &'static str;
     fn id(&self) -> PluginId;
     fn send(&self, message: &ipc::Message);
-    fn call(&self, context: &FunctionCallContext) -> FunctionResult;
+    fn call(&self, context: &FunctionCallContext);
 }
 
 pub mod remote;
