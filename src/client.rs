@@ -124,34 +124,6 @@ impl<'a> mio::Handler for Handler<'a> {
     }
 }
 
-// NOCOM(#sirver): urg... that is the real client.
-pub struct ClientHandle {
-    event_loop_sender: mio::Sender<EventLoopThreadCommand>,
-}
-
-impl ClientHandle {
-    pub fn write(&self, message: ipc::Message) {
-        self.event_loop_sender.send(EventLoopThreadCommand::Send(message)).unwrap();
-    }
-
-    // NOCOM(#sirver): Return a future? How about streaming functions?
-    pub fn call<T: Serialize>(&self, function: &str, args: &T) -> Rpc {
-        let args = json::to_value(&args);
-        let context = Uuid::new_v4().to_hyphenated_string();
-        let message = ipc::Message::RpcCall(ipc::RpcCall {
-            function: function.into(),
-            context: context.clone(),
-            args: args,
-        });
-
-        let (tx, rx) = mpsc::channel();
-        self.event_loop_sender.send(EventLoopThreadCommand::Call(context, tx)).unwrap();
-
-        self.write(message);
-        Rpc::new(rx)
-    }
-}
-
 enum FunctionThreadCommand<'a> {
     Quit,
     RegisterFunction(String, Box<RemoteProcedure + 'a>),
@@ -237,15 +209,21 @@ impl<'a> Client<'a> {
         client
     }
 
-    pub fn client_handle(&self) -> ClientHandle {
-        ClientHandle {
-            event_loop_sender: self.event_loop_sender.clone(),
-        }
-    }
-
-    // NOCOM(#sirver): now, that seems really stupid..
+    // NOCOM(#sirver): Return a future? How about streaming functions?
     pub fn call<T: Serialize>(&self, function: &str, args: &T) -> Rpc {
-        self.client_handle().call(function, args)
+        let args = json::to_value(&args);
+        let context = Uuid::new_v4().to_hyphenated_string();
+        let message = ipc::Message::RpcCall(ipc::RpcCall {
+            function: function.into(),
+            context: context.clone(),
+            args: args,
+        });
+
+        let (tx, rx) = mpsc::channel();
+        self.event_loop_sender.send(EventLoopThreadCommand::Call(context, tx)).unwrap();
+
+        self.event_loop_sender.send(EventLoopThreadCommand::Send(message)).unwrap();
+        Rpc::new(rx)
     }
 
     pub fn register_function(&self, name: &str, remote_procedure: Box<RemoteProcedure + 'a>) {

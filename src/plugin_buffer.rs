@@ -28,7 +28,6 @@ pub struct NewResponse {
 }
 
 struct New {
-    client_handle: client::ClientHandle,
     buffers: Arc<RwLock<BuffersManager>>,
 }
 
@@ -55,7 +54,6 @@ pub struct DeleteRequest {
 pub struct DeleteResponse;
 
 struct Delete {
-    client_handle: client::ClientHandle,
     buffers: Arc<RwLock<BuffersManager>>,
 }
 
@@ -74,15 +72,13 @@ impl<'a> RemoteProcedure for Delete {
 }
 
 struct BuffersManager {
-    client_handle: client::ClientHandle,
     next_buffer_index: usize,
     buffers: HashMap<usize, String>,
 }
 
 impl BuffersManager {
-    fn new(client_handle: client::ClientHandle) -> Self {
+    fn new() -> Self {
         BuffersManager {
-            client_handle: client_handle,
             next_buffer_index: 0,
             buffers: HashMap::new(),
         }
@@ -123,18 +119,16 @@ impl<'a> BufferPlugin<'a> {
         let client = Client::connect(socket_name);
 
         let plugin = BufferPlugin {
-            buffers: Arc::new(RwLock::new(BuffersManager::new(client.client_handle()))),
+            buffers: Arc::new(RwLock::new(BuffersManager::new())),
             client: client,
         };
 
         let new = Box::new(New {
-            client_handle: plugin.client.client_handle(),
             buffers: plugin.buffers.clone(),
         });
         plugin.client.register_function("buffer.new", new);
 
         let delete = Box::new(Delete {
-            client_handle: plugin.client.client_handle(),
             buffers: plugin.buffers.clone(),
         });
         plugin.client.register_function("buffer.delete", delete);
