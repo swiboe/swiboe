@@ -33,13 +33,3 @@ impl<'a> Drop for TestHarness<'a> {
         self.server.take().unwrap().shutdown();
     }
 }
-
-pub struct CallbackProcedure<F> {
-    pub callback: F,
-}
-
-impl<F> client::RemoteProcedure for CallbackProcedure<F> where
-        F: Fn(json::Value) -> ipc::RpcResult + Send
-{
-    fn call(&mut self, args: json::Value) -> ipc::RpcResult { (self.callback)(args) }
-}

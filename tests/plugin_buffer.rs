@@ -1,5 +1,6 @@
 use std::sync::mpsc;
-use support::{TestHarness, CallbackProcedure};
+use super::CallbackProcedure;
+use support::TestHarness;
 use switchboard::client;
 use switchboard::ipc::RpcResult;
 use switchboard::plugin_buffer;
