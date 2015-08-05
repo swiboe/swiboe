@@ -84,7 +84,8 @@ impl mio::Handler for IpcBridge {
                         stream: stream,
                         client_id: client_id,
                     };
-                    commands.send(server::Command::ClientConnected(client_id)).unwrap();
+                    // NOCOM(#sirver): what
+                    commands.send(server::Command::ClientConnected(client_id)).expect("On Acceppt");
                     connection
                 }) {
                     Some(token) => {
@@ -106,17 +107,17 @@ impl mio::Handler for IpcBridge {
                 if events.is_hup() {
                     let connection = self.connections.remove(client_token).unwrap();
                     self.commands.send(
-                        server::Command::ClientDisconnected(connection.client_id)).unwrap();
+                        server::Command::ClientDisconnected(connection.client_id)).expect("On HUP");
                 } else if events.is_readable() {
                     let conn = &mut self.connections[token];
                     // NOCOM(#sirver): should disconnect instead of crashing.
                     let message = conn.stream.read_message().expect("Could not read_message");;
                     match message {
                         ipc::Message::RpcCall(rpc_call) => {
-                            self.commands.send(server::Command::RpcCall(conn.client_id, rpc_call)).unwrap();
+                            self.commands.send(server::Command::RpcCall(conn.client_id, rpc_call)).expect("On RpcCall");
                         },
                         ipc::Message::RpcResponse(rpc_response) => {
-                            self.commands.send(server::Command::RpcResponse(rpc_response)).unwrap();
+                            self.commands.send(server::Command::RpcResponse(rpc_response)).expect("On RpcResponse");
                         }
                     }
                 }

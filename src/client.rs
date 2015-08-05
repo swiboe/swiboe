@@ -131,7 +131,7 @@ struct FunctionThread<'a> {
 }
 
 impl<'a> FunctionThread<'a> {
-    pub fn spin_forever(mut self) {
+    fn spin_forever(mut self) {
         while let Ok(command) = self.commands.recv() {
             match command {
                 FunctionThreadCommand::Quit => break,
@@ -140,14 +140,16 @@ impl<'a> FunctionThread<'a> {
                 },
                 FunctionThreadCommand::Call(rpc_call) => {
                     if let Some(function) = self.remote_procedures.get_mut(&rpc_call.function) {
-                        // NOCOM(#sirver): result value?
                         let result = function.call(rpc_call.args);
-                        self.event_loop_sender.send(EventLoopThreadCommand::Send(
+
+                        // Ignore error on send: if the event_loop is no longer listening, somebody
+                        // will send us a Quit command soon enough too.
+                        let _ = self.event_loop_sender.send(EventLoopThreadCommand::Send(
                             ipc::Message::RpcResponse(ipc::RpcResponse {
                                 context: rpc_call.context,
                                 // NOCOM(#sirver): what about streaming rpcs?
                                 result: result,
-                            }))).unwrap();
+                            })));
                     }
                     // NOCOM(#sirver): return an error - though if that has happened the
                     // server messed up too.
