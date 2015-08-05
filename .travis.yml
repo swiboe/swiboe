@@ -12,8 +12,9 @@ script:
   - |
       travis-cargo build &&
       travis-cargo test &&
-      travis-cargo bench 
+      travis-cargo bench
 
 env:
   global:
     - TRAVIS_CARGO_NIGHTLY_FEATURE=""
+    - RUST_BACKTRACE=1
