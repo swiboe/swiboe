@@ -146,7 +146,6 @@ impl<'a> FunctionThread<'a> {
                             ipc::Message::RpcResponse(ipc::RpcResponse {
                                 context: rpc_call.context,
                                 // NOCOM(#sirver): what about streaming rpcs?
-                                state: ipc::RpcState::Done,
                                 result: result,
                             }))).unwrap();
                     }

@@ -5,19 +5,9 @@ use super::Result;
 
 // NOCOM(#sirver): add documentation (using this lint that forbids not having documentation).
 
-
-// NOCOM(#sirver): I think this can be killed.
-#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
-pub enum RpcState {
-    Running,
-    Done,
-}
-
-
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct RpcResponse {
     pub context: String,
-    pub state: RpcState,
     pub result: RpcResult,
 }
 

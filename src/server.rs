@@ -78,7 +78,6 @@ impl Switchboard {
                                 client_id,
                                 ipc::Message::RpcResponse(ipc::RpcResponse {
                                     context: rpc_call.context.clone(),
-                                    state: ipc::RpcState::Done,
                                     result: result,
                                 }))).unwrap();
                     } else {
@@ -101,7 +100,6 @@ impl Switchboard {
                                     client_id,
                                     ipc::Message::RpcResponse(ipc::RpcResponse {
                                         context: rpc_call.context.clone(),
-                                        state: ipc::RpcState::Done,
                                         result: ipc::RpcResult::Err(ipc::RpcError::UnknownRpc),
                                     }))).unwrap();
                         }
