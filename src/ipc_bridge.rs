@@ -84,8 +84,7 @@ impl mio::Handler for IpcBridge {
                         stream: stream,
                         client_id: client_id,
                     };
-                    // NOCOM(#sirver): what
-                    commands.send(server::Command::ClientConnected(client_id)).expect("On Acceppt");
+                    commands.send(server::Command::ClientConnected(client_id)).expect("ClientConnected");
                     connection
                 }) {
                     Some(token) => {
@@ -107,17 +106,18 @@ impl mio::Handler for IpcBridge {
                 if events.is_hup() {
                     let connection = self.connections.remove(client_token).unwrap();
                     self.commands.send(
-                        server::Command::ClientDisconnected(connection.client_id)).expect("On HUP");
+                        server::Command::ClientDisconnected(connection.client_id)).expect("ClientDisconnected");
                 } else if events.is_readable() {
                     let conn = &mut self.connections[token];
                     // NOCOM(#sirver): should disconnect instead of crashing.
-                    let message = conn.stream.read_message().expect("Could not read_message");;
+                    let message = conn.stream.read_message().expect("ReadMessage");;
                     match message {
                         ipc::Message::RpcCall(rpc_call) => {
-                            self.commands.send(server::Command::RpcCall(conn.client_id, rpc_call)).expect("On RpcCall");
+                            self.commands.send(server::Command::RpcCall(
+                                    conn.client_id, rpc_call)).expect("RpcCall");
                         },
                         ipc::Message::RpcResponse(rpc_response) => {
-                            self.commands.send(server::Command::RpcResponse(rpc_response)).expect("On RpcResponse");
+                            self.commands.send(server::Command::RpcResponse(rpc_response)).expect("RpcResponse");
                         }
                     }
                 }

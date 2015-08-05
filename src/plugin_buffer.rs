@@ -30,7 +30,7 @@ struct New {
     buffers: Arc<RwLock<BuffersManager>>,
 }
 
-impl<'a> client::RemoteProcedure for New {
+impl client::RemoteProcedure for New {
     fn call(&mut self, args: json::Value) -> ipc::RpcResult {
         // NOCOM(#sirver): need some: on bad request results
         // NOCOM(#sirver): needs some understanding what happens on extra values.
@@ -56,7 +56,7 @@ struct Delete {
     buffers: Arc<RwLock<BuffersManager>>,
 }
 
-impl<'a> client::RemoteProcedure for Delete {
+impl client::RemoteProcedure for Delete {
     fn call(&mut self, args: json::Value) -> ipc::RpcResult {
         // NOCOM(#sirver): need some: on bad request results
         // NOCOM(#sirver): needs some understanding what happens on extra values.
