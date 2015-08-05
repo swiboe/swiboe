@@ -44,14 +44,6 @@ impl Rpc {
     }
 }
 
-pub struct Client<'a> {
-    event_loop_sender: mio::Sender<EventLoopThreadCommand>,
-    _event_loop_thread_guard: thread::JoinGuard<'a, ()>,
-
-    function_thread_sender: mpsc::Sender<FunctionThreadCommand<'a>>,
-    _function_thread_guard: thread::JoinGuard<'a, ()>,
-}
-
 pub enum EventLoopThreadCommand {
     Quit,
     Send(ipc::Message),
@@ -109,7 +101,9 @@ impl<'a> mio::Handler for Handler<'a> {
                             self.running_function_calls
                                 .get(&rpc_data.context)
                                 .map(|channel| {
-                                    channel.send(rpc_data).unwrap();
+                                    // The other side of this channel might not exist anymore - we
+                                    // might have dropped the RPC already. Just ignore it.
+                                    let _ = channel.send(rpc_data);
                                 });
                         },
                         ipc::Message::RpcCall(rpc_call) => {
@@ -166,6 +160,30 @@ impl<'a> FunctionThread<'a> {
     }
 }
 
+// NOCOM(#sirver): Return a future? How about streaming functions?
+fn call<T: Serialize>(event_loop_sender: &mio::Sender<EventLoopThreadCommand>, function: &str, args: &T) -> Rpc {
+    let args = json::to_value(&args);
+    let context = Uuid::new_v4().to_hyphenated_string();
+    let message = ipc::Message::RpcCall(ipc::RpcCall {
+        function: function.into(),
+        context: context.clone(),
+        args: args,
+    });
+
+    let (tx, rx) = mpsc::channel();
+    event_loop_sender.send(EventLoopThreadCommand::Call(context, tx)).unwrap();
+    event_loop_sender.send(EventLoopThreadCommand::Send(message)).unwrap();
+    Rpc::new(rx)
+}
+
+pub struct Client<'a> {
+    event_loop_sender: mio::Sender<EventLoopThreadCommand>,
+    _event_loop_thread_guard: thread::JoinGuard<'a, ()>,
+
+    function_thread_sender: mpsc::Sender<FunctionThreadCommand<'a>>,
+    _function_thread_guard: thread::JoinGuard<'a, ()>,
+}
+
 impl<'a> Client<'a> {
     pub fn connect(socket_name: &path::Path) -> Self {
         let stream = UnixStream::connect(socket_name).unwrap();
@@ -209,23 +227,6 @@ impl<'a> Client<'a> {
         client
     }
 
-    // NOCOM(#sirver): Return a future? How about streaming functions?
-    pub fn call<T: Serialize>(&self, function: &str, args: &T) -> Rpc {
-        let args = json::to_value(&args);
-        let context = Uuid::new_v4().to_hyphenated_string();
-        let message = ipc::Message::RpcCall(ipc::RpcCall {
-            function: function.into(),
-            context: context.clone(),
-            args: args,
-        });
-
-        let (tx, rx) = mpsc::channel();
-        self.event_loop_sender.send(EventLoopThreadCommand::Call(context, tx)).unwrap();
-
-        self.event_loop_sender.send(EventLoopThreadCommand::Send(message)).unwrap();
-        Rpc::new(rx)
-    }
-
     pub fn new_rpc(&self, name: &str, remote_procedure: Box<RemoteProcedure + 'a>) {
         // NOCOM(#sirver): what happens when this is already inserted? crash probably
         let rpc = self.call("core.new_rpc", &NewRpcRequest {
@@ -238,6 +239,16 @@ impl<'a> Client<'a> {
         self.function_thread_sender.send(FunctionThreadCommand::NewRpc(
                 name.into(), remote_procedure)).unwrap();
     }
+
+    pub fn call<T: Serialize>(&self, function: &str, args: &T) -> Rpc {
+        call(&self.event_loop_sender, function, args)
+    }
+
+    pub fn new_rpc_caller(&self) -> RpcCaller {
+        RpcCaller {
+            event_loop_sender: self.event_loop_sender.clone(),
+        }
+    }
 }
 
 impl<'a> Drop for Client<'a> {
@@ -246,5 +257,15 @@ impl<'a> Drop for Client<'a> {
         // fail, which is fine to be ignored in that case.
         let _ = self.event_loop_sender.send(EventLoopThreadCommand::Quit);
         let _ = self.function_thread_sender.send(FunctionThreadCommand::Quit);
+    }
+}
+
+pub struct RpcCaller {
+    event_loop_sender: mio::Sender<EventLoopThreadCommand>,
+}
+
+impl RpcCaller {
+    pub fn call<T: Serialize>(&self, function: &str, args: &T) -> Rpc {
+        call(&self.event_loop_sender, function, args)
     }
 }

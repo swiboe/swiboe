@@ -73,13 +73,15 @@ impl<'a> client::RemoteProcedure for Delete {
 struct BuffersManager {
     next_buffer_index: usize,
     buffers: HashMap<usize, String>,
+    rpc_caller: client::RpcCaller,
 }
 
 impl BuffersManager {
-    fn new() -> Self {
+    fn new(rpc_caller: client::RpcCaller) -> Self {
         BuffersManager {
             next_buffer_index: 0,
             buffers: HashMap::new(),
+            rpc_caller: rpc_caller
         }
     }
 
@@ -89,20 +91,22 @@ impl BuffersManager {
 
         self.buffers.insert(current_buffer_index, String::new());
 
-        // NOCOM(#sirver): should call a callback instead
-        // self.client_handle.call("core.broadcast", &BufferCreated {
-            // buffer_index: current_buffer_index,
-        // }).wait().unwrap();
+        // NOCOM(#sirver): new is not good. should be create.
+        // Fire the callback, but we do not wait for it's conclusion.
+        let _ = self.rpc_caller.call("on.buffer.new", &BufferCreated {
+            buffer_index: current_buffer_index,
+        });
         current_buffer_index
     }
 
     fn delete_buffer(&mut self, buffer_index: usize) -> Result<()> {
         self.buffers.remove(&buffer_index);
 
-        // NOCOM(#sirver): should call a callback instead
-        // self.client_handle.call("core.broadcast", &BufferDeleted {
-            // buffer_index: buffer_index,
-        // }).wait().unwrap();
+        // Fire the callback, but we do not wait for it's conclusion.
+        let _ = self.rpc_caller.call("on.buffer.deleted", &BufferDeleted {
+            buffer_index: buffer_index,
+        });
+
         Ok(())
     }
 }
@@ -117,7 +121,7 @@ impl<'a> BufferPlugin<'a> {
         let client = client::Client::connect(socket_name);
 
         let plugin = BufferPlugin {
-            buffers: Arc::new(RwLock::new(BuffersManager::new())),
+            buffers: Arc::new(RwLock::new(BuffersManager::new(client.new_rpc_caller()))),
             client: client,
         };
 

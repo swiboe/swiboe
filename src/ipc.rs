@@ -21,6 +21,11 @@ pub struct RpcResponse {
     pub result: RpcResult,
 }
 
+#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
+pub enum RpcError {
+    UnknownRpc,
+}
+
 // NOCOM(#sirver): more compact custom serialization?
 // NOCOM(#sirver): use actual result type?
 // NOCOM(#sirver): remove *Kind? at the end
@@ -28,6 +33,7 @@ pub struct RpcResponse {
 pub enum RpcResult {
     // NOCOM(#sirver): mention success as a convenient creating for this.
     Ok(json::Value),
+    Err(RpcError),
     NotHandled,
 }
 

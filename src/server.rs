@@ -82,21 +82,29 @@ impl Switchboard {
                                     result: result,
                                 }))).unwrap();
                     } else {
-                        let vec = self.functions.get(&rpc_call.function as &str).unwrap();
-                        let function = &vec[0];
-
-                        // NOCOM(#sirver): eventually, when we keep proper track of our rpc calls, this should be
-                        // able to move again.
-                        self.ipc_bridge_commands.send(ipc_bridge::Command::SendData(
-                                function.client_id,
-                                ipc::Message::RpcCall(rpc_call.clone())
-                        )).unwrap();
-                        self.running_rpcs.insert(rpc_call.context.clone(), RunningRpc {
-                            last_index: 0,
-                            rpc_call: rpc_call,
-                            caller: client_id,
-                        });
-                        // NOCOM(#sirver): we ignore timeouts.
+                        if let Some(vec) = self.functions.get(&rpc_call.function as &str) {
+                            let function = &vec[0];
+                            // NOCOM(#sirver): eventually, when we keep proper track of our rpc calls, this should be
+                            // able to move again.
+                            self.running_rpcs.insert(rpc_call.context.clone(), RunningRpc {
+                                last_index: 0,
+                                rpc_call: rpc_call.clone(),
+                                caller: client_id,
+                            });
+                            self.ipc_bridge_commands.send(ipc_bridge::Command::SendData(
+                                    function.client_id,
+                                    ipc::Message::RpcCall(rpc_call)
+                                    )).unwrap();
+                            // NOCOM(#sirver): we ignore timeouts.
+                        } else {
+                            self.ipc_bridge_commands.send(ipc_bridge::Command::SendData(
+                                    client_id,
+                                    ipc::Message::RpcResponse(ipc::RpcResponse {
+                                        context: rpc_call.context.clone(),
+                                        state: ipc::RpcState::Done,
+                                        result: ipc::RpcResult::Err(ipc::RpcError::UnknownRpc),
+                                    }))).unwrap();
+                        }
                     }
                 },
                 Command::RpcResponse(rpc_response) => {
@@ -109,8 +117,7 @@ impl Switchboard {
                     };
 
                     match rpc_response.result {
-                        // NOCOM(#sirver): same for errors.
-                        ipc::RpcResult::Ok(_) => {
+                        ipc::RpcResult::Ok(_) | ipc::RpcResult::Err(_) => {
                             let running_rpc = running_rpc.remove();
                             self.ipc_bridge_commands.send(ipc_bridge::Command::SendData(
                                     running_rpc.caller,
