@@ -3,7 +3,7 @@ use std::env;
 use std::path;
 use support::TestHarness;
 use switchboard::client::{RemoteProcedure, Client};
-use switchboard::ipc::{RpcResult, RpcError};
+use switchboard::ipc::{RpcErrorKind, RpcResult, RpcError};
 use switchboard::server::Server;
 use uuid::Uuid;
 
@@ -108,5 +108,8 @@ fn call_not_existing_rpc() {
 
     let client = Client::connect(&t.socket_name);
     let rpc = client.call("not_existing", &json::from_str::<json::Value>("{}").unwrap());
-    assert_eq!(RpcResult::Err(RpcError::UnknownRpc), rpc.wait().unwrap());
+    assert_eq!(RpcResult::Err(RpcError {
+        kind: RpcErrorKind::UnknownRpc,
+        details: None,
+    }), rpc.wait().unwrap());
 }

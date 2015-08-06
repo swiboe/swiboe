@@ -100,7 +100,10 @@ impl Switchboard {
                                     client_id,
                                     ipc::Message::RpcResponse(ipc::RpcResponse {
                                         context: rpc_call.context.clone(),
-                                        result: ipc::RpcResult::Err(ipc::RpcError::UnknownRpc),
+                                        result: ipc::RpcResult::Err(ipc::RpcError {
+                                            kind: ipc::RpcErrorKind::UnknownRpc,
+                                            details: None,
+                                        }),
                                     }))).unwrap();
                         }
                     }

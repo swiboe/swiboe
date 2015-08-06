@@ -1,8 +1,8 @@
 use serde::json;
 use std::collections::HashMap;
+use std::convert;
 use std::path;
 use std::sync::{RwLock, Arc};
-use super::Result;
 use super::client;
 use super::ipc;
 
@@ -30,11 +30,43 @@ struct New {
     buffers: Arc<RwLock<BuffersManager>>,
 }
 
+#[derive(Debug)]
+pub enum BufferError {
+    UnknownBuffer,
+}
+
+impl From<BufferError> for ipc::RpcError {
+     fn from(error: BufferError) -> Self {
+         use ipc::RpcErrorKind::*;
+
+         let (kind, details) = match error {
+             BufferError::UnknownBuffer => (InvalidArgs, format!("unknown_buffer")),
+         };
+
+         ipc::RpcError {
+             kind: kind,
+             details: Some(json::to_value(&details)),
+         }
+         // NOCOM(#sirver): more information!
+     }
+}
+
+
+// NOCOM(#sirver): kill?
+macro_rules! try_rpc {
+    ($expr:expr) => (match $expr {
+        Ok(val) => val,
+        Err(err) => {
+            return ipc::RpcResult::Err(convert::From::from(err))
+        }
+    })
+}
+
 impl client::RemoteProcedure for New {
     fn call(&mut self, args: json::Value) -> ipc::RpcResult {
-        // NOCOM(#sirver): need some: on bad request results
+        // NOCOM(#sirver): need testing for bad request results
         // NOCOM(#sirver): needs some understanding what happens on extra values.
-        let request: NewRequest = json::from_value(args).unwrap();
+        let request: NewRequest = try_rpc!(json::from_value(args));
         let mut buffers = self.buffers.write().unwrap();
 
         let response = NewResponse {
@@ -58,12 +90,11 @@ struct Delete {
 
 impl client::RemoteProcedure for Delete {
     fn call(&mut self, args: json::Value) -> ipc::RpcResult {
-        // NOCOM(#sirver): need some: on bad request results
         // NOCOM(#sirver): needs some understanding what happens on extra values.
-        let request: DeleteRequest = json::from_value(args).unwrap();
+        let request: DeleteRequest = try_rpc!(json::from_value(args));
         let mut buffers = self.buffers.write().unwrap();
         // NOCOM(#sirver): handle errors
-        buffers.delete_buffer(request.buffer_index).unwrap();
+        try_rpc!(buffers.delete_buffer(request.buffer_index));
 
         let response = DeleteResponse;
         ipc::RpcResult::success(response)
@@ -99,8 +130,10 @@ impl BuffersManager {
         current_buffer_index
     }
 
-    fn delete_buffer(&mut self, buffer_index: usize) -> Result<()> {
-        self.buffers.remove(&buffer_index);
+    fn delete_buffer(&mut self, buffer_index: usize) -> Result<(), BufferError> {
+        if self.buffers.remove(&buffer_index).is_none() {
+            return Err(BufferError::UnknownBuffer);
+        }
 
         // Fire the callback, but we do not wait for it's conclusion.
         let _ = self.rpc_caller.call("on.buffer.deleted", &BufferDeleted {

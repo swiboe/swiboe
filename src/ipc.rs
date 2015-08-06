@@ -2,6 +2,8 @@ use libc::consts::os::posix88;
 use serde::{self, json};
 use std::io::{self, Read, Write};
 use super::Result;
+use std::error::Error;
+use std::result;
 
 // NOCOM(#sirver): add documentation (using this lint that forbids not having documentation).
 
@@ -11,25 +13,84 @@ pub struct RpcResponse {
     pub result: RpcResult,
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
-pub enum RpcError {
+#[derive(Debug, PartialEq, Clone)]
+pub enum RpcErrorKind {
     UnknownRpc,
+    InvalidArgs,
 }
 
-// NOCOM(#sirver): more compact custom serialization?
-// NOCOM(#sirver): use actual result type?
-// NOCOM(#sirver): remove *Kind? at the end
+// TODO(sirver): To get really nice looking JSON, a lot of this serialization has to be tweaked.
+// Maybe ask on the serde tracker how to get beautiful serialization. This is here just to
+// understand how it would work. Maybe remove in the future?
+impl serde::Serialize for RpcErrorKind {
+    fn serialize<S>(&self, serializer: &mut S) -> result::Result<(), S::Error>
+        where S: serde::Serializer,
+    {
+        let s = match *self {
+            RpcErrorKind::UnknownRpc => "unknown_rpc",
+            RpcErrorKind::InvalidArgs => "invalid_args",
+        };
+        serializer.visit_str(s)
+    }
+}
+
+struct RpcErrorKindVisitor;
+
+impl serde::de::Visitor for RpcErrorKindVisitor {
+    type Value = RpcErrorKind;
+
+    fn visit_str<E>(&mut self, value: &str) -> result::Result<RpcErrorKind, E>
+        where E: serde::de::Error
+    {
+        match value {
+            "unknown_rpc" => Ok(RpcErrorKind::UnknownRpc),
+            "invalid_args" => Ok(RpcErrorKind::InvalidArgs),
+            _ => Err(serde::de::Error::unknown_field_error(value)),
+        }
+    }
+}
+
+impl serde::Deserialize for RpcErrorKind {
+    fn deserialize<D>(deserializer: &mut D) -> result::Result<Self, D::Error>
+        where D: serde::de::Deserializer {
+        deserializer.visit(RpcErrorKindVisitor)
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
+pub struct RpcError {
+    pub kind: RpcErrorKind,
+    pub details: Option<json::Value>,
+}
+
+impl From<json::error::Error> for RpcError {
+     fn from(error: json::error::Error) -> Self {
+         RpcError {
+             kind: RpcErrorKind::InvalidArgs,
+             details: Some(json::to_value(&error.description())),
+         }
+     }
+}
+
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 pub enum RpcResult {
     // NOCOM(#sirver): mention success as a convenient creating for this.
     Ok(json::Value),
     Err(RpcError),
+    // NOCOM(#sirver): Not Handled is never seen by a client, but is send by one.
     NotHandled,
 }
 
 impl RpcResult {
     pub fn success<T: serde::Serialize>(value: T) -> RpcResult {
         RpcResult::Ok(json::to_value(&value))
+    }
+
+    pub fn unwrap_err(self) -> RpcError {
+        match self {
+            RpcResult::Ok(_) | RpcResult::NotHandled => panic!("Called unwrap_rpc_error on a non_error."),
+            RpcResult::Err(e) => e,
+        }
     }
 }
 

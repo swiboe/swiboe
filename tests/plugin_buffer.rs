@@ -56,4 +56,15 @@ fn buffer_delete() {
     assert!(callback_called.load(Ordering::Relaxed));
 }
 
-    // NOCOM(#sirver): add a test for non existing buffer
+#[test]
+fn buffer_delete_non_existing() {
+    let t = TestHarness::new();
+
+    let client = client::Client::connect(&t.socket_name);
+    let request = plugin_buffer::DeleteRequest {
+        buffer_index: 0,
+    };
+    let rpc = client.call("buffer.delete", &request);
+    assert_eq!(
+        rpc.wait().unwrap().unwrap_err().details.unwrap().as_string(), Some("unknown_buffer"));
+}
