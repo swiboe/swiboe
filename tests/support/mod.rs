@@ -1,7 +1,4 @@
-use serde::json;
 use std::path::PathBuf;
-use switchboard::client;
-use switchboard::ipc;
 use switchboard::server::Server;
 use tempdir::TempDir;
 
