@@ -2,30 +2,12 @@ use serde::json;
 use std::collections::HashMap;
 use std::convert;
 use std::path;
+use std::string;
 use std::sync::{RwLock, Arc};
 use super::client;
 use super::ipc;
 
 // NOCOM(#sirver): make a new package rpc and move some stuff itno that?
-
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
-pub struct BufferCreated {
-    pub buffer_index: usize,
-}
-
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
-pub struct BufferDeleted {
-    pub buffer_index: usize,
-}
-
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
-pub struct NewRequest;
-
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
-pub struct NewResponse {
-    pub buffer_index: usize,
-}
-
 struct New {
     buffers: Arc<RwLock<BuffersManager>>,
 }
@@ -62,6 +44,27 @@ macro_rules! try_rpc {
     })
 }
 
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+pub struct BufferCreated {
+    pub buffer_index: usize,
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+pub struct BufferDeleted {
+    pub buffer_index: usize,
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+pub struct NewRequest {
+    pub content: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+pub struct NewResponse {
+    pub buffer_index: usize,
+}
+
 impl client::RemoteProcedure for New {
     fn call(&mut self, args: json::Value) -> ipc::RpcResult {
         // NOCOM(#sirver): need testing for bad request results
@@ -69,8 +72,13 @@ impl client::RemoteProcedure for New {
         let request: NewRequest = try_rpc!(json::from_value(args));
         let mut buffers = self.buffers.write().unwrap();
 
+        let buffer = match request.content {
+            Some(content) => Buffer::from_string(content),
+            None => Buffer::new(),
+        };
+
         let response = NewResponse {
-            buffer_index: buffers.create_buffer(),
+            buffer_index: buffers.new_buffer(buffer),
         };
         ipc::RpcResult::success(response)
     }
@@ -101,9 +109,60 @@ impl client::RemoteProcedure for Delete {
     }
 }
 
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+pub struct GetContentRequest {
+    pub buffer_index: usize,
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+pub struct GetContentResponse {
+    pub content: String,
+}
+
+struct GetContent {
+    buffers: Arc<RwLock<BuffersManager>>,
+}
+
+impl client::RemoteProcedure for GetContent {
+    fn call(&mut self, args: json::Value) -> ipc::RpcResult {
+        let request: GetContentRequest = try_rpc!(json::from_value(args));
+        let buffers = self.buffers.read().unwrap();
+
+        let buffer = try_rpc!(buffers.get(request.buffer_index));
+
+        let response = GetContentResponse {
+            content: buffer.to_string(),
+        };
+        ipc::RpcResult::success(response)
+    }
+}
+
+struct Buffer {
+    // TODO(sirver): This should probably be something more clever, like a rope or a gap buffer.
+    content: String,
+}
+
+impl string::ToString for Buffer {
+    fn to_string(&self) -> String {
+        self.content.clone()
+    }
+}
+
+impl Buffer {
+    fn new() -> Self {
+        Self::from_string("".into())
+    }
+
+    fn from_string(content: String) -> Self {
+        Buffer {
+            content: content,
+        }
+    }
+}
+
 struct BuffersManager {
     next_buffer_index: usize,
-    buffers: HashMap<usize, String>,
+    buffers: HashMap<usize, Buffer>,
     rpc_caller: client::RpcCaller,
 }
 
@@ -116,11 +175,11 @@ impl BuffersManager {
         }
     }
 
-    fn create_buffer(&mut self) -> usize {
+    fn new_buffer(&mut self, buffer: Buffer) -> usize {
         let current_buffer_index = self.next_buffer_index;
         self.next_buffer_index += 1;
 
-        self.buffers.insert(current_buffer_index, String::new());
+        self.buffers.insert(current_buffer_index, buffer);
 
         // NOCOM(#sirver): new is not good. should be create.
         // Fire the callback, but we do not wait for it's conclusion.
@@ -131,9 +190,7 @@ impl BuffersManager {
     }
 
     fn delete_buffer(&mut self, buffer_index: usize) -> Result<(), BufferError> {
-        if self.buffers.remove(&buffer_index).is_none() {
-            return Err(BufferError::UnknownBuffer);
-        }
+        try!(self.buffers.remove(&buffer_index).ok_or(BufferError::UnknownBuffer));
 
         // Fire the callback, but we do not wait for it's conclusion.
         let _ = self.rpc_caller.call("on.buffer.deleted", &BufferDeleted {
@@ -141,6 +198,11 @@ impl BuffersManager {
         });
 
         Ok(())
+    }
+
+    fn get(&self, index: usize) -> Result<&Buffer, BufferError> {
+        let buffer = try!(self.buffers.get(&index).ok_or(BufferError::UnknownBuffer));
+        Ok(buffer)
     }
 }
 
@@ -158,15 +220,15 @@ impl<'a> BufferPlugin<'a> {
             client: client,
         };
 
-        let new = Box::new(New {
-            buffers: plugin.buffers.clone(),
-        });
+        let new = Box::new(New { buffers: plugin.buffers.clone() });
         plugin.client.new_rpc("buffer.new", new);
 
-        let delete = Box::new(Delete {
-            buffers: plugin.buffers.clone(),
-        });
+        let delete = Box::new(Delete { buffers: plugin.buffers.clone() });
         plugin.client.new_rpc("buffer.delete", delete);
+
+        let get_content = Box::new(GetContent { buffers: plugin.buffers.clone() });
+        plugin.client.new_rpc("buffer.get_content", get_content);
+
         plugin
     }
 }

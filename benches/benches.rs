@@ -15,16 +15,17 @@ use switchboard::plugin_buffer;
 use test::Bencher;
 
 
-// On my macbook: 412,692 ns/iter (+/- 33,380)
+// On my macbook: 293,350 ns/iter (+/- 28,545)
 #[bench]
 fn bench_create_and_delete_buffers(b: &mut Bencher) {
     let t = TestHarness::new();
     let active_client = Client::connect(&t.socket_name);
-    let callback_client = Client::connect(&t.socket_name);
 
     b.iter(|| {
         let new_response: plugin_buffer::NewResponse = match active_client.call(
-            "buffer.new", &plugin_buffer::NewRequest).wait().unwrap()
+            "buffer.new", &plugin_buffer::NewRequest {
+                content: Some("bli\nbla\nblub".into()),
+            }).wait().unwrap()
         {
             ipc::RpcResult::Ok(value) => json::from_value(value).unwrap(),
             err => panic!("{:?}", err),

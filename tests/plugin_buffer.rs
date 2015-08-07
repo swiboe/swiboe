@@ -6,8 +6,10 @@ use switchboard::ipc::RpcResult;
 use switchboard::plugin_buffer;
 
 
-fn create_buffer(client: &client::Client, expected_index: usize) {
-    let request = plugin_buffer::NewRequest;
+fn create_buffer(client: &client::Client, expected_index: usize, content: Option<&str>) {
+    let request = plugin_buffer::NewRequest {
+        content: content.map(|s| s.to_string()),
+    };
     let rpc = client.call("buffer.new", &request);
     assert_eq!(rpc.wait().unwrap(), RpcResult::success(plugin_buffer::NewResponse {
         buffer_index: expected_index,
@@ -26,9 +28,25 @@ fn buffer_new() {
                 RpcResult::success(())
             }
         }));
-        create_buffer(&client, 0);
+        create_buffer(&client, 0, None);
     }
     assert!(callback_called.load(Ordering::Relaxed));
+}
+
+#[test]
+fn buffer_new_with_content() {
+    let t = TestHarness::new();
+    let client = client::Client::connect(&t.socket_name);
+
+    let content = "blub\nblah\nbli";
+    create_buffer(&client, 0, Some(content));
+
+    let rpc = client.call("buffer.get_content", &plugin_buffer::GetContentRequest {
+        buffer_index: 0,
+    });
+    assert_eq!(rpc.wait().unwrap(), RpcResult::success(plugin_buffer::GetContentResponse {
+        content: content.into(),
+    }));
 }
 
 #[test]
@@ -45,7 +63,7 @@ fn buffer_delete() {
             }
         }));
 
-        create_buffer(&client, 0);
+        create_buffer(&client, 0, None);
 
         let request = plugin_buffer::DeleteRequest {
             buffer_index: 0,

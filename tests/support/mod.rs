@@ -1,6 +1,8 @@
 use std::path::PathBuf;
+use std::io::{Write};
 use switchboard::server::Server;
 use tempdir::TempDir;
+use std::fs;
 
 pub struct TestHarness<'a> {
     server: Option<Server<'a>>,
@@ -22,6 +24,15 @@ impl<'a> TestHarness<'a> {
             socket_name: socket_name,
             temp_directory: temp_directory,
         }
+    }
+
+    pub fn new_file(&self, name: &str, content: &str) -> PathBuf {
+        let mut file_name = self.temp_directory.path().to_path_buf();
+        file_name.push(name);
+
+        let mut f = fs::File::create(&file_name).unwrap();
+        f.write_all(content.as_bytes()).unwrap();
+        file_name
     }
 }
 
