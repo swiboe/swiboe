@@ -13,6 +13,9 @@ uuid = "0.1"
 [dependencies.mio]
 git="https://github.com/carllerche/mio.git"
 
+[dependencies.subsequence_match]
+path = "subsequence_match"
+
 [[test]]
 name = "tests"
 
