@@ -29,12 +29,9 @@ impl From<BufferError> for ipc::RpcError {
              kind: kind,
              details: Some(json::to_value(&details)),
          }
-         // NOCOM(#sirver): more information!
      }
 }
 
-
-// NOCOM(#sirver): kill?
 macro_rules! try_rpc {
     ($expr:expr) => (match $expr {
         Ok(val) => val,
@@ -43,7 +40,6 @@ macro_rules! try_rpc {
         }
     })
 }
-
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub struct BufferCreated {
@@ -65,10 +61,10 @@ pub struct NewResponse {
     pub buffer_index: usize,
 }
 
+// NOCOM(#sirver): what does serde do if there are extra values in the JSON?
 impl client::RemoteProcedure for New {
     fn call(&mut self, args: json::Value) -> ipc::RpcResult {
         // NOCOM(#sirver): need testing for bad request results
-        // NOCOM(#sirver): needs some understanding what happens on extra values.
         let request: NewRequest = try_rpc!(json::from_value(args));
         let mut buffers = self.buffers.write().unwrap();
 
@@ -98,10 +94,8 @@ struct Delete {
 
 impl client::RemoteProcedure for Delete {
     fn call(&mut self, args: json::Value) -> ipc::RpcResult {
-        // NOCOM(#sirver): needs some understanding what happens on extra values.
         let request: DeleteRequest = try_rpc!(json::from_value(args));
         let mut buffers = self.buffers.write().unwrap();
-        // NOCOM(#sirver): handle errors
         try_rpc!(buffers.delete_buffer(request.buffer_index));
 
         let response = DeleteResponse;
