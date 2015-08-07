@@ -51,7 +51,7 @@ impl Candidate {
 
 #[derive(Debug)]
 pub struct QueryResult<'a> {
-    text: &'a str,
+    pub text: &'a str,
     score: usize,
 }
 
