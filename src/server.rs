@@ -81,30 +81,33 @@ impl Switchboard {
                                     result: result,
                                 }))).unwrap();
                     } else {
-                        if let Some(vec) = self.functions.get(&rpc_call.function as &str) {
-                            let function = &vec[0];
-                            // NOCOM(#sirver): eventually, when we keep proper track of our rpc calls, this should be
-                            // able to move again.
-                            self.running_rpcs.insert(rpc_call.context.clone(), RunningRpc {
-                                last_index: 0,
-                                rpc_call: rpc_call.clone(),
-                                caller: client_id,
-                            });
-                            self.ipc_bridge_commands.send(ipc_bridge::Command::SendData(
-                                    function.client_id,
-                                    ipc::Message::RpcCall(rpc_call)
-                                    )).unwrap();
-                            // NOCOM(#sirver): we ignore timeouts.
-                        } else {
-                            self.ipc_bridge_commands.send(ipc_bridge::Command::SendData(
-                                    client_id,
-                                    ipc::Message::RpcResponse(ipc::RpcResponse {
-                                        context: rpc_call.context.clone(),
-                                        result: ipc::RpcResult::Err(ipc::RpcError {
-                                            kind: ipc::RpcErrorKind::UnknownRpc,
-                                            details: None,
-                                        }),
-                                    }))).unwrap();
+                        match self.functions.get(&rpc_call.function as &str) {
+                            Some(vec) => {
+                                let function = &vec[0];
+                                // NOCOM(#sirver): eventually, when we keep proper track of our rpc calls, this should be
+                                // able to move again.
+                                self.running_rpcs.insert(rpc_call.context.clone(), RunningRpc {
+                                    last_index: 0,
+                                    rpc_call: rpc_call.clone(),
+                                    caller: client_id,
+                                });
+                                self.ipc_bridge_commands.send(ipc_bridge::Command::SendData(
+                                        function.client_id,
+                                        ipc::Message::RpcCall(rpc_call)
+                                        )).unwrap();
+                                // NOCOM(#sirver): we ignore timeouts.
+                            },
+                            None => {
+                                self.ipc_bridge_commands.send(ipc_bridge::Command::SendData(
+                                        client_id,
+                                        ipc::Message::RpcResponse(ipc::RpcResponse {
+                                            context: rpc_call.context.clone(),
+                                            result: ipc::RpcResult::Err(ipc::RpcError {
+                                                kind: ipc::RpcErrorKind::UnknownRpc,
+                                                details: None,
+                                            }),
+                                        }))).unwrap();
+                            }
                         }
                     }
                 },
@@ -129,27 +132,34 @@ impl Switchboard {
                             // last saw this context, this might skip a handler or call one twice. We need
                             // a better way to keep track where we are in the list of handlers.
                             let running_rpc = running_rpc.get_mut();
-                            let function = {
-                                running_rpc.last_index += 1;
+
+                            running_rpc.last_index += 1;
+                            match {
                                 // NOCOM(#sirver): quite some code duplication with RpcCall
-                                let vec = self.functions.get(&running_rpc.rpc_call.function as &str).unwrap();
-                                match vec.get(running_rpc.last_index) {
-                                    Some(function) => function,
-                                    None => {
-                                        // NOCOM(#sirver): return that it was not handled.
-                                        unimplemented!();
-                                    }
+                                self.functions.get(&running_rpc.rpc_call.function as &str).and_then(|vec| {
+                                    vec.get(running_rpc.last_index)
+                                })
+                            } {
+                                Some(function) => {
+                                // NOCOM(#sirver): eventually, when we keep proper track of our rpc calls, this should be
+                                // able to move again.
+                                self.ipc_bridge_commands.send(ipc_bridge::Command::SendData(
+                                        function.client_id,
+                                        ipc::Message::RpcCall(running_rpc.rpc_call.clone())
+                                        )).unwrap();
+                                },
+                                None => {
+                                self.ipc_bridge_commands.send(ipc_bridge::Command::SendData(
+                                        running_rpc.caller,
+                                        ipc::Message::RpcResponse(ipc::RpcResponse {
+                                            context: running_rpc.rpc_call.context.clone(),
+                                            result: ipc::RpcResult::Err(ipc::RpcError {
+                                                kind: ipc::RpcErrorKind::UnknownRpc,
+                                                details: None,
+                                            }),
+                                        }))).unwrap();
                                 }
                             };
-
-                            // NOCOM(#sirver): eventually, when we keep proper track of our rpc calls, this should be
-                            // able to move again.
-                            self.ipc_bridge_commands.send(ipc_bridge::Command::SendData(
-                                    function.client_id,
-                                    ipc::Message::RpcCall(running_rpc.rpc_call.clone())
-                            )).unwrap();
-
-                            // self.running_rpcs.insert(running_rpc.rpc_call.context.clone(), running_rpc);
                             // NOCOM(#sirver): we ignore timeouts.
                         }
                     }

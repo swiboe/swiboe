@@ -16,6 +16,7 @@ pub struct RpcResponse {
 #[derive(Debug, PartialEq, Clone)]
 pub enum RpcErrorKind {
     UnknownRpc,
+    Io,
     InvalidArgs,
 }
 
@@ -29,6 +30,7 @@ impl serde::Serialize for RpcErrorKind {
         let s = match *self {
             RpcErrorKind::UnknownRpc => "unknown_rpc",
             RpcErrorKind::InvalidArgs => "invalid_args",
+            RpcErrorKind::Io => "io",
         };
         serializer.visit_str(s)
     }

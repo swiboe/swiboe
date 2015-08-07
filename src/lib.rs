@@ -1,4 +1,5 @@
 #![feature(custom_derive, plugin)]
+#![feature(drain)]
 #![feature(result_expect)]
 #![feature(scoped)]
 #![plugin(serde_macros)]
