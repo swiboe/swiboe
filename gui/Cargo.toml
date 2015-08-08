@@ -3,8 +3,16 @@ name = "switchboard_gtk_gui"
 version = "0.1.0"
 authors = ["Holger Rapp <HolgerRapp@gmx.net>"]
 
+[dependencies]
+serde = "0.4.3"
+serde_macros = "0.4.3"
+time = "*"
+
 [dependencies.glib]
 git = "https://github.com/rust-gnome/glib.git"
+
+[dependencies.gdk]
+git = "https://github.com/rust-gnome/gdk"
 
 [dependencies.gtk]
 git = "https://github.com/rust-gnome/gtk.git"

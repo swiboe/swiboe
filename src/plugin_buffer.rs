@@ -11,6 +11,7 @@ use super::ipc;
 
 // NOCOM(#sirver): make a new package rpc and move some stuff itno that?
 struct New {
+    // NOCOM(#sirver): is the Arc needed? Maybe we can pass a reference to all the rpcs.
     buffers: Arc<RwLock<BuffersManager>>,
 }
 
