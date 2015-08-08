@@ -6,6 +6,7 @@ authors = ["Holger Rapp <HolgerRapp@gmx.net>"]
 [dependencies]
 serde = "0.4.3"
 serde_macros = "0.4.3"
+uuid = "0.1"
 time = "*"
 
 [dependencies.glib]

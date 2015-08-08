@@ -1,8 +1,9 @@
 use serde::json;
 use std::collections::HashMap;
-use std::io::{self, Read};
 use std::convert;
 use std::fs;
+use std::io::{self, Read};
+use std::ops;
 use std::path;
 use std::string;
 use std::sync::{RwLock, Arc};
@@ -199,6 +200,31 @@ impl client::RemoteProcedure for Open {
     }
 }
 
+// NOCOM(#sirver): add a test for this.
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+pub struct ListRequest;
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+pub struct ListResponse {
+    pub buffer_indices: Vec<usize>,
+}
+
+struct List {
+    buffers: Arc<RwLock<BuffersManager>>,
+}
+
+impl client::RemoteProcedure for List {
+    fn call(&mut self, args: json::Value) -> ipc::RpcResult {
+        let _: ListRequest = try_rpc!(json::from_value(args));
+
+        let buffers = self.buffers.read().unwrap();
+        let response = ListResponse {
+            buffer_indices: buffers.keys().map(|c| *c).collect(),
+        };
+        ipc::RpcResult::success(response)
+    }
+}
+
 struct Buffer {
     // TODO(sirver): This should probably be something more clever, like a rope or a gap buffer.
     content: String,
@@ -268,6 +294,16 @@ impl BuffersManager {
     }
 }
 
+impl ops::Deref for BuffersManager {
+    type Target = HashMap<usize, Buffer>;
+
+    fn deref(&self) -> &HashMap<usize, Buffer> {
+        &self.buffers
+    }
+}
+
+
+
 pub struct BufferPlugin<'a> {
     client: client::Client<'a>,
     buffers: Arc<RwLock<BuffersManager>>,
@@ -293,6 +329,9 @@ impl<'a> BufferPlugin<'a> {
 
         let open = Box::new(Open { buffers: plugin.buffers.clone() });
         plugin.client.new_rpc("buffer.open", open);
+
+        let list = Box::new(List { buffers: plugin.buffers.clone() });
+        plugin.client.new_rpc("buffer.list", list);
 
         plugin
     }

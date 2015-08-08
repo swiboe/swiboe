@@ -2,7 +2,7 @@
 
 use mio::unix::UnixStream;
 use mio;
-use serde::{json, Serialize};
+use serde::{json, Serialize, Deserialize};
 use std::collections::HashMap;
 use std::path;
 use std::sync::mpsc;
@@ -37,10 +37,22 @@ impl Rpc {
         Ok(try!(self.values.recv()))
     }
 
+    // NOCOM(#sirver): kill?
     pub fn wait(self) -> Result<ipc::RpcResult> {
         // NOCOM(#sirver): how does streaming work?
         let rpc_response = try!(self.recv());
         Ok(rpc_response.result)
+    }
+
+    // NOCOM(#sirver): figure out error handling for clients, not use Server error?
+    pub fn wait_for<T: Deserialize>(&self) -> Result<T> {
+        let rpc_response = try!(self.recv());
+        match rpc_response.result {
+            ipc::RpcResult::Ok(value) => Ok(try!(json::from_value(value))),
+            ipc::RpcResult::Err(err) => panic!("#sirver err: {:#?}", err),
+            // NOCOM(#sirver): probably should ignore other errors.
+            other => panic!("#sirver other: {:#?}", other),
+        }
     }
 }
 
@@ -66,7 +78,7 @@ impl<'a> mio::Handler for Handler<'a> {
             EventLoopThreadCommand::Quit => event_loop.shutdown(),
             EventLoopThreadCommand::Send(message) => {
                 if let Err(err) = self.stream.write_message(&message) {
-                    println!("Shutting down, since sending failed: {}", err);
+                    println!("Shutting down, since sending failed: {:?}", err);
                     event_loop.channel().send(EventLoopThreadCommand::Quit).expect("Quit");
                 }
             },
@@ -88,7 +100,7 @@ impl<'a> mio::Handler for Handler<'a> {
                     let message = match self.stream.read_message() {
                         Ok(message) => message,
                         Err(err) => {
-                            println!("Shutting down, since receiving failed: {}", err);
+                            println!("Shutting down, since receiving failed: {:?}", err);
                             event_loop.channel().send(EventLoopThreadCommand::Quit).expect("EventLoopThreadCommand::Quit");
                             return;
                         }
