@@ -1,6 +1,8 @@
 #![cfg(not(test))]
 #![feature(const_fn)]
 #![feature(custom_derive, plugin)]
+#![feature(str_char)]
+#![feature(str_split_at)]
 #![plugin(serde_macros)]
 
 extern crate cairo;

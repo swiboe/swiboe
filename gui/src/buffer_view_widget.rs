@@ -89,20 +89,45 @@ fn draw(buffer_view: &BufferView, inner_size: cairo::RectangleInt, cr: cairo::Co
     let font_extents = cr.font_extents();
 
     // Draw the cursor.
-    let cursor_position = buffer_view.cursor.position;
-    let y = (cursor_position.line_index - buffer_view.top_line_index) as f64;
-    let x = cursor_position.column_index as f64;
-    // TODO(sirver): This assumes all characters have equal width and height.
-    let text_extents = cr.text_extents("_");
+    {
+        let position = buffer_view.cursor.position;
+        let (x, y, c) = match buffer_view.lines.get(position.line_index as usize) {
+            Some(line) => {
+                let y = (position.line_index - buffer_view.top_line_index) as f64 * font_extents.height;
+                // NOCOM(#sirver): can this ever fail?
+                let (x, c) = match line.char_indices().skip(position.column_index as usize).next() {
+                    None => { // Empty line
+                        (0., '_')
+                    },
+                    Some((index, _)) => {
+                        let (before, after) = line.split_at(index);
+                        // NOCOM(#sirver): can this ever fail?
+                        let (current_char, _) = after.slice_shift_char().unwrap();
 
-    cr.set_source_color(&ORANGE);
-    cr.rectangle(x * text_extents.width, y * font_extents.height, text_extents.width, font_extents.height);
-    cr.fill();
+                        println!("#sirver before: {:#?}", before);
+                        println!("#sirver current_char: {:#?}", current_char);
+                        let before_extends = cr.text_extents(before);
+                        (before_extends.x_advance, current_char)
+                    }
+                };
+                (x, y, c)
+            },
+            None => {
+                (0., 0., '_')
+            }
+        };
+        let char_extends = cr.text_extents(&c.to_string());
+        cr.set_source_color(&ORANGE);
+        cr.rectangle(x, y, char_extends.x_advance, font_extents.height);
+        cr.fill();
+    }
 
     // TODO(sirver): This uses the Cairo "Toy" API. The correct solution will be to use Pango to
     // convert our text into glyphs and then use cr.draw_glyphs() to actually get them on screen.
     // Of interest (maybe):
     // http://www.codeproject.com/Articles/796132/Programming-Cairo-text-output-beyond-the-toy-text
+    // TODO(sirver): Properly support Unicode characters. The toy API is not rendering them
+    // correctly.
     cr.set_source_color(&BASE0);
     cr.move_to(0., font_extents.ascent);
     for (y, line) in buffer_view.lines[buffer_view.top_line_index as usize..].iter().enumerate() {

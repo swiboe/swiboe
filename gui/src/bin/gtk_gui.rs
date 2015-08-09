@@ -67,11 +67,11 @@ impl SwitchboardGtkGui {
         let vbox = gtk::Box::new(gtk::Orientation::Vertical, 0).unwrap();
 
 
-        let buffer_view_id = {
+        let cursor_id = {
             let mut buffer_views = gui.buffer_views.write().unwrap();
             let buffer_view = buffer_views.get_or_create(0);
-            let buffer_view_id = buffer_view.id().to_string();
-            buffer_view_id
+            let cursor_id = buffer_view.cursor.id().to_string();
+            cursor_id
         };
 
         // NOCOM(#sirver): rename BufferView to Editor(View)?
@@ -113,17 +113,29 @@ impl SwitchboardGtkGui {
                             println!("#sirver b: {:#?}", b);
                         }
                         "Up" => {
-                            rpc_caller.call("gui.buffer_view.scroll", &buffer_views::ScrollRequest {
-                                buffer_view_id: buffer_view_id.clone(),
-                                delta: -1,
+                            rpc_caller.call("gui.buffer_view.move_cursor", &buffer_views::MoveCursorRequest {
+                                cursor_id: cursor_id.clone(),
+                                delta: buffer_views::Position { line_index: -1, column_index: 0, },
                             });
                         },
                         "Down" => {
-                            rpc_caller.call("gui.buffer_view.scroll", &buffer_views::ScrollRequest {
-                                buffer_view_id: buffer_view_id.clone(),
-                                delta: 1,
+                            rpc_caller.call("gui.buffer_view.move_cursor", &buffer_views::MoveCursorRequest {
+                                cursor_id: cursor_id.clone(),
+                                delta: buffer_views::Position { line_index: 1, column_index: 0, },
                             });
                         }
+                        "Left" => {
+                            rpc_caller.call("gui.buffer_view.move_cursor", &buffer_views::MoveCursorRequest {
+                                cursor_id: cursor_id.clone(),
+                                delta: buffer_views::Position { line_index: 0, column_index: -1, },
+                            });
+                        },
+                        "Right" => {
+                            rpc_caller.call("gui.buffer_view.move_cursor", &buffer_views::MoveCursorRequest {
+                                cursor_id: cursor_id.clone(),
+                                delta: buffer_views::Position { line_index: 0, column_index: 1, },
+                            });
+                        },
                         _ => (),
                     // // if let Some(button) = shortcuts.get(&name_str) {
                         // // button.clicked();
