@@ -80,28 +80,33 @@ fn draw(buffer_view: &BufferView, inner_size: cairo::RectangleInt, cr: cairo::Co
 
     // Draw the background.
     cr.set_source_color(&BASE03);
-    println!("#sirver inner_size: {:#?}", inner_size);
     cr.rectangle(inner_size.x as f64, inner_size.y as f64, inner_size.width as f64, inner_size.height as f64);
     cr.fill();
 
-    let b = cr.get_antialias();
-    cr.set_antialias(cairo::Antialias::Subpixel);
-    println!("#sirver b: {:#?}", b);
-
     cr.select_font_face("Menlo", FontSlant::Normal, FontWeight::Normal);
     cr.set_font_size(12.);
-    cr.set_source_color(&BASE0);
 
-    let font_extent = cr.font_extents();
-    println!("#sirver font_extent.height: {:#?}", font_extent.height);
+    let font_extents = cr.font_extents();
+
+    // Draw the cursor.
+    let cursor_position = buffer_view.cursor.position;
+    let y = (cursor_position.line_index - buffer_view.top_line_index) as f64;
+    let x = cursor_position.column_index as f64;
+    // TODO(sirver): This assumes all characters have equal width and height.
+    let text_extents = cr.text_extents("_");
+
+    cr.set_source_color(&ORANGE);
+    cr.rectangle(x * text_extents.width, y * font_extents.height, text_extents.width, font_extents.height);
+    cr.fill();
 
     // TODO(sirver): This uses the Cairo "Toy" API. The correct solution will be to use Pango to
     // convert our text into glyphs and then use cr.draw_glyphs() to actually get them on screen.
     // Of interest (maybe):
     // http://www.codeproject.com/Articles/796132/Programming-Cairo-text-output-beyond-the-toy-text
-    cr.move_to(0., font_extent.ascent);
+    cr.set_source_color(&BASE0);
+    cr.move_to(0., font_extents.ascent);
     for (y, line) in buffer_view.lines[buffer_view.top_line_index as usize..].iter().enumerate() {
-        cr.move_to(0., font_extent.ascent + (y as f64) * font_extent.height);
+        cr.move_to(0., font_extents.ascent + (y as f64) * font_extents.height);
         cr.show_text(line);
     }
 

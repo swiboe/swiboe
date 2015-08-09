@@ -62,12 +62,13 @@ impl client::RemoteProcedure for Scroll {
     }
 }
 
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone, Copy)]
 pub struct Position {
     /// 0 based line index into the buffer.
-    line: usize,
+    pub line_index: isize,
 
     /// 0 based glyph index into the line. A multibyte character only counts as one here.
-    column: usize,
+    pub column_index: isize,
 }
 
 
@@ -103,16 +104,16 @@ pub mod cursor {
 
     pub struct Cursor {
         id: String,
-        wanted_position: Position,
-        position: Position,
+        pub wanted_position: Position,
+        pub position: Position,
     }
 
     impl Cursor {
         pub fn new() -> Self {
             Cursor {
                 id: Uuid::new_v4().to_hyphenated_string(),
-                wanted_position: Position { line: 0, column: 0 },
-                position: Position { line: 0, column: 0 },
+                wanted_position: Position { line_index: 0, column_index: 0 },
+                position: Position { line_index: 0, column_index: 0 },
             }
         }
     }
