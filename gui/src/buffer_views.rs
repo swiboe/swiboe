@@ -1,3 +1,4 @@
+use ::command::GuiCommand;
 use cairo::Context;
 use cairo::enums::{FontSlant, FontWeight};
 use cairo;
@@ -15,7 +16,6 @@ use std::f64::consts::PI;
 use std::fs::File;
 use std::io::BufReader;
 use std::io::prelude::*;
-use ::command::GuiCommand;
 use std::path;
 use std::rc::Rc;
 use std::sync::mpsc;
@@ -62,8 +62,92 @@ impl client::RemoteProcedure for Scroll {
     }
 }
 
+pub struct Position {
+    /// 0 based line index into the buffer.
+    line: usize,
+
+    /// 0 based glyph index into the line. A multibyte character only counts as one here.
+    column: usize,
+}
+
+
+pub mod cursor {
+    use super::*;
+    use ::command::GuiCommand;
+    use cairo::Context;
+    use cairo::enums::{FontSlant, FontWeight};
+    use cairo;
+    use gtk::signal;
+    use gtk::traits::*;
+    use gtk;
+    use serde::json;
+    use serde;
+    use std::cell::{RefCell, Cell};
+    use std::clone::Clone;
+    use std::cmp;
+    use std::collections::HashMap;
+    use std::convert;
+    use std::f64::consts::PI;
+    use std::fs::File;
+    use std::io::BufReader;
+    use std::io::prelude::*;
+    use std::path;
+    use std::rc::Rc;
+    use std::sync::mpsc;
+    use std::sync::{RwLock, Arc, Mutex};
+    use switchboard::client;
+    use switchboard::ipc;
+    use switchboard::plugin_buffer;
+    use time;
+    use uuid::Uuid;
+
+    pub struct Cursor {
+        id: String,
+        wanted_position: Position,
+        position: Position,
+    }
+
+    impl Cursor {
+        pub fn new() -> Self {
+            Cursor {
+                id: Uuid::new_v4().to_hyphenated_string(),
+                wanted_position: Position { line: 0, column: 0 },
+                position: Position { line: 0, column: 0 },
+            }
+        }
+    }
+
+
+    #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+    pub struct MoveRequest {
+        pub cursor_id: String,
+        // NOCOM(#sirver): this could also be absolute or so.
+        pub delta: isize,
+    }
+
+    #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+    pub struct MoveResponse;
+
+    struct Move {
+        buffer_views: Arc<RwLock<BufferViews>>,
+    }
+
+    impl client::RemoteProcedure for Move {
+        fn call(&mut self, args: json::Value) -> ipc::RpcResult {
+            let request: MoveRequest = try_rpc!(json::from_value(args));
+
+            // let mut buffer_views = self.buffer_views.write().unwrap();
+            // buffer_views.scroll(&request.buffer_view_id, request.delta);
+
+            let response = MoveResponse;
+            ipc::RpcResult::success(response)
+        }
+    }
+}
+
 pub struct BufferView {
     id: String,
+    pub cursor: cursor::Cursor,
     pub top_line_index: isize,
     pub lines: Vec<String>,
 }
@@ -74,6 +158,7 @@ impl BufferView {
             id: Uuid::new_v4().to_hyphenated_string(),
             top_line_index: 0,
             lines: Vec::new(),
+            cursor: cursor::Cursor::new(),
         }
     }
 

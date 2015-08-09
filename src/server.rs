@@ -10,6 +10,8 @@ use super::ipc_bridge;
 use super::plugin_buffer;
 use super::plugin_core;
 
+// NOCOM(#sirver): when a client disconnects and we still try to call one of it's rpcs, we never
+// get an error back - this will effectively interrupt the rpc call stack.
 // NOCOM(#sirver): document everything.
 const CORE_FUNCTIONS_PREFIX: &'static str = "core.";
 
