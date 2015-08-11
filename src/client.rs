@@ -10,7 +10,6 @@ use std::thread;
 use super::Result;
 use super::ipc;
 use super::plugin_core::NewRpcRequest;
-use time;
 use uuid::Uuid;
 
 const CLIENT: mio::Token = mio::Token(1);

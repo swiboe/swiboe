@@ -34,6 +34,7 @@ use switchboard::plugin_buffer;
 use switchboard_gtk_gui::buffer_view_widget;
 use switchboard_gtk_gui::buffer_views;
 use switchboard_gtk_gui::command::GuiCommand;
+use uuid::Uuid;
 
 thread_local!(
     static GLOBAL: RefCell<Option<(buffer_view_widget::BufferViewWidget)>> = RefCell::new(None)
@@ -49,8 +50,7 @@ struct SwitchboardGtkGui {
 impl SwitchboardGtkGui {
     fn new(client: &client::Client) -> Self {
 
-        // NOCOM(#sirver): use a uuid
-        let gui_id: String = "blumbaquatsch".into();
+        let gui_id: String = Uuid::new_v4().to_hyphenated_string();
 
         let (tx, rx) = mpsc::channel();
         let mut gui = SwitchboardGtkGui {
