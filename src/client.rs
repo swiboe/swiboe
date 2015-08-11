@@ -10,6 +10,7 @@ use std::thread;
 use super::Result;
 use super::ipc;
 use super::plugin_core::NewRpcRequest;
+use time;
 use uuid::Uuid;
 
 const CLIENT: mio::Token = mio::Token(1);
@@ -59,7 +60,7 @@ impl Rpc {
 pub enum EventLoopThreadCommand {
     Quit,
     Send(ipc::Message),
-    Call(String, mpsc::Sender<ipc::RpcResponse>),
+    Call(String, mpsc::Sender<ipc::RpcResponse>, ipc::Message),
 }
 
 // NOCOM(#sirver): bad name
@@ -69,6 +70,17 @@ struct Handler<'a> {
     function_thread_sender: mpsc::Sender<FunctionThreadCommand<'a>>,
 }
 
+impl<'a> Handler<'a> {
+    fn send(&mut self, event_loop: &mut mio::EventLoop<Self>, message: &ipc::Message) {
+        // println!("{:?}: Client -> Server {:?}", time::precise_time_ns(), message);
+        if let Err(err) = self.stream.write_message(&message) {
+            println!("Shutting down, since sending failed: {:?}", err);
+            event_loop.channel().send(EventLoopThreadCommand::Quit).expect("Quit");
+        }
+    }
+}
+
+
 impl<'a> mio::Handler for Handler<'a> {
     type Timeout = ();
     type Message = EventLoopThreadCommand;
@@ -76,14 +88,10 @@ impl<'a> mio::Handler for Handler<'a> {
     fn notify(&mut self, event_loop: &mut mio::EventLoop<Self>, command: EventLoopThreadCommand) {
         match command {
             EventLoopThreadCommand::Quit => event_loop.shutdown(),
-            EventLoopThreadCommand::Send(message) => {
-                if let Err(err) = self.stream.write_message(&message) {
-                    println!("Shutting down, since sending failed: {:?}", err);
-                    event_loop.channel().send(EventLoopThreadCommand::Quit).expect("Quit");
-                }
-            },
-            EventLoopThreadCommand::Call(context, tx) => {
+            EventLoopThreadCommand::Send(message) => self.send(event_loop, &message),
+            EventLoopThreadCommand::Call(context, tx, message) => {
                 self.running_function_calls.insert(context, tx);
+                self.send(event_loop, &message)
             },
         }
     }
@@ -193,8 +201,7 @@ fn call<T: Serialize>(event_loop_sender: &mio::Sender<EventLoopThreadCommand>, f
     });
 
     let (tx, rx) = mpsc::channel();
-    event_loop_sender.send(EventLoopThreadCommand::Call(context, tx)).expect("Call");
-    event_loop_sender.send(EventLoopThreadCommand::Send(message)).expect("Send");
+    event_loop_sender.send(EventLoopThreadCommand::Call(context, tx, message)).expect("Call");
     Rpc::new(rx)
 }
 

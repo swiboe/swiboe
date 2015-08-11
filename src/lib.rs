@@ -9,6 +9,7 @@
 extern crate libc;
 extern crate mio;
 extern crate serde;
+extern crate time;
 extern crate uuid;
 
 mod ipc_bridge;

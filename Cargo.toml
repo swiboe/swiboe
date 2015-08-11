@@ -9,6 +9,7 @@ serde = "0.4.3"
 serde_macros = "0.4.3"
 tempdir = "0.3.4"
 uuid = "0.1"
+time = "*"
 
 [dependencies.mio]
 git="https://github.com/carllerche/mio.git"

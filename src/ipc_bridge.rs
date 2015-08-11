@@ -6,6 +6,7 @@ use std::path::Path;
 use super::error::{ErrorKind, Error};
 use super::ipc::{self};
 use super::server;
+use time;
 
 #[derive(PartialEq, Eq, Clone, Copy, Hash, Debug)]
 pub struct ClientId {
@@ -63,8 +64,8 @@ impl mio::Handler for IpcBridge {
                         if conn.client_id != receiver {
                             Err(Error::new(ErrorKind::ClientDisconnected))
                         } else {
-                            // NOCOM(#sirver): useful?
-                            // println!("Server -> {:?}: {:#?}", receiver, message);
+                            // println!("{:?}: Server -> {:?}: {:#?}", time::precise_time_ns(),
+                                // receiver, message);
                             conn.stream.write_message(&message)
                         }
                     });
@@ -123,7 +124,8 @@ impl mio::Handler for IpcBridge {
                             Err(err) => panic!("Error while reading: {}", err),
                             Ok(None) => break,
                             Ok(Some(message)) => {
-                                // println!("{:?} -> Server: {:#?}", conn.client_id, message);
+                                // println!("{:?}: {:?} -> Server: {:#?}", time::precise_time_ns(),
+                                    // conn.client_id, message);
                                 match message {
                                     ipc::Message::RpcCall(rpc_call) => {
                                         self.commands.send(server::Command::RpcCall(
