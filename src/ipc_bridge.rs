@@ -4,6 +4,7 @@ use mio::unix::{UnixListener, UnixStream};
 use mio;
 use std::path::Path;
 use super::ipc::{self, IpcRead, IpcWrite};
+use super::error::{ErrorKind, Error};
 use super::server;
 
 #[derive(PartialEq, Eq, Clone, Copy, Hash, Debug)]
@@ -56,12 +57,19 @@ impl mio::Handler for IpcBridge {
         match command {
             Command::Quit => event_loop.shutdown(),
             Command::SendData(receiver, message) => {
-                // NOCOM(#sirver): what if that is no longer valid?
-                let conn = &mut self.connections[receiver.token];
-                if conn.client_id == receiver {
-                    if let Some(err) = conn.stream.write_message(&message).err() {
-                        println!("Could not send message to {:?}: {}", receiver, err);
-                    }
+                let result = self.connections.get_mut(receiver.token)
+                    .ok_or(Error::new(ErrorKind::ClientDisconnected))
+                    .and_then(|conn| {
+                        if conn.client_id != receiver {
+                            Err(Error::new(ErrorKind::ClientDisconnected))
+                        } else {
+                            // NOCOM(#sirver): useful?
+                            // println!("Server -> {:?}: {:#?}", receiver, message);
+                            conn.stream.write_message(&message)
+                        }
+                    });
+                if let Err(err) = result {
+                    self.commands.send(server::Command::SendDataFailed(receiver, message, err)).expect("SendFailed");
                 }
             }
         }
@@ -111,6 +119,9 @@ impl mio::Handler for IpcBridge {
                     let conn = &mut self.connections[token];
                     // NOCOM(#sirver): should disconnect instead of crashing.
                     let message = conn.stream.read_message().expect("ReadMessage");;
+                    // NOCOM(#sirver): useful?
+                    // println!("{:?} -> Server: {:#?}", conn.client_id, message);
+
                     match message {
                         ipc::Message::RpcCall(rpc_call) => {
                             self.commands.send(server::Command::RpcCall(

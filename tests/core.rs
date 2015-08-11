@@ -13,6 +13,10 @@ fn temporary_socket_name() -> path::PathBuf {
     dir
 }
 
+fn as_json(s: &str) -> json::Value {
+    json::from_str(s).unwrap()
+}
+
 #[test]
 fn shutdown_server_with_clients_connected() {
     let socket_name = temporary_socket_name();
@@ -41,7 +45,7 @@ impl RemoteProcedure for TestCall {
 
 
 #[test]
-fn new_rpc() {
+fn new_rpc_simple() {
     let t = TestHarness::new();
 
     let client1 = Client::connect(&t.socket_name);
@@ -65,19 +69,19 @@ fn new_rpc_with_priority() {
     let client1 = Client::connect(&t.socket_name);
     client1.new_rpc("test.test", Box::new(TestCall {
         priority: 100,
-        result: RpcResult::Ok(json::from_str(r#"{ "from": "client1" }"#).unwrap()),
+        result: RpcResult::Ok(as_json(r#"{ "from": "client1" }"#)),
     }));
 
 
     let client2 = Client::connect(&t.socket_name);
     client2.new_rpc("test.test", Box::new(TestCall {
         priority: 50,
-        result: RpcResult::Ok(json::from_str(r#"{ "from": "client2" }"#).unwrap()),
+        result: RpcResult::Ok(as_json(r#"{ "from": "client2" }"#)),
     }));
 
     let client3 = Client::connect(&t.socket_name);
     let rpc = client3.call("test.test", &json::from_str::<json::Value>(r#"{}"#).unwrap());
-    assert_eq!(RpcResult::Ok(json::from_str(r#"{ "from": "client2" }"#).unwrap()), rpc.wait().unwrap());
+    assert_eq!(RpcResult::Ok(as_json(r#"{ "from": "client2" }"#)), rpc.wait().unwrap());
 }
 
 #[test]
@@ -87,7 +91,7 @@ fn new_rpc_with_priority_first_does_not_handle() {
     let client1 = Client::connect(&t.socket_name);
     client1.new_rpc("test.test", Box::new(TestCall {
         priority: 100,
-        result: RpcResult::Ok(json::from_str(r#"{ "from": "client1" }"#).unwrap()),
+        result: RpcResult::Ok(as_json(r#"{ "from": "client1" }"#)),
     }));
 
 
@@ -99,7 +103,62 @@ fn new_rpc_with_priority_first_does_not_handle() {
 
     let client3 = Client::connect(&t.socket_name);
     let rpc = client3.call("test.test", &json::from_str::<json::Value>(r#"{}"#).unwrap());
-    assert_eq!(RpcResult::Ok(json::from_str(r#"{ "from": "client1" }"#).unwrap()), rpc.wait().unwrap());
+    assert_eq!(RpcResult::Ok(as_json(r#"{ "from": "client1" }"#)), rpc.wait().unwrap());
+}
+
+#[test]
+fn client_disconnects_should_not_stop_handling_of_rpcs() {
+    let t = TestHarness::new();
+
+    let client0 = Client::connect(&t.socket_name);
+    client0.new_rpc("test.test", Box::new(TestCall {
+            priority: 100, result: RpcResult::NotHandled,
+    }));
+
+    let client1 = Client::connect(&t.socket_name);
+    client1.new_rpc("test.test", Box::new(TestCall {
+            priority: 101, result:
+                RpcResult::Ok(as_json(r#"{ "from": "client1" }"#)),
+    }));
+
+    let client2 = Client::connect(&t.socket_name);
+    client2.new_rpc("test.test", Box::new(TestCall {
+            priority: 102, result: RpcResult::NotHandled,
+    }));
+
+    let client3 = Client::connect(&t.socket_name);
+    client3.new_rpc("test.test", Box::new(TestCall {
+            priority: 103, result:
+                RpcResult::Ok(as_json(r#"{ "from": "client3" }"#)),
+    }));
+
+    let client = Client::connect(&t.socket_name);
+
+    let rpc = client.call("test.test", &json::from_str::<json::Value>(r#"{}"#).unwrap());
+    assert_eq!(RpcResult::Ok(as_json(r#"{ "from": "client1" }"#)), rpc.wait().unwrap());
+
+    drop(client1); // clients: 0 2 3
+    let rpc = client.call("test.test", &json::from_str::<json::Value>(r#"{}"#).unwrap());
+    assert_eq!(RpcResult::Ok(as_json(r#"{ "from": "client3" }"#)), rpc.wait().unwrap());
+
+    drop(client0); // clients: 2 3
+    let rpc = client.call("test.test", &json::from_str::<json::Value>(r#"{}"#).unwrap());
+    assert_eq!(RpcResult::Ok(as_json(r#"{ "from": "client3" }"#)), rpc.wait().unwrap());
+
+    drop(client3); // clients: 2
+    let rpc = client.call("test.test", &json::from_str::<json::Value>(r#"{}"#).unwrap());
+    assert_eq!(RpcResult::NotHandled, rpc.wait().unwrap());
+
+    drop(client2); // clients:
+
+    let rpc = client.call("test.test", &json::from_str::<json::Value>(r#"{}"#).unwrap());
+
+    // NOCOM(#sirver): now, nobody can handle this RPC anymore - we should return Unknown RPC.
+    // Since we do not properly clean up after disconnects of clients, it does not work yet.
+    // assert_eq!(RpcResult::Err(RpcError {
+        // kind: RpcErrorKind::UnknownRpc,
+        // details: None,
+    // }), rpc.wait().unwrap());
 }
 
 #[test]

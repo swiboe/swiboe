@@ -58,12 +58,7 @@ fn buffer_open_unhandled_uri() {
         uri: "blumba://foo".into(),
     });
 
-    // NOCOM(#sirver): reconsider that: the rpc is not unknown (so this answer is false), but
-    // nobody handled it. Should I really distinguish between unknown and unhandled?
-    assert_eq!(ipc::RpcResult::Err(ipc::RpcError {
-        kind: ipc::RpcErrorKind::UnknownRpc,
-        details: None,
-    }), rpc.wait().unwrap());
+    assert_eq!(ipc::RpcResult::NotHandled, rpc.wait().unwrap());
 }
 
 #[test]

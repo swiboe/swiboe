@@ -11,8 +11,9 @@ pub type Result<T> = result::Result<T, Error>;
 
 #[derive(Debug)]
 pub enum ErrorKind {
-    Io(io::Error),
+    ClientDisconnected,
     Disconnected(mpsc::RecvError),
+    Io(io::Error),
     JsonParsing(json::error::Error),
 }
 
@@ -38,16 +39,18 @@ impl fmt::Display for Error {
 impl error::Error for Error {
   fn description(&self) -> &str {
       match self.kind {
-          ErrorKind::Io(ref e) => e.description(),
+          ErrorKind::ClientDisconnected => "Client disconnected.",
           ErrorKind::Disconnected(_) => "Channel is disconnected.",
+          ErrorKind::Io(ref e) => e.description(),
           ErrorKind::JsonParsing(ref e) => e.description(),
       }
   }
 
   fn cause(&self) -> Option<&error::Error> {
       match self.kind {
-          ErrorKind::Io(ref e) => Some(e),
+          ErrorKind::ClientDisconnected => None,
           ErrorKind::Disconnected(ref e) => Some(e),
+          ErrorKind::Io(ref e) => Some(e),
           ErrorKind::JsonParsing(ref e) => Some(e),
       }
   }

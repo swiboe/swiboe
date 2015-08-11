@@ -3,7 +3,6 @@ use serde::{self, json};
 use std::io::{self, Read, Write};
 use super::Result;
 use std::error::Error;
-use std::result;
 
 // NOCOM(#sirver): add documentation (using this lint that forbids not having documentation).
 
