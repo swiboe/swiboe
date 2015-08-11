@@ -138,7 +138,34 @@ impl Switchboard {
                 },
                 Command::ClientDisconnected(client_id) => {
                     self.clients.remove(&client_id);
-                    // NOCOM(#sirver): needs to remove all associated functions
+
+                    // Kill all pending RPCs that have been requested by this client.
+                    let rpcs_to_remove: Vec<_> = self.running_rpcs.iter()
+                        .filter_map(|(context, running_rpc)| {
+                            if running_rpc.caller == client_id {
+                                Some(context.to_string())
+                            } else {
+                                None
+                            }
+                        })
+                        .collect();
+                    for context in rpcs_to_remove {
+                        self.running_rpcs.remove(&context);
+                    }
+
+                    // Kill all functions that have been registered by this.
+                    let mut functions_to_remove = Vec::new();
+                    for (function_name, registered_functions) in &mut self.functions {
+                        registered_functions.retain(|registered_function| {
+                            registered_function.client_id != client_id
+                        });
+                        if registered_functions.is_empty() {
+                            functions_to_remove.push(function_name.to_string());
+                        }
+                    }
+                    for function_name in functions_to_remove {
+                        self.functions.remove(&function_name);
+                    }
                 }
             }
         }

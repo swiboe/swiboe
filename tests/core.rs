@@ -51,7 +51,7 @@ fn new_rpc_simple() {
     let client1 = Client::connect(&t.socket_name);
     let client2 = Client::connect(&t.socket_name);
 
-    let test_msg: json::Value = json::from_str(r#"{ "blub": "blah" }"#).unwrap();
+    let test_msg: json::Value = as_json(r#"{ "blub": "blah" }"#);
 
     client1.new_rpc("test.test", Box::new(TestCall {
         priority: 0,
@@ -80,7 +80,7 @@ fn new_rpc_with_priority() {
     }));
 
     let client3 = Client::connect(&t.socket_name);
-    let rpc = client3.call("test.test", &json::from_str::<json::Value>(r#"{}"#).unwrap());
+    let rpc = client3.call("test.test", &as_json(r#"{}"#));
     assert_eq!(RpcResult::Ok(as_json(r#"{ "from": "client2" }"#)), rpc.wait().unwrap());
 }
 
@@ -102,7 +102,7 @@ fn new_rpc_with_priority_first_does_not_handle() {
     }));
 
     let client3 = Client::connect(&t.socket_name);
-    let rpc = client3.call("test.test", &json::from_str::<json::Value>(r#"{}"#).unwrap());
+    let rpc = client3.call("test.test", &as_json(r#"{}"#));
     assert_eq!(RpcResult::Ok(as_json(r#"{ "from": "client1" }"#)), rpc.wait().unwrap());
 }
 
@@ -134,31 +134,28 @@ fn client_disconnects_should_not_stop_handling_of_rpcs() {
 
     let client = Client::connect(&t.socket_name);
 
-    let rpc = client.call("test.test", &json::from_str::<json::Value>(r#"{}"#).unwrap());
+    let rpc = client.call("test.test", &as_json(r#"{}"#));
     assert_eq!(RpcResult::Ok(as_json(r#"{ "from": "client1" }"#)), rpc.wait().unwrap());
 
     drop(client1); // clients: 0 2 3
-    let rpc = client.call("test.test", &json::from_str::<json::Value>(r#"{}"#).unwrap());
+    let rpc = client.call("test.test", &as_json(r#"{}"#));
     assert_eq!(RpcResult::Ok(as_json(r#"{ "from": "client3" }"#)), rpc.wait().unwrap());
 
     drop(client0); // clients: 2 3
-    let rpc = client.call("test.test", &json::from_str::<json::Value>(r#"{}"#).unwrap());
+    let rpc = client.call("test.test", &as_json(r#"{}"#));
     assert_eq!(RpcResult::Ok(as_json(r#"{ "from": "client3" }"#)), rpc.wait().unwrap());
 
     drop(client3); // clients: 2
-    let rpc = client.call("test.test", &json::from_str::<json::Value>(r#"{}"#).unwrap());
+    let rpc = client.call("test.test", &as_json(r#"{}"#));
     assert_eq!(RpcResult::NotHandled, rpc.wait().unwrap());
 
     drop(client2); // clients:
 
-    let rpc = client.call("test.test", &json::from_str::<json::Value>(r#"{}"#).unwrap());
-
-    // NOCOM(#sirver): now, nobody can handle this RPC anymore - we should return Unknown RPC.
-    // Since we do not properly clean up after disconnects of clients, it does not work yet.
-    // assert_eq!(RpcResult::Err(RpcError {
-        // kind: RpcErrorKind::UnknownRpc,
-        // details: None,
-    // }), rpc.wait().unwrap());
+    let rpc = client.call("test.test", &as_json(r#"{}"#));
+    assert_eq!(RpcResult::Err(RpcError {
+        kind: RpcErrorKind::UnknownRpc,
+        details: None,
+    }), rpc.wait().unwrap());
 }
 
 #[test]
@@ -166,7 +163,7 @@ fn call_not_existing_rpc() {
     let t = TestHarness::new();
 
     let client = Client::connect(&t.socket_name);
-    let rpc = client.call("not_existing", &json::from_str::<json::Value>("{}").unwrap());
+    let rpc = client.call("not_existing", &as_json("{}"));
     assert_eq!(RpcResult::Err(RpcError {
         kind: RpcErrorKind::UnknownRpc,
         details: None,
