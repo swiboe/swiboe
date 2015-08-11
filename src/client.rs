@@ -7,9 +7,9 @@ use std::collections::HashMap;
 use std::path;
 use std::sync::mpsc;
 use std::thread;
-use super::ipc::{self, IpcWrite, IpcRead};
-use super::plugin_core::NewRpcRequest;
 use super::Result;
+use super::ipc;
+use super::plugin_core::NewRpcRequest;
 use uuid::Uuid;
 
 const CLIENT: mio::Token = mio::Token(1);
@@ -64,7 +64,7 @@ pub enum EventLoopThreadCommand {
 
 // NOCOM(#sirver): bad name
 struct Handler<'a> {
-    stream: UnixStream,
+    stream: ipc::IpcStream<UnixStream>,
     running_function_calls: HashMap<String, mpsc::Sender<ipc::RpcResponse>>,
     function_thread_sender: mpsc::Sender<FunctionThreadCommand<'a>>,
 }
@@ -97,32 +97,41 @@ impl<'a> mio::Handler for Handler<'a> {
                 }
 
                 if events.is_readable() {
-                    let message = match self.stream.read_message() {
-                        Ok(message) => message,
-                        Err(err) => {
-                            println!("Shutting down, since receiving failed: {:?}", err);
-                            event_loop.channel().send(EventLoopThreadCommand::Quit).expect("EventLoopThreadCommand::Quit");
-                            return;
-                        }
-                    };
+                    loop {
+                        let message;
+                        match self.stream.read_message() {
+                            Err(err) => {
+                                println!("Shutting down, since receiving failed: {:?}", err);
+                                event_loop.channel().send(EventLoopThreadCommand::Quit).expect("EventLoopThreadCommand::Quit");
+                                return;
+                            }
+                            Ok(None) => break,
+                            Ok(Some(msg)) => message = msg,
+                        };
 
-                    match message {
-                        ipc::Message::RpcResponse(rpc_data) => {
-                            // This will quietly drop any updates on functions that we no longer
-                            // know/care about.
-                            self.running_function_calls
-                                .get(&rpc_data.context)
-                                .map(|channel| {
-                                    // The other side of this channel might not exist anymore - we
-                                    // might have dropped the RPC already. Just ignore it.
-                                    let _ = channel.send(rpc_data);
-                                });
-                        },
-                        ipc::Message::RpcCall(rpc_call) => {
-                            let command = FunctionThreadCommand::Call(rpc_call);
-                            self.function_thread_sender.send(command).expect("FunctionThreadCommand::Call");
-                        },
+                        match message {
+                            ipc::Message::RpcResponse(rpc_data) => {
+                                // This will quietly drop any updates on functions that we no longer
+                                // know/care about.
+                                self.running_function_calls
+                                    .get(&rpc_data.context)
+                                    .map(|channel| {
+                                        // The other side of this channel might not exist anymore - we
+                                        // might have dropped the RPC already. Just ignore it.
+                                        let _ = channel.send(rpc_data);
+                                    });
+                            },
+                            ipc::Message::RpcCall(rpc_call) => {
+                                let command = FunctionThreadCommand::Call(rpc_call);
+                                self.function_thread_sender.send(command).expect("FunctionThreadCommand::Call");
+                            },
+                        }
                     }
+                    event_loop.reregister(
+                        &self.stream.socket,
+                        CLIENT,
+                        mio::EventSet::readable(),
+                        mio::PollOpt::edge() | mio::PollOpt::oneshot()).unwrap();
                 }
             },
             client_token => panic!("Unexpected token: {:?}", client_token),
@@ -205,12 +214,13 @@ impl<'a> Client<'a> {
 
         let (commands_tx, commands_rx) = mpsc::channel();
         let mut handler = Handler {
-            stream: stream,
+            stream: ipc::IpcStream::new(stream),
             running_function_calls: HashMap::new(),
             function_thread_sender: commands_tx.clone(),
         };
         event_loop.register_opt(
-            &handler.stream, CLIENT, mio::EventSet::readable(), mio::PollOpt::level()).unwrap();
+            &handler.stream.socket, CLIENT, mio::EventSet::readable(), mio::PollOpt::edge() |
+            mio::PollOpt::oneshot()).unwrap();
         let event_loop_thread = thread::scoped(move || {
             event_loop.run(&mut handler).unwrap();
         });

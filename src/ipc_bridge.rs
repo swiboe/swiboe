@@ -3,8 +3,8 @@
 use mio::unix::{UnixListener, UnixStream};
 use mio;
 use std::path::Path;
-use super::ipc::{self, IpcRead, IpcWrite};
 use super::error::{ErrorKind, Error};
+use super::ipc::{self};
 use super::server;
 
 #[derive(PartialEq, Eq, Clone, Copy, Hash, Debug)]
@@ -14,7 +14,7 @@ pub struct ClientId {
 }
 
 struct Connection {
-    stream: UnixStream,
+    stream: ipc::IpcStream<UnixStream>,
     client_id: ClientId,
 }
 
@@ -89,7 +89,7 @@ impl mio::Handler for IpcBridge {
                         token: token,
                     };
                     let connection = Connection {
-                        stream: stream,
+                        stream: ipc::IpcStream::new(stream),
                         client_id: client_id,
                     };
                     commands.send(server::Command::ClientConnected(client_id)).expect("ClientConnected");
@@ -99,10 +99,10 @@ impl mio::Handler for IpcBridge {
                         // If we successfully insert, then register our connection.
                         let conn = &mut self.connections[token];
                         event_loop.register_opt(
-                            &conn.stream,
+                            &conn.stream.socket,
                             conn.client_id.token,
                             mio::EventSet::readable(),
-                            mio::PollOpt::level()).unwrap();
+                            mio::PollOpt::edge() | mio::PollOpt::oneshot()).unwrap();
                     },
                     None => {
                         // If we fail to insert, `conn` will go out of scope and be dropped.
@@ -117,20 +117,30 @@ impl mio::Handler for IpcBridge {
                         server::Command::ClientDisconnected(connection.client_id)).expect("ClientDisconnected");
                 } else if events.is_readable() {
                     let conn = &mut self.connections[token];
-                    // NOCOM(#sirver): should disconnect instead of crashing.
-                    let message = conn.stream.read_message().expect("ReadMessage");;
-                    // NOCOM(#sirver): useful?
-                    // println!("{:?} -> Server: {:#?}", conn.client_id, message);
-
-                    match message {
-                        ipc::Message::RpcCall(rpc_call) => {
-                            self.commands.send(server::Command::RpcCall(
-                                    conn.client_id, rpc_call)).expect("RpcCall");
-                        },
-                        ipc::Message::RpcResponse(rpc_response) => {
-                            self.commands.send(server::Command::RpcResponse(rpc_response)).expect("RpcResponse");
+                    loop {
+                        match conn.stream.read_message() {
+                            // NOCOM(#sirver): should disconnect instead of panic.
+                            Err(err) => panic!("Error while reading: {}", err),
+                            Ok(None) => break,
+                            Ok(Some(message)) => {
+                                // println!("{:?} -> Server: {:#?}", conn.client_id, message);
+                                match message {
+                                    ipc::Message::RpcCall(rpc_call) => {
+                                        self.commands.send(server::Command::RpcCall(
+                                                conn.client_id, rpc_call)).expect("RpcCall");
+                                    },
+                                    ipc::Message::RpcResponse(rpc_response) => {
+                                        self.commands.send(server::Command::RpcResponse(rpc_response)).expect("RpcResponse");
+                                    }
+                                }
+                            }
                         }
                     }
+                    event_loop.reregister(
+                        &conn.stream.socket,
+                        conn.client_id.token,
+                        mio::EventSet::readable(),
+                        mio::PollOpt::edge() | mio::PollOpt::oneshot()).unwrap();
                 }
             }
         }
