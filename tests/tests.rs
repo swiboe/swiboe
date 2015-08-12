@@ -18,6 +18,7 @@ mod core;
 mod plugin_buffer;
 
 pub struct CallbackProcedure<F> {
+    pub priority: u16,
     pub callback: F,
 }
 
@@ -26,6 +27,7 @@ impl<F> client::RemoteProcedure for CallbackProcedure<F> where
 {
     fn call(&mut self, _: client::Sender, args: json::Value) -> ipc::RpcResult {
         (self.callback)(args) }
+    fn priority(&self) -> u16 { self.priority }
 }
 
 pub fn create_file(t: &support::TestHarness, name: &str, content: &str) -> path::PathBuf {

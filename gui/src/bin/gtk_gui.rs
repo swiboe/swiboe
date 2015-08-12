@@ -32,6 +32,7 @@ use std::thread;
 use switchboard::client;
 use switchboard::ipc;
 use switchboard::plugin_buffer;
+use switchboard::plugin_list_files;
 use switchboard_gtk_gui::buffer_view_widget;
 use switchboard_gtk_gui::buffer_views;
 use switchboard_gtk_gui::command::GuiCommand;
@@ -106,13 +107,20 @@ impl SwitchboardGtkGui {
                     println!("#sirver name_str: {:#?}", name_str);
                     println!("#sirver keypress: {}", time::precise_time_ns());
                     match &name_str as &str {
-                        "F2" =>  {
+                        "F2" => {
                             let rpc = sender.call("buffer.open", &plugin_buffer::OpenRequest {
                                 uri: "file:///Users/sirver/Desktop/Programming/rust/Switchboard/src/client.rs".into(),
                             });
                             let b: plugin_buffer::OpenResponse = rpc.wait_for().unwrap();
                             println!("#sirver b: {:#?}", b);
-                        }
+                        },
+                        "F3" => {
+                            let rpc = sender.call("list_files", &plugin_list_files::ListFilesRequest {
+                                directory: "/Users/sirver/Desktop/Programming/".into(),
+                            });
+                            let b: plugin_list_files::ListFilesResult = rpc.wait_for().unwrap();
+                            println!("#sirver b: {:#?}", b);
+                        },
                         "Up" => {
                             sender.call("gui.buffer_view.move_cursor", &buffer_views::MoveCursorRequest {
                                 cursor_id: cursor_id.clone(),

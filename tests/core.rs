@@ -1,6 +1,8 @@
 use serde::json;
 use std::env;
 use std::path;
+use std::sync::atomic::{AtomicBool, Ordering};
+use super::CallbackProcedure;
 use support::TestHarness;
 use switchboard::client;
 use switchboard::ipc::{RpcErrorKind, RpcResult, RpcError};
@@ -170,4 +172,31 @@ fn call_not_existing_rpc() {
         kind: RpcErrorKind::UnknownRpc,
         details: None,
     }), rpc.wait().unwrap());
+}
+
+#[test]
+fn call_streaming_rpc_simple() {
+    let callback_called  = AtomicBool::new(false);
+    {
+        let t = TestHarness::new();
+
+        let never_called_client = Client::connect(&t.socket_name);
+        never_called_client.new_rpc("test.test", Box::new(CallbackProcedure {
+            priority: 100,
+            callback: |_| {
+                callback_called.store(true, Ordering::Relaxed);
+                RpcResult::success(())
+            },
+        }));
+
+        let streaming_client = Client::connect(&t.socket_name);
+        never_called_client.new_rpc("test.test", Box::new(CallbackProcedure {
+            priority: 50,
+            callback: |_| {
+                thread::spawn(move || {
+                })
+            },
+        }));
+    }
+    assert!(!callback_called.load(Ordering::Relaxed));
 }

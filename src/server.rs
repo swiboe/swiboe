@@ -5,11 +5,12 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{channel, Sender, Receiver};
 use std::thread;
+use super::error::Error;
 use super::ipc;
 use super::ipc_bridge;
 use super::plugin_buffer;
 use super::plugin_core;
-use super::error::Error;
+use super::plugin_list_files;
 
 // NOCOM(#sirver): when a client disconnects and we still try to call one of it's rpcs, we never
 // get an error back - this will effectively interrupt the rpc call stack.
@@ -229,6 +230,7 @@ pub struct Server<'a> {
     commands: CommandSender,
     switchboard_thread: Option<thread::JoinHandle<()>>,
     buffer_plugin: Option<plugin_buffer::BufferPlugin<'a>>,
+    list_files_plugin: Option<plugin_list_files::ListFilesPlugin<'a>>,
 }
 
 impl<'a> Server<'a> {
@@ -240,6 +242,7 @@ impl<'a> Server<'a> {
             commands: tx,
             switchboard_thread: None,
             buffer_plugin: None,
+            list_files_plugin: None,
         };
 
         // TODO(sirver): grep for unwrap and remove
@@ -269,6 +272,8 @@ impl<'a> Server<'a> {
 
         server.buffer_plugin = Some(
             plugin_buffer::BufferPlugin::new(&server.socket_name));
+        server.list_files_plugin = Some(
+            plugin_list_files::ListFilesPlugin::new(&server.socket_name));
         server
     }
 

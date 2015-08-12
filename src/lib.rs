@@ -18,6 +18,7 @@ pub mod error;
 pub mod ipc;
 pub mod plugin_buffer;
 pub mod plugin_core;
+pub mod plugin_list_files;
 pub mod server;
 
 pub use error::{Error, ErrorKind, Result};

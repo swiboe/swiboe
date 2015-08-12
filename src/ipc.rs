@@ -75,6 +75,12 @@ impl From<json::error::Error> for RpcError {
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
+pub enum RpcHandlerReply {
+    Inhibit,
+    Propagate,
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 pub enum RpcResult {
     // NOCOM(#sirver): mention success as a convenient creating for this.
     Ok(json::Value),
@@ -82,6 +88,7 @@ pub enum RpcResult {
     // NOCOM(#sirver): Not Handled is never seen by a client, but is send by one.
     NotHandled,
 }
+
 
 impl RpcResult {
     pub fn success<T: serde::Serialize>(value: T) -> RpcResult {

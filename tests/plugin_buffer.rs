@@ -23,6 +23,7 @@ fn buffer_new() {
     {
         let client = client::Client::connect(&t.socket_name);
         client.new_rpc("on.buffer.new", Box::new(CallbackProcedure {
+            priority: 100,
             callback: |_| {
                 callback_called.store(true, Ordering::Relaxed);
                 ipc::RpcResult::success(())
@@ -87,11 +88,12 @@ fn buffer_open_file() {
 #[test]
 fn buffer_delete() {
     let t = TestHarness::new();
-    let callback_called  = AtomicBool::new(true);
+    let callback_called  = AtomicBool::new(false);
 
     {
         let client = client::Client::connect(&t.socket_name);
         client.new_rpc("on.buffer.deleted", Box::new(CallbackProcedure {
+            priority: 100,
             callback: |_| {
                 callback_called.store(true, Ordering::Relaxed);
                 ipc::RpcResult::success(())
