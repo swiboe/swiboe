@@ -65,10 +65,11 @@ impl From<io::Error> for ipc::RpcError {
 }
 
 macro_rules! try_rpc {
-    ($expr:expr) => (match $expr {
+    ($sender:ident, $expr:expr) => (match $expr {
         Ok(val) => val,
         Err(err) => {
-            return ipc::RpcResult::Err(convert::From::from(err))
+            $sender.finish(ipc::RpcResult::Err(convert::From::from(err)));
+            return;
         }
     })
 }
@@ -95,9 +96,9 @@ pub struct NewResponse {
 
 // NOCOM(#sirver): what does serde do if there are extra values in the JSON?
 impl client::RemoteProcedure for New {
-    fn call(&mut self, _: client::RpcSender, args: json::Value) -> ipc::RpcResult {
+    fn call(&mut self, mut sender: client::RpcSender, args: json::Value) {
         // NOCOM(#sirver): need testing for bad request results
-        let request: NewRequest = try_rpc!(json::from_value(args));
+        let request: NewRequest = try_rpc!(sender, json::from_value(args));
         let mut buffers = self.buffers.write().unwrap();
 
         let buffer = match request.content {
@@ -108,7 +109,7 @@ impl client::RemoteProcedure for New {
         let response = NewResponse {
             buffer_index: buffers.new_buffer(buffer),
         };
-        ipc::RpcResult::success(response)
+        sender.finish(ipc::RpcResult::success(response));
     }
 }
 
@@ -125,13 +126,13 @@ struct Delete {
 }
 
 impl client::RemoteProcedure for Delete {
-    fn call(&mut self, _: client::RpcSender, args: json::Value) -> ipc::RpcResult {
-        let request: DeleteRequest = try_rpc!(json::from_value(args));
+    fn call(&mut self, mut sender: client::RpcSender, args: json::Value) {
+        let request: DeleteRequest = try_rpc!(sender, json::from_value(args));
         let mut buffers = self.buffers.write().unwrap();
-        try_rpc!(buffers.delete_buffer(request.buffer_index));
+        try_rpc!(sender, buffers.delete_buffer(request.buffer_index));
 
         let response = DeleteResponse;
-        ipc::RpcResult::success(response)
+        sender.finish(ipc::RpcResult::success(response));
     }
 }
 
@@ -150,16 +151,16 @@ struct GetContent {
 }
 
 impl client::RemoteProcedure for GetContent {
-    fn call(&mut self, _: client::RpcSender, args: json::Value) -> ipc::RpcResult {
-        let request: GetContentRequest = try_rpc!(json::from_value(args));
+    fn call(&mut self, mut sender: client::RpcSender, args: json::Value) {
+        let request: GetContentRequest = try_rpc!(sender, json::from_value(args));
         let buffers = self.buffers.read().unwrap();
 
-        let buffer = try_rpc!(buffers.get(request.buffer_index));
+        let buffer = try_rpc!(sender, buffers.get(request.buffer_index));
 
         let response = GetContentResponse {
             content: buffer.to_string(),
         };
-        ipc::RpcResult::success(response)
+        sender.finish(ipc::RpcResult::success(response));
     }
 }
 
@@ -178,17 +179,18 @@ struct Open {
 }
 
 impl client::RemoteProcedure for Open {
-    fn call(&mut self,  _: client::RpcSender,args: json::Value) -> ipc::RpcResult {
+    fn call(&mut self, mut sender: client::RpcSender, args: json::Value) {
         const FILE_PREFIX: &'static str = "file://";
-        let mut request: OpenRequest = try_rpc!(json::from_value(args));
+        let mut request: OpenRequest = try_rpc!(sender, json::from_value(args));
         if !request.uri.starts_with(FILE_PREFIX) {
-            return ipc::RpcResult::NotHandled;
+            sender.finish(ipc::RpcResult::NotHandled);
+            return;
         }
         request.uri.drain(..FILE_PREFIX.len());
 
-        let mut file = try_rpc!(fs::File::open(path::Path::new(&request.uri)));
+        let mut file = try_rpc!(sender, fs::File::open(path::Path::new(&request.uri)));
         let mut content = String::new();
-        try_rpc!(file.read_to_string(&mut content));
+        try_rpc!(sender, file.read_to_string(&mut content));
 
         let buffer = Buffer::from_string(content);
 
@@ -196,7 +198,7 @@ impl client::RemoteProcedure for Open {
         let response = OpenResponse {
             buffer_index: buffers.new_buffer(buffer),
         };
-        ipc::RpcResult::success(response)
+        sender.finish(ipc::RpcResult::success(response));
     }
 }
 
@@ -214,14 +216,14 @@ struct List {
 }
 
 impl client::RemoteProcedure for List {
-    fn call(&mut self, _: client::RpcSender, args: json::Value) -> ipc::RpcResult {
-        let _: ListRequest = try_rpc!(json::from_value(args));
+    fn call(&mut self, mut sender: client::RpcSender, args: json::Value) {
+        let _: ListRequest = try_rpc!(sender, json::from_value(args));
 
         let buffers = self.buffers.read().unwrap();
         let response = ListResponse {
             buffer_indices: buffers.keys().map(|c| *c).collect(),
         };
-        ipc::RpcResult::success(response)
+        sender.finish(ipc::RpcResult::success(response));
     }
 }
 

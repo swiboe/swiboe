@@ -16,7 +16,7 @@ const CLIENT: mio::Token = mio::Token(1);
 
 pub trait RemoteProcedure: Send {
     fn priority(&self) -> u16 { u16::max_value() }
-    fn call(&mut self, rpc_sender: RpcSender, args: json::Value) -> ipc::RpcResult;
+    fn call(&mut self, rpc_sender: RpcSender, args: json::Value);
 }
 
 pub struct Rpc {
@@ -175,24 +175,11 @@ impl<'a> FunctionThread<'a> {
                 },
                 FunctionThreadCommand::Call(rpc_call) => {
                     if let Some(function) = self.remote_procedures.get_mut(&rpc_call.function) {
-                        let result = function.call(RpcSender {
-                            context: rpc_call.context.clone(),
-                            event_loop_sender: self.event_loop_sender.clone(),
-                        }, rpc_call.args);
-
-                        // Ignore error on send: if the event_loop is no longer listening, somebody
-                        // will send us a Quit command soon enough too.
-                        let _ = self.event_loop_sender.send(EventLoopThreadCommand::Send(
-                            ipc::Message::RpcResponse(ipc::RpcResponse {
-                                context: rpc_call.context,
-                                // NOCOM(#sirver): what about streaming rpcs?
-                                kind: ipc::RpcResponseKind::Last(result),
-                            })));
+                        function.call(RpcSender::new(
+                            rpc_call.context.clone(), self.event_loop_sender.clone()), rpc_call.args);
                     }
                     // NOCOM(#sirver): return an error - though if that has happened the
                     // server messed up too.
-
-                    // NOCOM(#sirver): implement
                 }
             }
         }
@@ -288,7 +275,10 @@ impl<'a> Client<'a> {
 
 impl<'a> Drop for Client<'a> {
     fn drop(&mut self) {
-        self.function_thread_sender.send(FunctionThreadCommand::Quit).unwrap();
+        // Either thread might have panicked at this point, so we can not rely on the sends to go
+        // through. We just tell both (again) to Quit and hope they actually join.
+        let _ = self.function_thread_sender.send(FunctionThreadCommand::Quit);
+        let _ = self.event_loop_sender.send(EventLoopThreadCommand::Quit);
     }
 }
 
@@ -307,9 +297,18 @@ impl Sender {
 pub struct RpcSender {
     context: String,
     event_loop_sender: mio::Sender<EventLoopThreadCommand>,
+    finish_called: bool,
 }
 
 impl RpcSender {
+    fn new(context: String, event_loop_sender: mio::Sender<EventLoopThreadCommand>) -> Self {
+        RpcSender {
+            context: context,
+            event_loop_sender: event_loop_sender,
+            finish_called: false
+        }
+    }
+
     pub fn call<T: Serialize>(&self, function: &str, args: &T) -> Rpc {
         call(&self.event_loop_sender, function, args)
     }
@@ -319,7 +318,21 @@ impl RpcSender {
         // self.event_loop_sender.send(EventLoopThreadCommand::Send(context, tx, message)).expect("Call");
     }
 
-    pub fn finish() {
-        // NOCOM(#sirver): implement
+    pub fn finish(&mut self, result: ipc::RpcResult) {
+        assert!(!self.finish_called, "Finish has already been called!");
+        self.finish_called = true;
+
+        let msg = ipc::Message::RpcResponse(ipc::RpcResponse {
+            context: self.context.clone(),
+            kind: ipc::RpcResponseKind::Last(result),
+        });
+        self.event_loop_sender.send(EventLoopThreadCommand::Send(msg)).expect("Send");
+    }
+}
+
+impl Drop for RpcSender {
+    fn drop(&mut self) {
+        assert!(self.finish_called,
+                "RpcSender dropped, but finish() was not called.");
     }
 }

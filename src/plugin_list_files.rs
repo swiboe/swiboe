@@ -14,10 +14,11 @@ use uuid::Uuid;
 
 // NOCOM(#sirver): duplicated
 macro_rules! try_rpc {
-    ($expr:expr) => (match $expr {
+    ($sender:ident, $expr:expr) => (match $expr {
         Ok(val) => val,
         Err(err) => {
-            return ipc::RpcResult::Err(convert::From::from(err))
+            $sender.finish(ipc::RpcResult::Err(convert::From::from(err)));
+            return;
         }
     })
 }
@@ -59,8 +60,8 @@ pub struct ListFilesResponse {
 struct ListFiles;
 
 impl client::RemoteProcedure for ListFiles {
-    fn call(&mut self, rpc_sender: client::RpcSender, args: json::Value) -> ipc::RpcResult {
-        let request: ListFilesRequest = try_rpc!(json::from_value(args));
+    fn call(&mut self, mut sender: client::RpcSender, args: json::Value) {
+        let request: ListFilesRequest = try_rpc!(sender, json::from_value(args));
 
         let context = Uuid::new_v4().to_hyphenated_string();
 
@@ -79,7 +80,7 @@ impl client::RemoteProcedure for ListFiles {
         let response = ListFilesResponse {
             context: context,
         };
-        ipc::RpcResult::success(response)
+        sender.finish(ipc::RpcResult::success(response));
     }
 }
 

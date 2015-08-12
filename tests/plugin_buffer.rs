@@ -24,9 +24,9 @@ fn buffer_new() {
         let client = client::Client::connect(&t.socket_name);
         client.new_rpc("on.buffer.new", Box::new(CallbackProcedure {
             priority: 100,
-            callback: |_| {
+            callback: |mut sender: client::RpcSender, _| {
                 callback_called.store(true, Ordering::Relaxed);
-                ipc::RpcResult::success(())
+                sender.finish(ipc::RpcResult::success(()));
             }
         }));
         create_buffer(&client, 0, None);
@@ -94,9 +94,9 @@ fn buffer_delete() {
         let client = client::Client::connect(&t.socket_name);
         client.new_rpc("on.buffer.deleted", Box::new(CallbackProcedure {
             priority: 100,
-            callback: |_| {
+            callback: |mut sender: client::RpcSender, _| {
                 callback_called.store(true, Ordering::Relaxed);
-                ipc::RpcResult::success(())
+                sender.finish(ipc::RpcResult::success(()));
             }
         }));
 

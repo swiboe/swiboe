@@ -43,8 +43,8 @@ struct TestCall {
 
 impl client::RemoteProcedure for TestCall {
     fn priority(&self) -> u16 { self.priority }
-    fn call(&mut self, _: client::RpcSender, _: json::Value) -> RpcResult {
-        self.result.clone()
+    fn call(&mut self, mut sender: client::RpcSender, _: json::Value) {
+        sender.finish(self.result.clone());
     }
 }
 
@@ -112,6 +112,26 @@ fn new_rpc_with_priority_first_does_not_handle() {
 }
 
 #[test]
+#[should_panic]
+fn rpc_not_calling_finish() {
+    let t = TestHarness::new();
+
+    let client1 = client::Client::connect(&t.socket_name);
+    client1.new_rpc("test.test", Box::new(CallbackProcedure {
+        priority: 100,
+        callback: |sender, args| {},
+    }));
+
+    let client2 = client::Client::connect(&t.socket_name);
+    // TODO(sirver): This should timeout, but that is not implemented yet.
+    let rpc = client2.call("test.test", &as_json(r#"{}"#));
+
+    // Should be plenty to have test.test being handled.
+    thread::sleep_ms(500);
+}
+
+
+#[test]
 fn client_disconnects_should_not_stop_handling_of_rpcs() {
     let t = TestHarness::new();
 
@@ -175,15 +195,11 @@ fn call_not_existing_rpc() {
     }), rpc.wait().unwrap());
 }
 
-// NOCOM(#sirver): next step: make rpc_caller check that finish was called on drop, then use it
-// everywhere.
 // #[test]
 // fn call_streaming_rpc_simple() {
     // let callback_called  = AtomicBool::new(false);
     // {
         // // NOCOM(#sirver): test for next_result on non streaming rpc
-        // // NOCOM(#sirver): test for forgetting to call finish()
-        // // NOCOM(#sirver): the current API is really easy to misuse
         // let t = TestHarness::new();
 
         // // Since the streaming RPC handles the call, this one should never be called.

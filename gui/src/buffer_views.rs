@@ -29,10 +29,11 @@ use uuid::Uuid;
 
 // NOCOM(#sirver): duplicated. Export from client.
 macro_rules! try_rpc {
-    ($expr:expr) => (match $expr {
+    ($sender:ident, $expr:expr) => (match $expr {
         Ok(val) => val,
         Err(err) => {
-            return ipc::RpcResult::Err(convert::From::from(err))
+            $sender.finish(ipc::RpcResult::Err(convert::From::from(err)));
+            return;
         }
     })
 }
@@ -73,14 +74,14 @@ struct Scroll {
 }
 
 impl client::RemoteProcedure for Scroll {
-    fn call(&mut self, _: client::RpcSender, args: json::Value) -> ipc::RpcResult {
-        let request: ScrollRequest = try_rpc!(json::from_value(args));
+    fn call(&mut self, mut sender: client::RpcSender, args: json::Value) {
+        let request: ScrollRequest = try_rpc!(sender, json::from_value(args));
 
         let mut buffer_views = self.buffer_views.write().unwrap();
         buffer_views.scroll(&request.buffer_view_id, request.delta);
 
         let response = ScrollResponse;
-        ipc::RpcResult::success(response)
+        sender.finish(ipc::RpcResult::success(response))
     }
 }
 
@@ -140,15 +141,15 @@ struct MoveCursor {
 }
 
 impl client::RemoteProcedure for MoveCursor {
-    fn call(&mut self,  _: client::RpcSender, args: json::Value) -> ipc::RpcResult {
+    fn call(&mut self,  mut sender: client::RpcSender, args: json::Value) {
         println!("#sirver Beginning of MoveCursor: {:#?}", time::precise_time_ns());
-        let request: MoveCursorRequest = try_rpc!(json::from_value(args));
+        let request: MoveCursorRequest = try_rpc!(sender, json::from_value(args));
 
         let mut buffer_views = self.buffer_views.write().unwrap();
 
-        try_rpc!(buffer_views.move_cursor(&request.cursor_id, request.delta));
+        try_rpc!(sender, buffer_views.move_cursor(&request.cursor_id, request.delta));
         println!("#sirver End of MoveCursor: {:#?}", time::precise_time_ns());
-        ipc::RpcResult::success(MoveCursorResponse)
+        sender.finish(ipc::RpcResult::success(MoveCursorResponse))
     }
 }
 
@@ -321,8 +322,8 @@ struct OnBufferCreated {
 }
 
 impl client::RemoteProcedure for OnBufferCreated {
-    fn call(&mut self, _: client::RpcSender, args: json::Value) -> ipc::RpcResult {
-        let info: plugin_buffer::BufferCreated = try_rpc!(json::from_value(args));
+    fn call(&mut self, mut sender: client::RpcSender, args: json::Value) {
+        let info: plugin_buffer::BufferCreated = try_rpc!(sender, json::from_value(args));
 
         let rpc = self.sender.call("buffer.get_content", &plugin_buffer::GetContentRequest {
             buffer_index: info.buffer_index,
@@ -336,6 +337,6 @@ impl client::RemoteProcedure for OnBufferCreated {
             }
             _ => {},
         }
-        ipc::RpcResult::success(())
+        sender.finish(ipc::RpcResult::success(()))
     }
 }
