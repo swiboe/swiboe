@@ -284,9 +284,9 @@ impl<'a> Server<'a> {
         let mut ipc_bridge = ipc_bridge::IpcBridge::new(
             &mut event_loop, &server.socket_name, server.commands.clone());
 
-        let event_loop_thread = thread::spawn(move || {
+        server.event_loop_thread = Some(thread::spawn(move || {
             event_loop.run(&mut ipc_bridge).unwrap();
-        });
+        }));
 
         server.switchboard_thread = Some(thread::spawn(move || {
             switchboard.spin_forever();
