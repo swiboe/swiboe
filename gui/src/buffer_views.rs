@@ -73,7 +73,7 @@ struct Scroll {
 }
 
 impl client::RemoteProcedure for Scroll {
-    fn call(&mut self, args: json::Value) -> ipc::RpcResult {
+    fn call(&mut self, _: client::Sender, args: json::Value) -> ipc::RpcResult {
         let request: ScrollRequest = try_rpc!(json::from_value(args));
 
         let mut buffer_views = self.buffer_views.write().unwrap();
@@ -140,7 +140,7 @@ struct MoveCursor {
 }
 
 impl client::RemoteProcedure for MoveCursor {
-    fn call(&mut self, args: json::Value) -> ipc::RpcResult {
+    fn call(&mut self,  _: client::Sender, args: json::Value) -> ipc::RpcResult {
         println!("#sirver Beginning of MoveCursor: {:#?}", time::precise_time_ns());
         let request: MoveCursorRequest = try_rpc!(json::from_value(args));
 
@@ -189,7 +189,7 @@ pub struct BufferViews {
     // NOCOM(#sirver): is the gui id needed?
     gui_id: String,
     buffer_views: HashMap<usize, BufferView>,
-    rpc_caller: client::RpcCaller,
+    sender: client::Sender,
     // NOCOM(#sirver): are these mutex really needed?
     commands: Mutex<mpsc::Sender<GuiCommand>>,
 }
@@ -199,7 +199,7 @@ impl BufferViews {
         let mut buffer_view = Arc::new(RwLock::new(BufferViews {
             gui_id: gui_id.to_string(),
             buffer_views: HashMap::new(),
-            rpc_caller: client.new_rpc_caller(),
+            sender: client.new_sender(),
             commands: Mutex::new(commands),
         }));
 
@@ -215,7 +215,7 @@ impl BufferViews {
 
         let on_buffer_created = OnBufferCreated {
             buffer_views: buffer_view.clone(),
-            rpc_caller: client.new_rpc_caller(),
+            sender: client.new_sender(),
         };
         client.new_rpc("on.buffer.new", Box::new(on_buffer_created));
 
@@ -229,11 +229,11 @@ impl BufferViews {
 
     fn update_all_buffers_blocking(&mut self) {
         // NOCOM(#sirver): all these unwraps are very dangerous.
-        let rpc = self.rpc_caller.call("buffer.list", &plugin_buffer::ListRequest);
+        let rpc = self.sender.call("buffer.list", &plugin_buffer::ListRequest);
         let result: plugin_buffer::ListResponse = rpc.wait_for().unwrap();
 
         for buffer_index in result.buffer_indices {
-            let rpc = self.rpc_caller.call("buffer.get_content", &plugin_buffer::GetContentRequest {
+            let rpc = self.sender.call("buffer.get_content", &plugin_buffer::GetContentRequest {
                 buffer_index: buffer_index,
             });
             let response: plugin_buffer::GetContentResponse = rpc.wait_for().unwrap();
@@ -317,14 +317,14 @@ impl BufferViews {
 // weak_refs?
 struct OnBufferCreated {
     buffer_views: Arc<RwLock<BufferViews>>,
-    rpc_caller: client::RpcCaller,
+    sender: client::Sender,
 }
 
 impl client::RemoteProcedure for OnBufferCreated {
-    fn call(&mut self, args: json::Value) -> ipc::RpcResult {
+    fn call(&mut self, _: client::Sender, args: json::Value) -> ipc::RpcResult {
         let info: plugin_buffer::BufferCreated = try_rpc!(json::from_value(args));
 
-        let rpc = self.rpc_caller.call("buffer.get_content", &plugin_buffer::GetContentRequest {
+        let rpc = self.sender.call("buffer.get_content", &plugin_buffer::GetContentRequest {
             buffer_index: info.buffer_index,
         });
         match rpc.wait().unwrap() {

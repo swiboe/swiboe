@@ -95,7 +95,7 @@ pub struct NewResponse {
 
 // NOCOM(#sirver): what does serde do if there are extra values in the JSON?
 impl client::RemoteProcedure for New {
-    fn call(&mut self, args: json::Value) -> ipc::RpcResult {
+    fn call(&mut self, _: client::Sender, args: json::Value) -> ipc::RpcResult {
         // NOCOM(#sirver): need testing for bad request results
         let request: NewRequest = try_rpc!(json::from_value(args));
         let mut buffers = self.buffers.write().unwrap();
@@ -125,7 +125,7 @@ struct Delete {
 }
 
 impl client::RemoteProcedure for Delete {
-    fn call(&mut self, args: json::Value) -> ipc::RpcResult {
+    fn call(&mut self, _: client::Sender, args: json::Value) -> ipc::RpcResult {
         let request: DeleteRequest = try_rpc!(json::from_value(args));
         let mut buffers = self.buffers.write().unwrap();
         try_rpc!(buffers.delete_buffer(request.buffer_index));
@@ -150,7 +150,7 @@ struct GetContent {
 }
 
 impl client::RemoteProcedure for GetContent {
-    fn call(&mut self, args: json::Value) -> ipc::RpcResult {
+    fn call(&mut self, _: client::Sender, args: json::Value) -> ipc::RpcResult {
         let request: GetContentRequest = try_rpc!(json::from_value(args));
         let buffers = self.buffers.read().unwrap();
 
@@ -178,7 +178,7 @@ struct Open {
 }
 
 impl client::RemoteProcedure for Open {
-    fn call(&mut self, args: json::Value) -> ipc::RpcResult {
+    fn call(&mut self,  _: client::Sender,args: json::Value) -> ipc::RpcResult {
         const FILE_PREFIX: &'static str = "file://";
         let mut request: OpenRequest = try_rpc!(json::from_value(args));
         if !request.uri.starts_with(FILE_PREFIX) {
@@ -214,7 +214,7 @@ struct List {
 }
 
 impl client::RemoteProcedure for List {
-    fn call(&mut self, args: json::Value) -> ipc::RpcResult {
+    fn call(&mut self, _: client::Sender, args: json::Value) -> ipc::RpcResult {
         let _: ListRequest = try_rpc!(json::from_value(args));
 
         let buffers = self.buffers.read().unwrap();
@@ -251,15 +251,15 @@ impl Buffer {
 struct BuffersManager {
     next_buffer_index: usize,
     buffers: HashMap<usize, Buffer>,
-    rpc_caller: client::RpcCaller,
+    sender: client::Sender,
 }
 
 impl BuffersManager {
-    fn new(rpc_caller: client::RpcCaller) -> Self {
+    fn new(sender: client::Sender) -> Self {
         BuffersManager {
             next_buffer_index: 0,
             buffers: HashMap::new(),
-            rpc_caller: rpc_caller
+            sender: sender
         }
     }
 
@@ -271,7 +271,7 @@ impl BuffersManager {
 
         // NOCOM(#sirver): new is not good. should be create.
         // Fire the callback, but we do not wait for it's conclusion.
-        let _ = self.rpc_caller.call("on.buffer.new", &BufferCreated {
+        let _ = self.sender.call("on.buffer.new", &BufferCreated {
             buffer_index: current_buffer_index,
         });
         current_buffer_index
@@ -281,7 +281,7 @@ impl BuffersManager {
         try!(self.buffers.remove(&buffer_index).ok_or(BufferError::UnknownBuffer));
 
         // Fire the callback, but we do not wait for it's conclusion.
-        let _ = self.rpc_caller.call("on.buffer.deleted", &BufferDeleted {
+        let _ = self.sender.call("on.buffer.deleted", &BufferDeleted {
             buffer_index: buffer_index,
         });
 
@@ -314,7 +314,7 @@ impl<'a> BufferPlugin<'a> {
         let client = client::Client::connect(socket_name);
 
         let plugin = BufferPlugin {
-            buffers: Arc::new(RwLock::new(BuffersManager::new(client.new_rpc_caller()))),
+            buffers: Arc::new(RwLock::new(BuffersManager::new(client.new_sender()))),
             client: client,
         };
 

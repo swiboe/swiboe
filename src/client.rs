@@ -16,7 +16,7 @@ const CLIENT: mio::Token = mio::Token(1);
 
 pub trait RemoteProcedure: Send {
     fn priority(&self) -> u16 { u16::max_value() }
-    fn call(&mut self, args: json::Value) -> ipc::RpcResult;
+    fn call(&mut self, sender: Sender, args: json::Value) -> ipc::RpcResult;
 }
 
 pub struct Rpc {
@@ -168,7 +168,9 @@ impl<'a> FunctionThread<'a> {
                 },
                 FunctionThreadCommand::Call(rpc_call) => {
                     if let Some(function) = self.remote_procedures.get_mut(&rpc_call.function) {
-                        let result = function.call(rpc_call.args);
+                        let result = function.call(Sender {
+                            event_loop_sender: self.event_loop_sender.clone(),
+                        }, rpc_call.args);
 
                         // Ignore error on send: if the event_loop is no longer listening, somebody
                         // will send us a Quit command soon enough too.
@@ -269,8 +271,8 @@ impl<'a> Client<'a> {
         call(&self.event_loop_sender, function, args)
     }
 
-    pub fn new_rpc_caller(&self) -> RpcCaller {
-        RpcCaller {
+    pub fn new_sender(&self) -> Sender {
+        Sender {
             event_loop_sender: self.event_loop_sender.clone(),
         }
     }
@@ -282,11 +284,12 @@ impl<'a> Drop for Client<'a> {
     }
 }
 
-pub struct RpcCaller {
+#[derive(Clone)]
+pub struct Sender {
     event_loop_sender: mio::Sender<EventLoopThreadCommand>,
 }
 
-impl RpcCaller {
+impl Sender {
     pub fn call<T: Serialize>(&self, function: &str, args: &T) -> Rpc {
         call(&self.event_loop_sender, function, args)
     }

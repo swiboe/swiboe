@@ -9,6 +9,7 @@ extern crate serde;
 extern crate switchboard;
 extern crate switchboard_gtk_gui;
 extern crate time;
+extern crate uuid;
 
 use cairo::Context;
 use cairo::enums::{FontSlant, FontWeight};
@@ -93,7 +94,7 @@ impl SwitchboardGtkGui {
 
         // let drawing_area_clone = drawing_area.clone();
         let buffers_clone = gui.buffer_views.clone();
-        let rpc_caller = client.new_rpc_caller();
+        let sender = client.new_sender();
         window.connect_key_press_event(move |_, key| {
             // println!("#sirver key: {:#?}", key);
             let state = (*key).state;
@@ -106,32 +107,32 @@ impl SwitchboardGtkGui {
                     println!("#sirver keypress: {}", time::precise_time_ns());
                     match &name_str as &str {
                         "F2" =>  {
-                            let rpc = rpc_caller.call("buffer.open", &plugin_buffer::OpenRequest {
+                            let rpc = sender.call("buffer.open", &plugin_buffer::OpenRequest {
                                 uri: "file:///Users/sirver/Desktop/Programming/rust/Switchboard/src/client.rs".into(),
                             });
                             let b: plugin_buffer::OpenResponse = rpc.wait_for().unwrap();
                             println!("#sirver b: {:#?}", b);
                         }
                         "Up" => {
-                            rpc_caller.call("gui.buffer_view.move_cursor", &buffer_views::MoveCursorRequest {
+                            sender.call("gui.buffer_view.move_cursor", &buffer_views::MoveCursorRequest {
                                 cursor_id: cursor_id.clone(),
                                 delta: buffer_views::Position { line_index: -1, column_index: 0, },
                             });
                         },
                         "Down" => {
-                            rpc_caller.call("gui.buffer_view.move_cursor", &buffer_views::MoveCursorRequest {
+                            sender.call("gui.buffer_view.move_cursor", &buffer_views::MoveCursorRequest {
                                 cursor_id: cursor_id.clone(),
                                 delta: buffer_views::Position { line_index: 1, column_index: 0, },
                             });
                         }
                         "Left" => {
-                            rpc_caller.call("gui.buffer_view.move_cursor", &buffer_views::MoveCursorRequest {
+                            sender.call("gui.buffer_view.move_cursor", &buffer_views::MoveCursorRequest {
                                 cursor_id: cursor_id.clone(),
                                 delta: buffer_views::Position { line_index: 0, column_index: -1, },
                             });
                         },
                         "Right" => {
-                            rpc_caller.call("gui.buffer_view.move_cursor", &buffer_views::MoveCursorRequest {
+                            sender.call("gui.buffer_view.move_cursor", &buffer_views::MoveCursorRequest {
                                 cursor_id: cursor_id.clone(),
                                 delta: buffer_views::Position { line_index: 0, column_index: 1, },
                             });

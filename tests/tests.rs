@@ -24,7 +24,8 @@ pub struct CallbackProcedure<F> {
 impl<F> client::RemoteProcedure for CallbackProcedure<F> where
         F: Fn(json::Value) -> ipc::RpcResult + Send
 {
-    fn call(&mut self, args: json::Value) -> ipc::RpcResult { (self.callback)(args) }
+    fn call(&mut self, _: client::Sender, args: json::Value) -> ipc::RpcResult {
+        (self.callback)(args) }
 }
 
 pub fn create_file(t: &support::TestHarness, name: &str, content: &str) -> path::PathBuf {
