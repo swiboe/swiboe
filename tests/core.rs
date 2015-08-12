@@ -2,6 +2,7 @@ use serde::json;
 use std::env;
 use std::path;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::thread;
 use super::CallbackProcedure;
 use support::TestHarness;
 use switchboard::client;
@@ -42,7 +43,7 @@ struct TestCall {
 
 impl client::RemoteProcedure for TestCall {
     fn priority(&self) -> u16 { self.priority }
-    fn call(&mut self, _: client::Sender, _: json::Value) -> RpcResult {
+    fn call(&mut self, _: client::RpcSender, _: json::Value) -> RpcResult {
         self.result.clone()
     }
 }
@@ -174,29 +175,49 @@ fn call_not_existing_rpc() {
     }), rpc.wait().unwrap());
 }
 
-#[test]
-fn call_streaming_rpc_simple() {
-    let callback_called  = AtomicBool::new(false);
-    {
-        let t = TestHarness::new();
+// NOCOM(#sirver): next step: make rpc_caller check that finish was called on drop, then use it
+// everywhere.
+// #[test]
+// fn call_streaming_rpc_simple() {
+    // let callback_called  = AtomicBool::new(false);
+    // {
+        // // NOCOM(#sirver): test for next_result on non streaming rpc
+        // // NOCOM(#sirver): test for forgetting to call finish()
+        // // NOCOM(#sirver): the current API is really easy to misuse
+        // let t = TestHarness::new();
 
-        let never_called_client = Client::connect(&t.socket_name);
-        never_called_client.new_rpc("test.test", Box::new(CallbackProcedure {
-            priority: 100,
-            callback: |_| {
-                callback_called.store(true, Ordering::Relaxed);
-                RpcResult::success(())
-            },
-        }));
+        // // Since the streaming RPC handles the call, this one should never be called.
+        // let never_called_client = client::Client::connect(&t.socket_name);
+        // never_called_client.new_rpc("test.test", Box::new(CallbackProcedure {
+            // priority: 100,
+            // callback: |_| {
+                // callback_called.store(true, Ordering::Relaxed);
+                // RpcResult::success(())
+            // },
+        // }));
 
-        let streaming_client = Client::connect(&t.socket_name);
-        never_called_client.new_rpc("test.test", Box::new(CallbackProcedure {
-            priority: 50,
-            callback: |_| {
-                thread::spawn(move || {
-                })
-            },
-        }));
-    }
-    assert!(!callback_called.load(Ordering::Relaxed));
-}
+        // let streaming_client = client::Client::connect(&t.socket_name);
+        // never_called_client.new_rpc("test.test", Box::new(CallbackProcedure {
+            // priority: 50,
+            // callback: |rpc_sender, _| {
+                // thread::spawn(move || {
+                    // rpc_sender.partial(as_json(r#"{ "msg": "one" }"#));
+                    // rpc_sender.partial(as_json(r#"{ "msg": "two" }"#));
+                    // rpc_sender.partial(as_json(r#"{ "msg": "three" }"#));
+                    // rpc_sender.finish(RpcResult::success(as_json(r#"{ "foo": "blah" }"#)));
+                // });
+                // RpcResult::Streaming
+            // },
+        // }));
+
+        // let client = client::Client::connect(&t.socket_name);
+        // let rpc = client.call("test.test", &as_json("{}"));
+
+        // assert_eq!(as_json(r#"{ "msg": "one" }"#), rpc.next_result().unwrap());
+        // assert_eq!(as_json(r#"{ "msg": "two" }"#), rpc.next_result().unwrap());
+        // assert_eq!(as_json(r#"{ "msg": "three" }"#), rpc.next_result().unwrap());
+
+        // assert_eq!(RpcResult::success(as_json(r#"{ "foo": "blah" }"#)), rpc.wait().unwrap());
+    // }
+    // assert!(!callback_called.load(Ordering::Relaxed));
+// }

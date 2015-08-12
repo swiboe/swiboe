@@ -6,11 +6,23 @@ use std::io::{self, Read, Write};
 use super::Result;
 
 // NOCOM(#sirver): add documentation (using this lint that forbids not having documentation).
+//
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub enum RpcResponseKind {
+    Last(RpcResult),
+    Partial(json::Value),
+}
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct RpcResponse {
     pub context: String,
-    pub result: RpcResult,
+    pub kind: RpcResponseKind,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct RpcStreamingResult {
+    pub context: String,
+    pub value: json::Value,
 }
 
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
@@ -85,7 +97,6 @@ pub enum RpcResult {
     // NOCOM(#sirver): mention success as a convenient creating for this.
     Ok(json::Value),
     Err(RpcError),
-    // NOCOM(#sirver): Not Handled is never seen by a client, but is send by one.
     NotHandled,
 }
 
@@ -96,9 +107,10 @@ impl RpcResult {
     }
 
     pub fn unwrap_err(self) -> RpcError {
+        use self::RpcResult::*;
         match self {
-            RpcResult::Ok(_) | RpcResult::NotHandled => panic!("Called unwrap_rpc_error on a non_error."),
-            RpcResult::Err(e) => e,
+            Ok(_) | NotHandled => panic!("Called unwrap_rpc_error on a non_error."),
+            Err(e) => e,
         }
     }
 }

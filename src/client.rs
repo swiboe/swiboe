@@ -16,7 +16,7 @@ const CLIENT: mio::Token = mio::Token(1);
 
 pub trait RemoteProcedure: Send {
     fn priority(&self) -> u16 { u16::max_value() }
-    fn call(&mut self, sender: Sender, args: json::Value) -> ipc::RpcResult;
+    fn call(&mut self, rpc_sender: RpcSender, args: json::Value) -> ipc::RpcResult;
 }
 
 pub struct Rpc {
@@ -38,16 +38,21 @@ impl Rpc {
     }
 
     // NOCOM(#sirver): kill?
-    pub fn wait(self) -> Result<ipc::RpcResult> {
+    pub fn wait(&self) -> Result<ipc::RpcResult> {
         // NOCOM(#sirver): how does streaming work?
         let rpc_response = try!(self.recv());
-        Ok(rpc_response.result)
+        match rpc_response.kind {
+            ipc::RpcResponseKind::Last(result) => Ok(result),
+            ipc::RpcResponseKind::Partial(_) => {
+                // NOCOM(#sirver): this is not correct and needs updating.
+                self.wait()
+            }
+        }
     }
 
     // NOCOM(#sirver): figure out error handling for clients, not use Server error?
     pub fn wait_for<T: Deserialize>(&self) -> Result<T> {
-        let rpc_response = try!(self.recv());
-        match rpc_response.result {
+        match try!(self.wait()) {
             ipc::RpcResult::Ok(value) => Ok(try!(json::from_value(value))),
             ipc::RpcResult::Err(err) => panic!("#sirver err: {:#?}", err),
             // NOCOM(#sirver): probably should ignore other errors.
@@ -118,6 +123,8 @@ impl<'a> mio::Handler for Handler<'a> {
 
                         match message {
                             ipc::Message::RpcResponse(rpc_data) => {
+                                // NOCOM(#sirver): if this is a streaming RPC, we should cancel the
+                                // RPC.
                                 // This will quietly drop any updates on functions that we no longer
                                 // know/care about.
                                 self.running_function_calls
@@ -168,7 +175,8 @@ impl<'a> FunctionThread<'a> {
                 },
                 FunctionThreadCommand::Call(rpc_call) => {
                     if let Some(function) = self.remote_procedures.get_mut(&rpc_call.function) {
-                        let result = function.call(Sender {
+                        let result = function.call(RpcSender {
+                            context: rpc_call.context.clone(),
                             event_loop_sender: self.event_loop_sender.clone(),
                         }, rpc_call.args);
 
@@ -178,7 +186,7 @@ impl<'a> FunctionThread<'a> {
                             ipc::Message::RpcResponse(ipc::RpcResponse {
                                 context: rpc_call.context,
                                 // NOCOM(#sirver): what about streaming rpcs?
-                                result: result,
+                                kind: ipc::RpcResponseKind::Last(result),
                             })));
                     }
                     // NOCOM(#sirver): return an error - though if that has happened the
@@ -292,5 +300,26 @@ pub struct Sender {
 impl Sender {
     pub fn call<T: Serialize>(&self, function: &str, args: &T) -> Rpc {
         call(&self.event_loop_sender, function, args)
+    }
+}
+
+#[derive(Clone)]
+pub struct RpcSender {
+    context: String,
+    event_loop_sender: mio::Sender<EventLoopThreadCommand>,
+}
+
+impl RpcSender {
+    pub fn call<T: Serialize>(&self, function: &str, args: &T) -> Rpc {
+        call(&self.event_loop_sender, function, args)
+    }
+
+    pub fn publish<T: Serialize>(&self, args: &T) {
+        // NOCOM(#sirver): implement
+        // self.event_loop_sender.send(EventLoopThreadCommand::Send(context, tx, message)).expect("Call");
+    }
+
+    pub fn finish() {
+        // NOCOM(#sirver): implement
     }
 }

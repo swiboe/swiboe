@@ -73,7 +73,7 @@ struct Scroll {
 }
 
 impl client::RemoteProcedure for Scroll {
-    fn call(&mut self, _: client::Sender, args: json::Value) -> ipc::RpcResult {
+    fn call(&mut self, _: client::RpcSender, args: json::Value) -> ipc::RpcResult {
         let request: ScrollRequest = try_rpc!(json::from_value(args));
 
         let mut buffer_views = self.buffer_views.write().unwrap();
@@ -140,7 +140,7 @@ struct MoveCursor {
 }
 
 impl client::RemoteProcedure for MoveCursor {
-    fn call(&mut self,  _: client::Sender, args: json::Value) -> ipc::RpcResult {
+    fn call(&mut self,  _: client::RpcSender, args: json::Value) -> ipc::RpcResult {
         println!("#sirver Beginning of MoveCursor: {:#?}", time::precise_time_ns());
         let request: MoveCursorRequest = try_rpc!(json::from_value(args));
 
@@ -321,7 +321,7 @@ struct OnBufferCreated {
 }
 
 impl client::RemoteProcedure for OnBufferCreated {
-    fn call(&mut self, _: client::Sender, args: json::Value) -> ipc::RpcResult {
+    fn call(&mut self, _: client::RpcSender, args: json::Value) -> ipc::RpcResult {
         let info: plugin_buffer::BufferCreated = try_rpc!(json::from_value(args));
 
         let rpc = self.sender.call("buffer.get_content", &plugin_buffer::GetContentRequest {

@@ -95,7 +95,7 @@ pub struct NewResponse {
 
 // NOCOM(#sirver): what does serde do if there are extra values in the JSON?
 impl client::RemoteProcedure for New {
-    fn call(&mut self, _: client::Sender, args: json::Value) -> ipc::RpcResult {
+    fn call(&mut self, _: client::RpcSender, args: json::Value) -> ipc::RpcResult {
         // NOCOM(#sirver): need testing for bad request results
         let request: NewRequest = try_rpc!(json::from_value(args));
         let mut buffers = self.buffers.write().unwrap();
@@ -125,7 +125,7 @@ struct Delete {
 }
 
 impl client::RemoteProcedure for Delete {
-    fn call(&mut self, _: client::Sender, args: json::Value) -> ipc::RpcResult {
+    fn call(&mut self, _: client::RpcSender, args: json::Value) -> ipc::RpcResult {
         let request: DeleteRequest = try_rpc!(json::from_value(args));
         let mut buffers = self.buffers.write().unwrap();
         try_rpc!(buffers.delete_buffer(request.buffer_index));
@@ -150,7 +150,7 @@ struct GetContent {
 }
 
 impl client::RemoteProcedure for GetContent {
-    fn call(&mut self, _: client::Sender, args: json::Value) -> ipc::RpcResult {
+    fn call(&mut self, _: client::RpcSender, args: json::Value) -> ipc::RpcResult {
         let request: GetContentRequest = try_rpc!(json::from_value(args));
         let buffers = self.buffers.read().unwrap();
 
@@ -178,7 +178,7 @@ struct Open {
 }
 
 impl client::RemoteProcedure for Open {
-    fn call(&mut self,  _: client::Sender,args: json::Value) -> ipc::RpcResult {
+    fn call(&mut self,  _: client::RpcSender,args: json::Value) -> ipc::RpcResult {
         const FILE_PREFIX: &'static str = "file://";
         let mut request: OpenRequest = try_rpc!(json::from_value(args));
         if !request.uri.starts_with(FILE_PREFIX) {
@@ -214,7 +214,7 @@ struct List {
 }
 
 impl client::RemoteProcedure for List {
-    fn call(&mut self, _: client::Sender, args: json::Value) -> ipc::RpcResult {
+    fn call(&mut self, _: client::RpcSender, args: json::Value) -> ipc::RpcResult {
         let _: ListRequest = try_rpc!(json::from_value(args));
 
         let buffers = self.buffers.read().unwrap();

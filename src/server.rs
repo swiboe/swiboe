@@ -84,7 +84,7 @@ impl Switchboard {
                                 client_id,
                                 ipc::Message::RpcResponse(ipc::RpcResponse {
                                     context: rpc_call.context.clone(),
-                                    result: result,
+                                    kind: ipc::RpcResponseKind::Last(result),
                                 }))).unwrap();
                     } else {
                         match self.functions.get(&rpc_call.function as &str) {
@@ -108,10 +108,10 @@ impl Switchboard {
                                         client_id,
                                         ipc::Message::RpcResponse(ipc::RpcResponse {
                                             context: rpc_call.context.clone(),
-                                            result: ipc::RpcResult::Err(ipc::RpcError {
+                                            kind: ipc::RpcResponseKind::Last(ipc::RpcResult::Err(ipc::RpcError {
                                                 kind: ipc::RpcErrorKind::UnknownRpc,
                                                 details: None,
-                                            }),
+                                            })),
                                         }))).unwrap();
                             }
                         }
@@ -122,11 +122,15 @@ impl Switchboard {
                 },
                 Command::SendDataFailed(client_id, msg, err) => {
                     let action = match msg {
-                        ipc::Message::RpcResponse(_) => "dropped the RpcResponse.",
+                        ipc::Message::RpcResponse(_) => {
+                            // NOCOM(#sirver): on a streaming rpc, this should also try to cancel
+                            // the RPC.
+                            "dropped the RpcResponse."
+                        },
                         ipc::Message::RpcCall(rpc_call) => {
                             self.on_rpc_response(ipc::RpcResponse {
                                 context: rpc_call.context,
-                                result: ipc::RpcResult::NotHandled,
+                                kind: ipc::RpcResponseKind::Last(ipc::RpcResult::NotHandled),
                             });
                             "surrogate replied as NotHandled."
                         }
@@ -181,46 +185,57 @@ impl Switchboard {
             }
         };
 
-        match rpc_response.result {
-            ipc::RpcResult::Ok(_) | ipc::RpcResult::Err(_) => {
-                let running_rpc = running_rpc.remove();
-                self.ipc_bridge_commands.send(ipc_bridge::Command::SendData(
-                        running_rpc.caller,
-                        ipc::Message::RpcResponse(rpc_response))).unwrap();
+        match rpc_response.kind {
+            ipc::RpcResponseKind::Last(result) => match result {
+                ipc::RpcResult::Ok(_) | ipc::RpcResult::Err(_) => {
+                    let running_rpc = running_rpc.remove();
+                    self.ipc_bridge_commands.send(ipc_bridge::Command::SendData(
+                            running_rpc.caller,
+                            ipc::Message::RpcResponse(ipc::RpcResponse {
+                                context: running_rpc.rpc_call.context,
+                                kind: ipc::RpcResponseKind::Last(
+                                    result
+                                ),
+                            }))).unwrap();
+                },
+                ipc::RpcResult::NotHandled => {
+                    // TODO(sirver): If a new function has been registered or been deleted since we
+                    // last saw this context, this might skip a handler or call one twice. We need
+                    // a better way to keep track where we are in the list of handlers.
+                    let running_rpc = running_rpc.get_mut();
+
+
+                    running_rpc.last_index += 1;
+                    match {
+                        // NOCOM(#sirver): quite some code duplication with RpcCall
+                        self.functions.get(&running_rpc.rpc_call.function as &str).and_then(|vec| {
+                            vec.get(running_rpc.last_index)
+                        })
+                    } {
+                        Some(function) => {
+                            // NOCOM(#sirver): eventually, when we keep proper track of our rpc calls, this should be
+                            // able to move again.
+                            self.ipc_bridge_commands.send(ipc_bridge::Command::SendData(
+                                    function.client_id,
+                                    ipc::Message::RpcCall(running_rpc.rpc_call.clone())
+                                    )).unwrap();
+                        },
+                        None => {
+                            self.ipc_bridge_commands.send(ipc_bridge::Command::SendData(
+                                    running_rpc.caller,
+                                    ipc::Message::RpcResponse(ipc::RpcResponse {
+                                        context: running_rpc.rpc_call.context.clone(),
+                                        kind: ipc::RpcResponseKind::Last(ipc::RpcResult::NotHandled),
+                                    }))).unwrap();
+                        }
+                    };
+                    // NOCOM(#sirver): we ignore timeouts.
+                }
             },
-            ipc::RpcResult::NotHandled => {
-                // TODO(sirver): If a new function has been registered or been deleted since we
-                // last saw this context, this might skip a handler or call one twice. We need
-                // a better way to keep track where we are in the list of handlers.
-                let running_rpc = running_rpc.get_mut();
-
-
-                running_rpc.last_index += 1;
-                match {
-                    // NOCOM(#sirver): quite some code duplication with RpcCall
-                    self.functions.get(&running_rpc.rpc_call.function as &str).and_then(|vec| {
-                        vec.get(running_rpc.last_index)
-                    })
-                } {
-                    Some(function) => {
-                        // NOCOM(#sirver): eventually, when we keep proper track of our rpc calls, this should be
-                        // able to move again.
-                        self.ipc_bridge_commands.send(ipc_bridge::Command::SendData(
-                                function.client_id,
-                                ipc::Message::RpcCall(running_rpc.rpc_call.clone())
-                                )).unwrap();
-                    },
-                    None => {
-                        self.ipc_bridge_commands.send(ipc_bridge::Command::SendData(
-                                running_rpc.caller,
-                                ipc::Message::RpcResponse(ipc::RpcResponse {
-                                    context: running_rpc.rpc_call.context.clone(),
-                                    result: ipc::RpcResult::NotHandled,
-                                }))).unwrap();
-                    }
-                };
-                // NOCOM(#sirver): we ignore timeouts.
-            }
+            ipc::RpcResponseKind::Partial(value) => {
+                // NOCOM(#sirver): What happens on partial data?
+                unimplemented!();
+            },
         }
     }
 }

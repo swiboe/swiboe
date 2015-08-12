@@ -59,7 +59,7 @@ pub struct ListFilesResponse {
 struct ListFiles;
 
 impl client::RemoteProcedure for ListFiles {
-    fn call(&mut self, args: json::Value) -> ipc::RpcResult {
+    fn call(&mut self, rpc_sender: client::RpcSender, args: json::Value) -> ipc::RpcResult {
         let request: ListFilesRequest = try_rpc!(json::from_value(args));
 
         let context = Uuid::new_v4().to_hyphenated_string();

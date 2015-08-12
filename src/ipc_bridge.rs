@@ -132,7 +132,7 @@ impl mio::Handler for IpcBridge {
                                     },
                                     ipc::Message::RpcResponse(rpc_response) => {
                                         self.commands.send(server::Command::RpcResponse(rpc_response)).expect("RpcResponse");
-                                    }
+                                    },
                                 }
                             }
                         }
