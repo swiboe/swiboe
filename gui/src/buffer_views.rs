@@ -230,11 +230,11 @@ impl BufferViews {
 
     fn update_all_buffers_blocking(&mut self) {
         // NOCOM(#sirver): all these unwraps are very dangerous.
-        let rpc = self.sender.call("buffer.list", &plugin_buffer::ListRequest);
+        let mut rpc = self.sender.call("buffer.list", &plugin_buffer::ListRequest);
         let result: plugin_buffer::ListResponse = rpc.wait_for().unwrap();
 
         for buffer_index in result.buffer_indices {
-            let rpc = self.sender.call("buffer.get_content", &plugin_buffer::GetContentRequest {
+            let mut rpc = self.sender.call("buffer.get_content", &plugin_buffer::GetContentRequest {
                 buffer_index: buffer_index,
             });
             let response: plugin_buffer::GetContentResponse = rpc.wait_for().unwrap();
@@ -325,7 +325,7 @@ impl client::RemoteProcedure for OnBufferCreated {
     fn call(&mut self, mut sender: client::RpcSender, args: json::Value) {
         let info: plugin_buffer::BufferCreated = try_rpc!(sender, json::from_value(args));
 
-        let rpc = self.sender.call("buffer.get_content", &plugin_buffer::GetContentRequest {
+        let mut rpc = self.sender.call("buffer.get_content", &plugin_buffer::GetContentRequest {
             buffer_index: info.buffer_index,
         });
         match rpc.wait().unwrap() {

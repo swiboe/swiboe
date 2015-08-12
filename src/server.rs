@@ -18,7 +18,7 @@ use super::plugin_list_files;
 const CORE_FUNCTIONS_PREFIX: &'static str = "core.";
 
 pub enum Command {
-    Shutdown,
+    Quit,
     NewRpc(ipc_bridge::ClientId, String, u16),
     RpcCall(ipc_bridge::ClientId, ipc::RpcCall),
     RpcResponse(ipc::RpcResponse),
@@ -54,7 +54,7 @@ impl Switchboard {
     pub fn spin_forever(&mut self) {
         while let Ok(command) = self.commands.recv() {
             match command {
-                Command::Shutdown => break,
+                Command::Quit => break,
                 Command::NewRpc(client_id, name, priority) => {
                     // NOCOM(#sirver): deny everything starting with 'core'
                     // NOCOM(#sirver): make sure the client_id is known.
@@ -186,6 +186,15 @@ impl Switchboard {
         };
 
         match rpc_response.kind {
+            ipc::RpcResponseKind::Partial(value) => {
+                let running_rpc = running_rpc.get();
+                self.ipc_bridge_commands.send(ipc_bridge::Command::SendData(
+                        running_rpc.caller,
+                        ipc::Message::RpcResponse(ipc::RpcResponse {
+                            context: running_rpc.rpc_call.context.clone(),
+                            kind: ipc::RpcResponseKind::Partial(value),
+                        }))).unwrap();
+            },
             ipc::RpcResponseKind::Last(result) => match result {
                 ipc::RpcResult::Ok(_) | ipc::RpcResult::Err(_) => {
                     let running_rpc = running_rpc.remove();
@@ -232,10 +241,6 @@ impl Switchboard {
                     // NOCOM(#sirver): we ignore timeouts.
                 }
             },
-            ipc::RpcResponseKind::Partial(value) => {
-                // NOCOM(#sirver): What happens on partial data?
-                unimplemented!();
-            },
         }
     }
 }
@@ -243,7 +248,9 @@ impl Switchboard {
 pub struct Server<'a> {
     socket_name: PathBuf,
     commands: CommandSender,
+    ipc_bridge_commands: mio::Sender<ipc_bridge::Command>,
     switchboard_thread: Option<thread::JoinHandle<()>>,
+    event_loop_thread: Option<thread::JoinHandle<()>>,
     buffer_plugin: Option<plugin_buffer::BufferPlugin<'a>>,
     list_files_plugin: Option<plugin_list_files::ListFilesPlugin<'a>>,
 }
@@ -252,16 +259,18 @@ impl<'a> Server<'a> {
     pub fn launch(socket_name: &Path) -> Self {
         let (tx, rx) = channel();
 
+        // TODO(sirver): grep for unwrap and remove
+        let mut event_loop = mio::EventLoop::new().unwrap();
+
         let mut server = Server {
             socket_name: socket_name.to_path_buf(),
             commands: tx,
-            switchboard_thread: None,
+            ipc_bridge_commands: event_loop.channel(),
             buffer_plugin: None,
             list_files_plugin: None,
+            switchboard_thread: None,
+            event_loop_thread: None,
         };
-
-        // TODO(sirver): grep for unwrap and remove
-        let mut event_loop = mio::EventLoop::new().unwrap();
 
         let mut switchboard = Switchboard {
             functions: HashMap::new(),
@@ -281,8 +290,6 @@ impl<'a> Server<'a> {
 
         server.switchboard_thread = Some(thread::spawn(move || {
             switchboard.spin_forever();
-            switchboard.ipc_bridge_commands.send(ipc_bridge::Command::Quit).unwrap();
-            event_loop_thread.join().unwrap();
         }));
 
         server.buffer_plugin = Some(
@@ -295,15 +302,23 @@ impl<'a> Server<'a> {
     pub fn shutdown(&mut self) {
         // We might already be shutdown and commands will not be connected anymore. So ignore send
         // errors.
-        let _ = self.commands.send(Command::Shutdown);
+        let _ = self.commands.send(Command::Quit);
         self.wait_for_shutdown();
     }
 
     pub fn wait_for_shutdown(&mut self) {
+        // Any of the threads might have already panicked. So we ignore send errors.
+        let _ = self.ipc_bridge_commands.send(ipc_bridge::Command::Quit);
+        let _ = self.commands.send(Command::Quit);
+
         if let Some(thread) = self.switchboard_thread.take() {
             thread.join().expect("Could not join switchboard_thread.");
-            fs::remove_file(&self.socket_name).expect(
-                &format!("Could not remove socket {:?}", self.socket_name));
         }
+        if let Some(thread) = self.event_loop_thread.take() {
+            thread.join().expect("Could not join event_loop_thread.");
+        }
+
+        fs::remove_file(&self.socket_name).expect(
+            &format!("Could not remove socket {:?}", self.socket_name));
     }
 }

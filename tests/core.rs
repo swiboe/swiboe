@@ -63,7 +63,7 @@ fn new_rpc_simple() {
         result: RpcResult::Ok(test_msg.clone()),
     }));
 
-    let rpc = client2.call("test.test", &test_msg);
+    let mut rpc = client2.call("test.test", &test_msg);
     assert_eq!(rpc.wait().unwrap(), RpcResult::Ok(test_msg));
 }
 
@@ -85,7 +85,7 @@ fn new_rpc_with_priority() {
     }));
 
     let client3 = client::Client::connect(&t.socket_name);
-    let rpc = client3.call("test.test", &as_json(r#"{}"#));
+    let mut rpc = client3.call("test.test", &as_json(r#"{}"#));
     assert_eq!(RpcResult::Ok(as_json(r#"{ "from": "client2" }"#)), rpc.wait().unwrap());
 }
 
@@ -107,7 +107,7 @@ fn new_rpc_with_priority_first_does_not_handle() {
     }));
 
     let client3 = client::Client::connect(&t.socket_name);
-    let rpc = client3.call("test.test", &as_json(r#"{}"#));
+    let mut rpc = client3.call("test.test", &as_json(r#"{}"#));
     assert_eq!(RpcResult::Ok(as_json(r#"{ "from": "client1" }"#)), rpc.wait().unwrap());
 }
 
@@ -124,7 +124,7 @@ fn rpc_not_calling_finish() {
 
     let client2 = client::Client::connect(&t.socket_name);
     // TODO(sirver): This should timeout, but that is not implemented yet.
-    let rpc = client2.call("test.test", &as_json(r#"{}"#));
+    let mut rpc = client2.call("test.test", &as_json(r#"{}"#));
 
     // Should be plenty to have test.test being handled.
     thread::sleep_ms(500);
@@ -159,24 +159,24 @@ fn client_disconnects_should_not_stop_handling_of_rpcs() {
 
     let client = client::Client::connect(&t.socket_name);
 
-    let rpc = client.call("test.test", &as_json(r#"{}"#));
+    let mut rpc = client.call("test.test", &as_json(r#"{}"#));
     assert_eq!(RpcResult::Ok(as_json(r#"{ "from": "client1" }"#)), rpc.wait().unwrap());
 
     drop(client1); // clients: 0 2 3
-    let rpc = client.call("test.test", &as_json(r#"{}"#));
+    let mut rpc = client.call("test.test", &as_json(r#"{}"#));
     assert_eq!(RpcResult::Ok(as_json(r#"{ "from": "client3" }"#)), rpc.wait().unwrap());
 
     drop(client0); // clients: 2 3
-    let rpc = client.call("test.test", &as_json(r#"{}"#));
+    let mut rpc = client.call("test.test", &as_json(r#"{}"#));
     assert_eq!(RpcResult::Ok(as_json(r#"{ "from": "client3" }"#)), rpc.wait().unwrap());
 
     drop(client3); // clients: 2
-    let rpc = client.call("test.test", &as_json(r#"{}"#));
+    let mut rpc = client.call("test.test", &as_json(r#"{}"#));
     assert_eq!(RpcResult::NotHandled, rpc.wait().unwrap());
 
     drop(client2); // clients:
 
-    let rpc = client.call("test.test", &as_json(r#"{}"#));
+    let mut rpc = client.call("test.test", &as_json(r#"{}"#));
     assert_eq!(RpcResult::Err(RpcError {
         kind: RpcErrorKind::UnknownRpc,
         details: None,
@@ -188,52 +188,40 @@ fn call_not_existing_rpc() {
     let t = TestHarness::new();
 
     let client = client::Client::connect(&t.socket_name);
-    let rpc = client.call("not_existing", &as_json("{}"));
+    let mut rpc = client.call("not_existing", &as_json("{}"));
     assert_eq!(RpcResult::Err(RpcError {
         kind: RpcErrorKind::UnknownRpc,
         details: None,
     }), rpc.wait().unwrap());
 }
 
-// #[test]
-// fn call_streaming_rpc_simple() {
-    // let callback_called  = AtomicBool::new(false);
-    // {
-        // // NOCOM(#sirver): test for next_result on non streaming rpc
-        // let t = TestHarness::new();
+#[test]
+fn call_streaming_rpc_simple() {
+    let callback_called = AtomicBool::new(false);
+    {
+        // NOCOM(#sirver): test for next_result on non streaming rpc
+        let t = TestHarness::new();
 
-        // // Since the streaming RPC handles the call, this one should never be called.
-        // let never_called_client = client::Client::connect(&t.socket_name);
-        // never_called_client.new_rpc("test.test", Box::new(CallbackProcedure {
-            // priority: 100,
-            // callback: |_| {
-                // callback_called.store(true, Ordering::Relaxed);
-                // RpcResult::success(())
-            // },
-        // }));
+        let streaming_client = client::Client::connect(&t.socket_name);
+        streaming_client.new_rpc("test.test", Box::new(CallbackProcedure {
+            priority: 50,
+            callback: |mut rpc_sender: client::RpcSender, _| {
+                thread::spawn(move || {
+                    rpc_sender.update(&as_json(r#"{ "msg": "one" }"#));
+                    rpc_sender.update(&as_json(r#"{ "msg": "two" }"#));
+                    rpc_sender.update(&as_json(r#"{ "msg": "three" }"#));
+                    rpc_sender.finish(RpcResult::success(&as_json(r#"{ "foo": "blah" }"#)));
+                });
+            },
+        }));
 
-        // let streaming_client = client::Client::connect(&t.socket_name);
-        // never_called_client.new_rpc("test.test", Box::new(CallbackProcedure {
-            // priority: 50,
-            // callback: |rpc_sender, _| {
-                // thread::spawn(move || {
-                    // rpc_sender.partial(as_json(r#"{ "msg": "one" }"#));
-                    // rpc_sender.partial(as_json(r#"{ "msg": "two" }"#));
-                    // rpc_sender.partial(as_json(r#"{ "msg": "three" }"#));
-                    // rpc_sender.finish(RpcResult::success(as_json(r#"{ "foo": "blah" }"#)));
-                // });
-                // RpcResult::Streaming
-            // },
-        // }));
+        let client = client::Client::connect(&t.socket_name);
+        let mut rpc = client.call("test.test", &as_json("{}"));
 
-        // let client = client::Client::connect(&t.socket_name);
-        // let rpc = client.call("test.test", &as_json("{}"));
-
-        // assert_eq!(as_json(r#"{ "msg": "one" }"#), rpc.next_result().unwrap());
-        // assert_eq!(as_json(r#"{ "msg": "two" }"#), rpc.next_result().unwrap());
-        // assert_eq!(as_json(r#"{ "msg": "three" }"#), rpc.next_result().unwrap());
-
-        // assert_eq!(RpcResult::success(as_json(r#"{ "foo": "blah" }"#)), rpc.wait().unwrap());
-    // }
-    // assert!(!callback_called.load(Ordering::Relaxed));
-// }
+        assert_eq!(as_json(r#"{ "msg": "one" }"#), rpc.recv().unwrap().unwrap());
+        assert_eq!(as_json(r#"{ "msg": "two" }"#), rpc.recv().unwrap().unwrap());
+        assert_eq!(as_json(r#"{ "msg": "three" }"#), rpc.recv().unwrap().unwrap());
+        assert_eq!(RpcResult::success(as_json(r#"{ "foo": "blah" }"#)), rpc.wait().unwrap());
+    }
+    assert!(!callback_called.load(Ordering::Relaxed));
+}

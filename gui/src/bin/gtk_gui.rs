@@ -108,14 +108,14 @@ impl SwitchboardGtkGui {
                     println!("#sirver keypress: {}", time::precise_time_ns());
                     match &name_str as &str {
                         "F2" => {
-                            let rpc = sender.call("buffer.open", &plugin_buffer::OpenRequest {
+                            let mut rpc = sender.call("buffer.open", &plugin_buffer::OpenRequest {
                                 uri: "file:///Users/sirver/Desktop/Programming/rust/Switchboard/src/client.rs".into(),
                             });
                             let b: plugin_buffer::OpenResponse = rpc.wait_for().unwrap();
                             println!("#sirver b: {:#?}", b);
                         },
                         "F3" => {
-                            let rpc = sender.call("list_files", &plugin_list_files::ListFilesRequest {
+                            let mut rpc = sender.call("list_files", &plugin_list_files::ListFilesRequest {
                                 directory: "/Users/sirver/Desktop/Programming/".into(),
                             });
                             let b: plugin_list_files::ListFilesResult = rpc.wait_for().unwrap();

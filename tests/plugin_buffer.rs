@@ -10,7 +10,7 @@ fn create_buffer(client: &client::Client, expected_index: usize, content: Option
     let request = plugin_buffer::NewRequest {
         content: content.map(|s| s.to_string()),
     };
-    let rpc = client.call("buffer.new", &request);
+    let mut rpc = client.call("buffer.new", &request);
     assert_eq!(rpc.wait().unwrap(), ipc::RpcResult::success(plugin_buffer::NewResponse {
         buffer_index: expected_index,
     }));
@@ -42,7 +42,7 @@ fn buffer_new_with_content() {
     let content = "blub\nblah\nbli";
     create_buffer(&client, 0, Some(content));
 
-    let rpc = client.call("buffer.get_content", &plugin_buffer::GetContentRequest {
+    let mut rpc = client.call("buffer.get_content", &plugin_buffer::GetContentRequest {
         buffer_index: 0,
     });
     assert_eq!(rpc.wait().unwrap(), ipc::RpcResult::success(plugin_buffer::GetContentResponse {
@@ -55,7 +55,7 @@ fn buffer_open_unhandled_uri() {
     let t = TestHarness::new();
     let client = client::Client::connect(&t.socket_name);
 
-    let rpc = client.call("buffer.open", &plugin_buffer::OpenRequest {
+    let mut rpc = client.call("buffer.open", &plugin_buffer::OpenRequest {
         uri: "blumba://foo".into(),
     });
 
@@ -70,14 +70,14 @@ fn buffer_open_file() {
     let content = "blub\nblah\nbli";
     let path = create_file(&t, "foo", &content);
 
-    let rpc = client.call("buffer.open", &plugin_buffer::OpenRequest {
+    let mut rpc = client.call("buffer.open", &plugin_buffer::OpenRequest {
         uri: format!("file://{}", path.to_str().unwrap()),
     });
     assert_eq!(rpc.wait().unwrap(), ipc::RpcResult::success(plugin_buffer::OpenResponse {
         buffer_index: 0,
     }));
 
-    let rpc = client.call("buffer.get_content", &plugin_buffer::GetContentRequest {
+    let mut rpc = client.call("buffer.get_content", &plugin_buffer::GetContentRequest {
         buffer_index: 0,
     });
     assert_eq!(rpc.wait().unwrap(), ipc::RpcResult::success(plugin_buffer::GetContentResponse {
@@ -105,7 +105,7 @@ fn buffer_delete() {
         let request = plugin_buffer::DeleteRequest {
             buffer_index: 0,
         };
-        let rpc = client.call("buffer.delete", &request);
+        let mut rpc = client.call("buffer.delete", &request);
         assert_eq!(rpc.wait().unwrap(), ipc::RpcResult::success(()));
     }
     assert!(callback_called.load(Ordering::Relaxed));
@@ -119,7 +119,7 @@ fn buffer_delete_non_existing() {
     let request = plugin_buffer::DeleteRequest {
         buffer_index: 0,
     };
-    let rpc = client.call("buffer.delete", &request);
+    let mut rpc = client.call("buffer.delete", &request);
     assert_eq!(
         rpc.wait().unwrap().unwrap_err().details.unwrap().as_string(), Some("unknown_buffer"));
 }

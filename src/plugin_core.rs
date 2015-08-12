@@ -23,7 +23,7 @@ impl CorePlugin {
     pub fn call(&self, caller: ipc_bridge::ClientId, rpc_call: &ipc::RpcCall) -> ipc::RpcResult {
         match &rpc_call.function as &str {
             "core.exit" => {
-                self.commands.send(server::Command::Shutdown).unwrap();
+                self.commands.send(server::Command::Quit).unwrap();
                 ipc::RpcResult::success(())
             },
             // NOCOM(#sirver): These args can be pulled out into Serializable structs.

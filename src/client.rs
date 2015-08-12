@@ -21,7 +21,8 @@ pub trait RemoteProcedure: Send {
 
 pub struct Rpc {
     // NOCOM(#sirver): something more structured?
-    pub values: mpsc::Receiver<ipc::RpcResponse>,
+    values: mpsc::Receiver<ipc::RpcResponse>,
+    result: Option<ipc::RpcResult>,
 }
 
 impl Rpc {
@@ -29,29 +30,30 @@ impl Rpc {
         // NOCOM(#sirver): implement drop so that we can cancel an RPC.
         Rpc {
             values: values,
+            result: None,
         }
     }
 
     // NOCOM(#sirver): timeout?
-    fn recv(&self) -> Result<ipc::RpcResponse> {
-        Ok(try!(self.values.recv()))
-    }
-
-    // NOCOM(#sirver): kill?
-    pub fn wait(&self) -> Result<ipc::RpcResult> {
-        // NOCOM(#sirver): how does streaming work?
-        let rpc_response = try!(self.recv());
+    pub fn recv(&mut self) -> Result<Option<json::Value>> {
+        let rpc_response = try!(self.values.recv());
         match rpc_response.kind {
-            ipc::RpcResponseKind::Last(result) => Ok(result),
-            ipc::RpcResponseKind::Partial(_) => {
-                // NOCOM(#sirver): this is not correct and needs updating.
-                self.wait()
-            }
+            ipc::RpcResponseKind::Partial(value) => Ok(Some(value)),
+            ipc::RpcResponseKind::Last(result) => {
+                self.result = Some(result);
+                Ok(None)
+            },
         }
     }
 
+    pub fn wait(&mut self) -> Result<ipc::RpcResult> {
+        while let Some(_) = try!(self.recv()) {
+        }
+        Ok(self.result.take().unwrap())
+    }
+
     // NOCOM(#sirver): figure out error handling for clients, not use Server error?
-    pub fn wait_for<T: Deserialize>(&self) -> Result<T> {
+    pub fn wait_for<T: Deserialize>(&mut self) -> Result<T> {
         match try!(self.wait()) {
             ipc::RpcResult::Ok(value) => Ok(try!(json::from_value(value))),
             ipc::RpcResult::Err(err) => panic!("#sirver err: {:#?}", err),
@@ -250,7 +252,7 @@ impl<'a> Client<'a> {
     // NOCOM(#hrapp): 'a needed?
     pub fn new_rpc(&self, name: &str, remote_procedure: Box<RemoteProcedure + 'a>) {
         // NOCOM(#sirver): what happens when this is already inserted? crash probably
-        let rpc = self.call("core.new_rpc", &NewRpcRequest {
+        let mut rpc = self.call("core.new_rpc", &NewRpcRequest {
             priority: remote_procedure.priority(),
             name: name.into(),
         });
@@ -313,9 +315,14 @@ impl RpcSender {
         call(&self.event_loop_sender, function, args)
     }
 
-    pub fn publish<T: Serialize>(&self, args: &T) {
-        // NOCOM(#sirver): implement
-        // self.event_loop_sender.send(EventLoopThreadCommand::Send(context, tx, message)).expect("Call");
+    pub fn update<T: Serialize>(&self, args: &T) {
+        assert!(!self.finish_called, "Finish has already been called!");
+
+        let msg = ipc::Message::RpcResponse(ipc::RpcResponse {
+            context: self.context.clone(),
+            kind: ipc::RpcResponseKind::Partial(json::to_value(args)),
+        });
+        self.event_loop_sender.send(EventLoopThreadCommand::Send(msg)).expect("Send");
     }
 
     pub fn finish(&mut self, result: ipc::RpcResult) {
