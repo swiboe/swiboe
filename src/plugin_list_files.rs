@@ -1,8 +1,10 @@
 use serde::json;
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::convert;
 use std::fs::{self, DirEntry};
 use std::io;
+use std::mem;
 use std::ops;
 use std::path::Path;
 use std::path;
@@ -10,6 +12,7 @@ use std::string;
 use std::thread;
 use super::client;
 use super::ipc;
+use time;
 use uuid::Uuid;
 
 // NOCOM(#sirver): rewrite
@@ -30,8 +33,7 @@ fn visit_dirs(dir: &Path, cb: &mut FnMut(&DirEntry)) -> io::Result<()> {
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
-pub struct ListFilesResult {
-    context: String,
+pub struct ListFilesUpdate {
     pub files: Vec<String>,
 }
 
@@ -41,9 +43,7 @@ pub struct ListFilesRequest {
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
-pub struct ListFilesResponse {
-    pub context: String,
-}
+pub struct ListFilesResponse;
 
 struct ListFiles;
 
@@ -51,24 +51,24 @@ impl client::RemoteProcedure for ListFiles {
     fn call(&mut self, mut sender: client::RpcSender, args: json::Value) {
         let request: ListFilesRequest = try_rpc!(sender, json::from_value(args));
 
-        let context = Uuid::new_v4().to_hyphenated_string();
-
-        let context_clone = context.clone();
         thread::spawn(move || {
-            // let mut files = Vec::new();
-            let mut nfiles = 0;
+            let mut files = Vec::new();
+            let mut last = time::SteadyTime::now();
             visit_dirs(Path::new(&request.directory), &mut |entry| {
-                println!("#sirver entry: {:#?}", &entry.path());
-                nfiles += 1;
-                // files.push(entry.path());
+                files.push(entry.path().to_string_lossy().into_owned());
+                let now = time::SteadyTime::now();
+                if now - last > time::Duration::milliseconds(50) {
+                    last = now;
+                    sender.update(&ListFilesUpdate {
+                        files: mem::replace(&mut files, Vec::new())
+                    });
+                }
             });
-            println!("#sirver nfiles: {:#?}", nfiles);
+
+            let response = ListFilesResponse;
+            sender.finish(ipc::RpcResult::success(response));
         });
 
-        let response = ListFilesResponse {
-            context: context,
-        };
-        sender.finish(ipc::RpcResult::success(response));
     }
 }
 

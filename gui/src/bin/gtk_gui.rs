@@ -118,8 +118,17 @@ impl SwitchboardGtkGui {
                             let mut rpc = sender.call("list_files", &plugin_list_files::ListFilesRequest {
                                 directory: "/Users/sirver/Desktop/Programming/".into(),
                             });
-                            let b: plugin_list_files::ListFilesResult = rpc.wait_for().unwrap();
+                            let mut num = 0;
+                            let start = time::SteadyTime::now();
+                            while let Some(b) = rpc.recv().unwrap() {
+                                let b: plugin_list_files::ListFilesUpdate = json::from_value(b).unwrap();
+                                num += b.files.len();
+                                println!("#sirver num: {:#?}", num);
+                            }
+                            let b: plugin_list_files::ListFilesResponse = rpc.wait_for().unwrap();
                             println!("#sirver b: {:#?}", b);
+                            let duration = time::SteadyTime::now() - start;
+                            println!("#sirver duration: {:#?}", duration);
                         },
                         "Up" => {
                             sender.call("gui.buffer_view.move_cursor", &buffer_views::MoveCursorRequest {

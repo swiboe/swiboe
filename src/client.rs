@@ -36,6 +36,10 @@ impl Rpc {
 
     // NOCOM(#sirver): timeout?
     pub fn recv(&mut self) -> Result<Option<json::Value>> {
+        if (self.result.is_some()) {
+            return Ok(None);
+        }
+
         let rpc_response = try!(self.values.recv());
         match rpc_response.kind {
             ipc::RpcResponseKind::Partial(value) => Ok(Some(value)),
