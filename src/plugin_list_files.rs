@@ -12,18 +12,6 @@ use super::client;
 use super::ipc;
 use uuid::Uuid;
 
-// NOCOM(#sirver): duplicated
-macro_rules! try_rpc {
-    ($sender:ident, $expr:expr) => (match $expr {
-        Ok(val) => val,
-        Err(err) => {
-            $sender.finish(ipc::RpcResult::Err(convert::From::from(err)));
-            return;
-        }
-    })
-}
-
-
 // NOCOM(#sirver): rewrite
 // one possible implementation of fs::walk_dir only visiting files
 fn visit_dirs(dir: &Path, cb: &mut FnMut(&DirEntry)) -> io::Result<()> {

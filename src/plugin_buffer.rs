@@ -64,16 +64,6 @@ impl From<io::Error> for ipc::RpcError {
      }
 }
 
-macro_rules! try_rpc {
-    ($sender:ident, $expr:expr) => (match $expr {
-        Ok(val) => val,
-        Err(err) => {
-            $sender.finish(ipc::RpcResult::Err(convert::From::from(err)));
-            return;
-        }
-    })
-}
-
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub struct BufferCreated {
     pub buffer_index: usize,

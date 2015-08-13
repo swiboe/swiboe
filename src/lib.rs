@@ -12,6 +12,17 @@ extern crate serde;
 extern crate time;
 extern crate uuid;
 
+#[macro_export]
+macro_rules! try_rpc {
+    ($sender:ident, $expr:expr) => (match $expr {
+        Ok(val) => val,
+        Err(err) => {
+            $sender.finish(ipc::RpcResult::Err(convert::From::from(err)));
+            return;
+        }
+    })
+}
+
 mod ipc_bridge;
 pub mod client;
 pub mod error;

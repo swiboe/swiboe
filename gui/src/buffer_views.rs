@@ -27,17 +27,6 @@ use switchboard::plugin_buffer;
 use time;
 use uuid::Uuid;
 
-// NOCOM(#sirver): duplicated. Export from client.
-macro_rules! try_rpc {
-    ($sender:ident, $expr:expr) => (match $expr {
-        Ok(val) => val,
-        Err(err) => {
-            $sender.finish(ipc::RpcResult::Err(convert::From::from(err)));
-            return;
-        }
-    })
-}
-
 // NOCOM(#sirver): nothing in this file is tested .
 #[derive(Debug)]
 pub enum BufferViewError {

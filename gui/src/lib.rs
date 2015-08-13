@@ -5,12 +5,12 @@
 #![feature(str_split_at)]
 #![plugin(serde_macros)]
 
+#[macro_use] extern crate switchboard;
 extern crate cairo;
 extern crate gdk;
 extern crate glib;
 extern crate gtk;
 extern crate serde;
-extern crate switchboard;
 extern crate time;
 extern crate uuid;
 

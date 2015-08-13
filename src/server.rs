@@ -300,17 +300,13 @@ impl<'a> Server<'a> {
     }
 
     pub fn shutdown(&mut self) {
-        // We might already be shutdown and commands will not be connected anymore. So ignore send
-        // errors.
+        // Any of the threads might have already panicked. So we ignore send errors.
+        let _ = self.ipc_bridge_commands.send(ipc_bridge::Command::Quit);
         let _ = self.commands.send(Command::Quit);
         self.wait_for_shutdown();
     }
 
     pub fn wait_for_shutdown(&mut self) {
-        // Any of the threads might have already panicked. So we ignore send errors.
-        let _ = self.ipc_bridge_commands.send(ipc_bridge::Command::Quit);
-        let _ = self.commands.send(Command::Quit);
-
         if let Some(thread) = self.switchboard_thread.take() {
             thread.join().expect("Could not join switchboard_thread.");
         }
