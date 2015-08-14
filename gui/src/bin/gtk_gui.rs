@@ -1,5 +1,4 @@
 #![cfg(not(test))]
-#![feature(scoped)]
 
 extern crate cairo;
 extern crate gdk;
@@ -184,7 +183,7 @@ fn main() {
     let client = client::Client::connect(path::Path::new("/tmp/sb.socket"));
     let mut switchboard = SwitchboardGtkGui::new(&client);
 
-    let guard = thread::scoped(move || {
+    let join_handle = thread::spawn(move || {
         while let Ok(command) = switchboard.gui_commands.recv() {
             match command {
                 GuiCommand::Quit => break,
@@ -203,4 +202,5 @@ fn main() {
     });
 
     gtk::main();
+    join_handle.join().unwrap();
 }
