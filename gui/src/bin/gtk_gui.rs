@@ -79,7 +79,7 @@ impl SwitchboardGtkGui {
         let buffer_view_widget = buffer_view_widget::BufferViewWidget::new(
             gui.buffer_views.clone(),
         );
-        vbox.pack_start(buffer_view_widget.widget(), true, true, 0);
+        vbox.pack_start(buffer_view_widget.overlay(), true, true, 0);
         GLOBAL.with(|global| {
             *global.borrow_mut() = Some(buffer_view_widget)
         });
@@ -95,7 +95,7 @@ impl SwitchboardGtkGui {
         // let drawing_area_clone = drawing_area.clone();
         let buffers_clone = gui.buffer_views.clone();
         let sender = client.new_sender();
-        window.connect_key_press_event(move |_, key| {
+        window.connect_key_press_event(move |window, key| {
             // println!("#sirver key: {:#?}", key);
             let state = (*key).state;
             println!("#sirver state: {:#?}", state);
@@ -128,6 +128,13 @@ impl SwitchboardGtkGui {
                             println!("#sirver b: {:#?}", b);
                             let duration = time::SteadyTime::now() - start;
                             println!("#sirver duration: {:#?}", duration);
+                        },
+                        "F4" => {
+                            GLOBAL.with(|global| {
+                                if let Some(ref mut widget) = *global.borrow_mut() {
+                                    widget.show_completion();
+                                }
+                            });
                         },
                         "Up" => {
                             sender.call("gui.buffer_view.move_cursor", &buffer_views::MoveCursorRequest {

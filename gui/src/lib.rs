@@ -14,6 +14,7 @@ extern crate serde;
 extern crate time;
 extern crate uuid;
 
-pub mod buffer_views;
 pub mod buffer_view_widget;
+pub mod buffer_views;
 pub mod command;
+pub mod completion_widget;

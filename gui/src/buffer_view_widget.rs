@@ -20,6 +20,7 @@ use std::sync::{RwLock, Arc};
 use switchboard::client;
 use switchboard::ipc;
 use switchboard::plugin_buffer;
+use ::completion_widget::CompletionWidget;
 use time;
 
 struct Color {
@@ -70,6 +71,8 @@ impl CairoContexExt for cairo::Context {
 pub struct BufferViewWidget {
     drawing_area: gtk::DrawingArea,
     inner_size: Rc<Cell<cairo::RectangleInt>>,
+    overlay: gtk::Overlay,
+    completion_widget: Option<CompletionWidget>,
 }
 
 fn draw(buffer_view: &BufferView, inner_size: cairo::RectangleInt, cr: cairo::Context) {
@@ -143,13 +146,17 @@ impl BufferViewWidget {
     pub fn new(buffer_views: Arc<RwLock<BufferViews>>) -> Self {
         let mut buffer_view_widget = BufferViewWidget {
             drawing_area: gtk::DrawingArea::new().unwrap(),
+            overlay: gtk::Overlay::new().unwrap(),
             inner_size: Rc::new(Cell::new(cairo::RectangleInt {
                 x: 0,
                 y: 0,
                 width: 0,
                 height: 0,
             })),
+            completion_widget: None,
         };
+
+        buffer_view_widget.overlay.add(&buffer_view_widget.drawing_area);
 
         let inner_size_clone = buffer_view_widget.inner_size.clone();
         buffer_view_widget.drawing_area.connect_draw(move |_, cr| {
@@ -172,4 +179,15 @@ impl BufferViewWidget {
     pub fn widget(&self) -> &gtk::DrawingArea {
         &self.drawing_area
     }
+
+    pub fn overlay(&self) -> &gtk::Overlay {
+        &self.overlay
+    }
+
+    pub fn show_completion(&mut self) {
+        let completion_widget = CompletionWidget::new(&self.drawing_area);
+        self.overlay.add_overlay(&completion_widget);
+        self.overlay.queue_draw();
+    }
+
 }
