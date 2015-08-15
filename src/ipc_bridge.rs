@@ -1,5 +1,3 @@
-// NOCOM(#sirver): rename IpcRead and IpcWrite to ipc::Read
-
 use mio::unix::{UnixListener, UnixStream};
 use mio;
 use std::path::Path;

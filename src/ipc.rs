@@ -122,7 +122,6 @@ pub struct RpcCall {
     pub args: json::Value,
 }
 
-// NOCOM(#sirver): most of the entries here could be Cow.
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum Message {
     RpcCall(RpcCall),

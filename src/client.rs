@@ -192,7 +192,6 @@ impl<'a> FunctionThread<'a> {
     }
 }
 
-// NOCOM(#sirver): Return a future? How about streaming functions?
 fn call<T: Serialize>(event_loop_sender: &mio::Sender<EventLoopThreadCommand>, function: &str, args: &T) -> Rpc {
     let args = json::to_value(&args);
     let context = Uuid::new_v4().to_hyphenated_string();
@@ -253,7 +252,6 @@ impl<'a> Client<'a> {
         }
     }
 
-    // NOCOM(#hrapp): 'a needed?
     pub fn new_rpc(&self, name: &str, remote_procedure: Box<RemoteProcedure + 'a>) {
         // NOCOM(#sirver): what happens when this is already inserted? crash probably
         let mut rpc = self.call("core.new_rpc", &NewRpcRequest {
@@ -263,7 +261,6 @@ impl<'a> Client<'a> {
         let success = rpc.wait().unwrap();
         // NOCOM(#sirver): report failure.
 
-        // NOCOM(#hrapp): bring back
         self.function_thread_sender.send(FunctionThreadCommand::NewRpc(
                 name.into(), remote_procedure)).expect("NewRpc");
     }
