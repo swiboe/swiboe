@@ -17,6 +17,7 @@ pub enum ErrorKind {
     JsonParsing(json::error::Error),
 }
 
+// NOCOM(#sirver): kill and just use the enum
 #[derive(Debug)]
 pub struct Error {
     kind: ErrorKind,

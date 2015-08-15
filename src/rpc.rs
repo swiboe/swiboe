@@ -28,45 +28,6 @@ pub enum ErrorKind {
     InvalidArgs,
 }
 
-// TODO(sirver): To get really nice looking JSON, a lot of this serialization has to be tweaked.
-// Maybe ask on the serde tracker how to get beautiful serialization. This is here just to
-// understand how it would work. Maybe remove in the future?
-// impl serde::Serialize for ErrorKind {
-    // fn serialize<S>(&self, serializer: &mut S) -> result::Result<(), S::Error>
-        // where S: serde::Serializer,
-    // {
-        // let s = match *self {
-            // ErrorKind::Unknown => "unknown_rpc",
-            // ErrorKind::InvalidArgs => "invalid_args",
-            // ErrorKind::Io => "io",
-        // };
-        // serializer.visit_str(s)
-    // }
-// }
-
-// struct ErrorKindVisitor;
-
-// impl serde::de::Visitor for ErrorKindVisitor {
-    // type Value = ErrorKind;
-
-    // fn visit_str<E>(&mut self, value: &str) -> result::Result<ErrorKind, E>
-        // where E: serde::de::Error
-    // {
-        // match value {
-            // "unknown_rpc" => Ok(ErrorKind::UnknownRpc),
-            // "invalid_args" => Ok(ErrorKind::InvalidArgs),
-            // _ => Err(serde::de::Error::unknown_field_error(value)),
-        // }
-    // }
-// }
-
-// impl serde::Deserialize for ErrorKind {
-    // fn deserialize<D>(deserializer: &mut D) -> result::Result<Self, D::Error>
-        // where D: serde::de::Deserializer {
-        // deserializer.visit(ErrorKindVisitor)
-    // }
-// }
-
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 pub struct Error {
     pub kind: ErrorKind,

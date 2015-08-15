@@ -17,7 +17,8 @@ macro_rules! try_rpc {
     ($sender:ident, $expr:expr) => (match $expr {
         Ok(val) => val,
         Err(err) => {
-            $sender.finish($crate::rpc::Result::Err(convert::From::from(err)));
+            // TODO(sirver): Not sure if unwrap() here is okay.
+            $sender.finish($crate::rpc::Result::Err(convert::From::from(err))).unwrap();
             return;
         }
     })

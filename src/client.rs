@@ -9,6 +9,7 @@ use mio;
 use serde::{json, Serialize, Deserialize};
 use std::collections::HashMap;
 use std::path;
+use std::result;
 use std::sync::mpsc;
 use std::thread;
 use uuid::Uuid;
@@ -193,7 +194,8 @@ impl<'a> FunctionThread<'a> {
     }
 }
 
-fn call<T: Serialize>(event_loop_sender: &mio::Sender<EventLoopThreadCommand>, function: &str, args: &T) -> Rpc {
+fn call<T: Serialize>(event_loop_sender: &mio::Sender<EventLoopThreadCommand>, function: &str, args: &T) ->
+        result::Result<Rpc, mio::NotifyError<EventLoopThreadCommand>>  {
     let args = json::to_value(&args);
     let context = Uuid::new_v4().to_hyphenated_string();
     let message = ipc::Message::RpcCall(rpc::Call {
@@ -203,8 +205,8 @@ fn call<T: Serialize>(event_loop_sender: &mio::Sender<EventLoopThreadCommand>, f
     });
 
     let (tx, rx) = mpsc::channel();
-    event_loop_sender.send(EventLoopThreadCommand::Call(context, tx, message)).expect("Call");
-    Rpc::new(rx)
+    try!(event_loop_sender.send(EventLoopThreadCommand::Call(context, tx, message)));
+    Ok(Rpc::new(rx))
 }
 
 pub struct Client<'a> {
@@ -267,7 +269,7 @@ impl<'a> Client<'a> {
     }
 
     pub fn call<T: Serialize>(&self, function: &str, args: &T) -> Rpc {
-        call(&self.event_loop_sender, function, args)
+        call(&self.event_loop_sender, function, args).unwrap()
     }
 
     pub fn new_sender(&self) -> Sender {
@@ -291,57 +293,95 @@ pub struct Sender {
     event_loop_sender: mio::Sender<EventLoopThreadCommand>,
 }
 
+// NOCOM(#sirver): figure out the difference between a Sender, an RpcSender and come up with better
+// names.
 impl Sender {
     pub fn call<T: Serialize>(&self, function: &str, args: &T) -> Rpc {
-        call(&self.event_loop_sender, function, args)
+        call(&self.event_loop_sender, function, args).unwrap()
     }
+}
+
+#[derive(Clone, Debug)]
+enum RpcSenderState {
+    Alive,
+    Finished,
+    Cancelled,
 }
 
 #[derive(Clone)]
 pub struct RpcSender {
     context: String,
     event_loop_sender: mio::Sender<EventLoopThreadCommand>,
-    finish_called: bool,
+    state: RpcSenderState,
 }
+
+#[derive(Debug)]
+pub enum RpcSenderError {
+    Finished,
+    Cancelled,
+    Disconnected,
+}
+
+// NOCOM(#sirver): impl error::Error for RpcSenderError?
+
+impl From<mio::NotifyError<EventLoopThreadCommand>> for RpcSenderError {
+    fn from(error: mio::NotifyError<EventLoopThreadCommand>) -> Self {
+        RpcSenderError::Disconnected
+    }
+}
+
+
+pub type RpcSenderResult<T> = result::Result<T, RpcSenderError>;
 
 impl RpcSender {
     fn new(context: String, event_loop_sender: mio::Sender<EventLoopThreadCommand>) -> Self {
         RpcSender {
             context: context,
             event_loop_sender: event_loop_sender,
-            finish_called: false
+            state: RpcSenderState::Alive
         }
     }
 
-    pub fn call<T: Serialize>(&self, function: &str, args: &T) -> Rpc {
-        call(&self.event_loop_sender, function, args)
+    pub fn check_liveness(&self) -> RpcSenderResult<()> {
+        match self.state {
+            RpcSenderState::Alive => Ok(()),
+            RpcSenderState::Finished => Err(RpcSenderError::Finished),
+            RpcSenderState::Cancelled => Err(RpcSenderError::Cancelled),
+        }
     }
 
-    pub fn update<T: Serialize>(&self, args: &T) {
-        assert!(!self.finish_called, "Finish has already been called!");
+    pub fn call<T: Serialize>(&self, function: &str, args: &T) -> RpcSenderResult<Rpc> {
+        try!(self.check_liveness());
+        Ok(try!(call(&self.event_loop_sender, function, args)))
+    }
+
+    pub fn update<T: Serialize>(&self, args: &T) -> RpcSenderResult<()> {
+        try!(self.check_liveness());
 
         let msg = ipc::Message::RpcResponse(rpc::Response {
             context: self.context.clone(),
             kind: rpc::ResponseKind::Partial(json::to_value(args)),
         });
-        self.event_loop_sender.send(EventLoopThreadCommand::Send(msg)).expect("Send");
+        Ok(try!(self.event_loop_sender.send(EventLoopThreadCommand::Send(msg))))
     }
 
-    pub fn finish(&mut self, result: rpc::Result) {
-        assert!(!self.finish_called, "Finish has already been called!");
-        self.finish_called = true;
+    pub fn finish(&mut self, result: rpc::Result) -> RpcSenderResult<()> {
+        try!(self.check_liveness());
 
+        self.state = RpcSenderState::Finished;
         let msg = ipc::Message::RpcResponse(rpc::Response {
             context: self.context.clone(),
             kind: rpc::ResponseKind::Last(result),
         });
-        self.event_loop_sender.send(EventLoopThreadCommand::Send(msg)).expect("Send");
+        Ok(try!(self.event_loop_sender.send(EventLoopThreadCommand::Send(msg))))
     }
 }
 
 impl Drop for RpcSender {
     fn drop(&mut self) {
-        assert!(self.finish_called,
-                "RpcSender dropped, but finish() was not called.");
+        match self.state {
+            RpcSenderState::Finished | RpcSenderState::Cancelled => (),
+            RpcSenderState::Alive => panic!("RpcSender dropped while still alive. Call finish()!."),
+        }
     }
 }
