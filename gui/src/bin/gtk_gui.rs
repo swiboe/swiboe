@@ -133,6 +133,7 @@ impl SwitchboardGtkGui {
                             GLOBAL.with(|global| {
                                 if let Some(ref mut widget) = *global.borrow_mut() {
                                     widget.show_completion();
+                                    widget.widget().queue_draw();
                                 }
                             });
                         },

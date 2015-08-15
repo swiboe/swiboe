@@ -13,7 +13,7 @@ impl CompletionWidget {
         container.set_border_width(10);
         // container.set_default_size((widget.get_allocated_width() as f32 * 0.8).round() as i32, 200);
 
-        let listview = gtk::Listview();
+        // let listview = gtk::Listview();
 
         let entry = gtk::Entry::new().unwrap();
         entry.set_has_frame(true);
