@@ -9,7 +9,7 @@ extern crate tempdir;
 use serde::json;
 use support::{TestHarness};
 use switchboard::client::Client;
-use switchboard::ipc;
+use switchboard::rpc;
 use switchboard::plugin_buffer;
 
 fn main() {
@@ -22,7 +22,7 @@ fn main() {
                 content: Some("bli\nbla\nblub".into()),
             }).wait().unwrap()
         {
-            ipc::RpcResult::Ok(value) => json::from_value(value).unwrap(),
+            rpc::Result::Ok(value) => json::from_value(value).unwrap(),
             err => panic!("{:?}", err),
         };
 
@@ -30,7 +30,7 @@ fn main() {
             "buffer.delete", &plugin_buffer::DeleteRequest {
                 buffer_index: new_response.buffer_index
             }).wait().unwrap() {
-            ipc::RpcResult::Ok(value) => json::from_value(value).unwrap(),
+            rpc::Result::Ok(value) => json::from_value(value).unwrap(),
             err => panic!("{:?}", err),
         };
     }

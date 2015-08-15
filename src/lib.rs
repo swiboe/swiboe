@@ -17,19 +17,20 @@ macro_rules! try_rpc {
     ($sender:ident, $expr:expr) => (match $expr {
         Ok(val) => val,
         Err(err) => {
-            $sender.finish(ipc::RpcResult::Err(convert::From::from(err)));
+            $sender.finish($crate::rpc::Result::Err(convert::From::from(err)));
             return;
         }
     })
 }
 
+mod ipc;
 mod ipc_bridge;
 pub mod client;
 pub mod error;
-pub mod ipc;
 pub mod plugin_buffer;
 pub mod plugin_core;
 pub mod plugin_list_files;
+pub mod rpc;
 pub mod server;
 
 pub use error::{Error, ErrorKind, Result};

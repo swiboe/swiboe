@@ -2,7 +2,7 @@ use mio::unix::{UnixListener, UnixStream};
 use mio;
 use std::path::Path;
 use super::error::{ErrorKind, Error};
-use super::ipc::{self};
+use super::ipc;
 use super::server;
 
 #[derive(PartialEq, Eq, Clone, Copy, Hash, Debug)]
@@ -12,7 +12,7 @@ pub struct ClientId {
 }
 
 struct Connection {
-    stream: ipc::IpcStream<UnixStream>,
+    stream: ipc::Stream<UnixStream>,
     client_id: ClientId,
 }
 
@@ -87,7 +87,7 @@ impl mio::Handler for IpcBridge {
                         token: token,
                     };
                     let connection = Connection {
-                        stream: ipc::IpcStream::new(stream),
+                        stream: ipc::Stream::new(stream),
                         client_id: client_id,
                     };
                     commands.send(server::Command::ClientConnected(client_id)).expect("ClientConnected");

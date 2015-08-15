@@ -10,8 +10,8 @@ extern crate test;
 use serde::json;
 use support::{TestHarness};
 use switchboard::client::Client;
-use switchboard::ipc;
 use switchboard::plugin_buffer;
+use switchboard::rpc;
 use test::Bencher;
 
 
@@ -27,7 +27,7 @@ fn bench_create_and_delete_buffers(b: &mut Bencher) {
                 content: Some("bli\nbla\nblub".into()),
             }).wait().unwrap()
         {
-            ipc::RpcResult::Ok(value) => json::from_value(value).unwrap(),
+            rpc::Result::Ok(value) => json::from_value(value).unwrap(),
             err => panic!("{:?}", err),
         };
 
@@ -35,7 +35,7 @@ fn bench_create_and_delete_buffers(b: &mut Bencher) {
             "buffer.delete", &plugin_buffer::DeleteRequest {
                 buffer_index: new_response.buffer_index
             }).wait().unwrap() {
-            ipc::RpcResult::Ok(value) => json::from_value(value).unwrap(),
+            rpc::Result::Ok(value) => json::from_value(value).unwrap(),
             err => panic!("{:?}", err),
         };
     });

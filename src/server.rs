@@ -1,3 +1,10 @@
+use ::error::Error;
+use ::ipc;
+use ::ipc_bridge;
+use ::plugin_buffer;
+use ::plugin_core;
+use ::plugin_list_files;
+use ::rpc;
 use mio;
 use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
@@ -5,12 +12,6 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{channel, Sender, Receiver};
 use std::thread;
-use super::error::Error;
-use super::ipc;
-use super::ipc_bridge;
-use super::plugin_buffer;
-use super::plugin_core;
-use super::plugin_list_files;
 
 // NOCOM(#sirver): when a client disconnects and we still try to call one of it's rpcs, we never
 // get an error back - this will effectively interrupt the rpc call stack.
@@ -20,8 +21,8 @@ const CORE_FUNCTIONS_PREFIX: &'static str = "core.";
 pub enum Command {
     Quit,
     NewRpc(ipc_bridge::ClientId, String, u16),
-    RpcCall(ipc_bridge::ClientId, ipc::RpcCall),
-    RpcResponse(ipc::RpcResponse),
+    RpcCall(ipc_bridge::ClientId, rpc::Call),
+    RpcResponse(rpc::Response),
     ClientConnected(ipc_bridge::ClientId),
     ClientDisconnected(ipc_bridge::ClientId),
     SendDataFailed(ipc_bridge::ClientId, ipc::Message, Error),
@@ -37,7 +38,7 @@ struct RegisteredFunction {
 #[derive(Debug)]
 struct RunningRpc {
     caller: ipc_bridge::ClientId,
-    rpc_call: ipc::RpcCall,
+    rpc_call: rpc::Call,
     last_index: usize,
 }
 
@@ -82,9 +83,9 @@ impl Switchboard {
                         let result = self.plugin_core.call(client_id, &rpc_call);
                         self.ipc_bridge_commands.send(ipc_bridge::Command::SendData(
                                 client_id,
-                                ipc::Message::RpcResponse(ipc::RpcResponse {
+                                ipc::Message::RpcResponse(rpc::Response {
                                     context: rpc_call.context.clone(),
-                                    kind: ipc::RpcResponseKind::Last(result),
+                                    kind: rpc::ResponseKind::Last(result),
                                 }))).unwrap();
                     } else {
                         match self.functions.get(&rpc_call.function as &str) {
@@ -106,10 +107,10 @@ impl Switchboard {
                             None => {
                                 self.ipc_bridge_commands.send(ipc_bridge::Command::SendData(
                                         client_id,
-                                        ipc::Message::RpcResponse(ipc::RpcResponse {
+                                        ipc::Message::RpcResponse(rpc::Response {
                                             context: rpc_call.context.clone(),
-                                            kind: ipc::RpcResponseKind::Last(ipc::RpcResult::Err(ipc::RpcError {
-                                                kind: ipc::RpcErrorKind::UnknownRpc,
+                                            kind: rpc::ResponseKind::Last(rpc::Result::Err(rpc::Error {
+                                                kind: rpc::ErrorKind::UnknownRpc,
                                                 details: None,
                                             })),
                                         }))).unwrap();
@@ -128,9 +129,9 @@ impl Switchboard {
                             "dropped the RpcResponse."
                         },
                         ipc::Message::RpcCall(rpc_call) => {
-                            self.on_rpc_response(ipc::RpcResponse {
+                            self.on_rpc_response(rpc::Response {
                                 context: rpc_call.context,
-                                kind: ipc::RpcResponseKind::Last(ipc::RpcResult::NotHandled),
+                                kind: rpc::ResponseKind::Last(rpc::Result::NotHandled),
                             });
                             "surrogate replied as NotHandled."
                         }
@@ -176,7 +177,7 @@ impl Switchboard {
         }
     }
 
-    fn on_rpc_response(&mut self, rpc_response: ipc::RpcResponse) {
+    fn on_rpc_response(&mut self, rpc_response: rpc::Response) {
         let mut running_rpc = match self.running_rpcs.entry(rpc_response.context.clone()) {
             Entry::Occupied(running_rpc) => running_rpc,
             Entry::Vacant(_) => {
@@ -186,28 +187,28 @@ impl Switchboard {
         };
 
         match rpc_response.kind {
-            ipc::RpcResponseKind::Partial(value) => {
+            rpc::ResponseKind::Partial(value) => {
                 let running_rpc = running_rpc.get();
                 self.ipc_bridge_commands.send(ipc_bridge::Command::SendData(
                         running_rpc.caller,
-                        ipc::Message::RpcResponse(ipc::RpcResponse {
+                        ipc::Message::RpcResponse(rpc::Response {
                             context: running_rpc.rpc_call.context.clone(),
-                            kind: ipc::RpcResponseKind::Partial(value),
+                            kind: rpc::ResponseKind::Partial(value),
                         }))).unwrap();
             },
-            ipc::RpcResponseKind::Last(result) => match result {
-                ipc::RpcResult::Ok(_) | ipc::RpcResult::Err(_) => {
+            rpc::ResponseKind::Last(result) => match result {
+                rpc::Result::Ok(_) | rpc::Result::Err(_) => {
                     let running_rpc = running_rpc.remove();
                     self.ipc_bridge_commands.send(ipc_bridge::Command::SendData(
                             running_rpc.caller,
-                            ipc::Message::RpcResponse(ipc::RpcResponse {
+                            ipc::Message::RpcResponse(rpc::Response {
                                 context: running_rpc.rpc_call.context,
-                                kind: ipc::RpcResponseKind::Last(
+                                kind: rpc::ResponseKind::Last(
                                     result
                                 ),
                             }))).unwrap();
                 },
-                ipc::RpcResult::NotHandled => {
+                rpc::Result::NotHandled => {
                     // TODO(sirver): If a new function has been registered or been deleted since we
                     // last saw this context, this might skip a handler or call one twice. We need
                     // a better way to keep track where we are in the list of handlers.
@@ -232,9 +233,9 @@ impl Switchboard {
                         None => {
                             self.ipc_bridge_commands.send(ipc_bridge::Command::SendData(
                                     running_rpc.caller,
-                                    ipc::Message::RpcResponse(ipc::RpcResponse {
+                                    ipc::Message::RpcResponse(rpc::Response {
                                         context: running_rpc.rpc_call.context.clone(),
-                                        kind: ipc::RpcResponseKind::Last(ipc::RpcResult::NotHandled),
+                                        kind: rpc::ResponseKind::Last(rpc::Result::NotHandled),
                                     }))).unwrap();
                         }
                     };

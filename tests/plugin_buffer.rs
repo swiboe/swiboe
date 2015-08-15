@@ -2,8 +2,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use super::{CallbackProcedure, create_file};
 use support::TestHarness;
 use switchboard::client;
-use switchboard::ipc;
 use switchboard::plugin_buffer;
+use switchboard::rpc;
 
 
 fn create_buffer(client: &client::Client, expected_index: usize, content: Option<&str>) {
@@ -11,7 +11,7 @@ fn create_buffer(client: &client::Client, expected_index: usize, content: Option
         content: content.map(|s| s.to_string()),
     };
     let mut rpc = client.call("buffer.new", &request);
-    assert_eq!(rpc.wait().unwrap(), ipc::RpcResult::success(plugin_buffer::NewResponse {
+    assert_eq!(rpc.wait().unwrap(), rpc::Result::success(plugin_buffer::NewResponse {
         buffer_index: expected_index,
     }));
 }
@@ -26,7 +26,7 @@ fn buffer_new() {
             priority: 100,
             callback: |mut sender: client::RpcSender, _| {
                 callback_called.store(true, Ordering::Relaxed);
-                sender.finish(ipc::RpcResult::success(()));
+                sender.finish(rpc::Result::success(()));
             }
         }));
         create_buffer(&client, 0, None);
@@ -45,7 +45,7 @@ fn buffer_new_with_content() {
     let mut rpc = client.call("buffer.get_content", &plugin_buffer::GetContentRequest {
         buffer_index: 0,
     });
-    assert_eq!(rpc.wait().unwrap(), ipc::RpcResult::success(plugin_buffer::GetContentResponse {
+    assert_eq!(rpc.wait().unwrap(), rpc::Result::success(plugin_buffer::GetContentResponse {
         content: content.into(),
     }));
 }
@@ -59,7 +59,7 @@ fn buffer_open_unhandled_uri() {
         uri: "blumba://foo".into(),
     });
 
-    assert_eq!(ipc::RpcResult::NotHandled, rpc.wait().unwrap());
+    assert_eq!(rpc::Result::NotHandled, rpc.wait().unwrap());
 }
 
 #[test]
@@ -73,14 +73,14 @@ fn buffer_open_file() {
     let mut rpc = client.call("buffer.open", &plugin_buffer::OpenRequest {
         uri: format!("file://{}", path.to_str().unwrap()),
     });
-    assert_eq!(rpc.wait().unwrap(), ipc::RpcResult::success(plugin_buffer::OpenResponse {
+    assert_eq!(rpc.wait().unwrap(), rpc::Result::success(plugin_buffer::OpenResponse {
         buffer_index: 0,
     }));
 
     let mut rpc = client.call("buffer.get_content", &plugin_buffer::GetContentRequest {
         buffer_index: 0,
     });
-    assert_eq!(rpc.wait().unwrap(), ipc::RpcResult::success(plugin_buffer::GetContentResponse {
+    assert_eq!(rpc.wait().unwrap(), rpc::Result::success(plugin_buffer::GetContentResponse {
         content: content.into(),
     }));
 }
@@ -96,7 +96,7 @@ fn buffer_delete() {
             priority: 100,
             callback: |mut sender: client::RpcSender, _| {
                 callback_called.store(true, Ordering::Relaxed);
-                sender.finish(ipc::RpcResult::success(()));
+                sender.finish(rpc::Result::success(()));
             }
         }));
 
@@ -106,7 +106,7 @@ fn buffer_delete() {
             buffer_index: 0,
         };
         let mut rpc = client.call("buffer.delete", &request);
-        assert_eq!(rpc.wait().unwrap(), ipc::RpcResult::success(()));
+        assert_eq!(rpc.wait().unwrap(), rpc::Result::success(()));
     }
     assert!(callback_called.load(Ordering::Relaxed));
 }

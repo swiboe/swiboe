@@ -29,7 +29,6 @@ use std::sync::mpsc;
 use std::sync::{RwLock, Arc};
 use std::thread;
 use switchboard::client;
-use switchboard::ipc;
 use switchboard::plugin_buffer;
 use switchboard::plugin_list_files;
 use switchboard_gtk_gui::buffer_view_widget;

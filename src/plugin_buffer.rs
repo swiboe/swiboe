@@ -1,3 +1,6 @@
+use ::client;
+use ::ipc;
+use ::rpc;
 use serde::json;
 use std::collections::HashMap;
 use std::convert;
@@ -7,10 +10,7 @@ use std::ops;
 use std::path;
 use std::string;
 use std::sync::{RwLock, Arc};
-use super::client;
-use super::ipc;
 
-// NOCOM(#sirver): make a new package rpc and move some stuff itno that?
 struct New {
     buffers: Arc<RwLock<BuffersManager>>,
 }
@@ -20,22 +20,22 @@ pub enum BufferError {
     UnknownBuffer,
 }
 
-impl From<BufferError> for ipc::RpcError {
+impl From<BufferError> for rpc::Error {
      fn from(error: BufferError) -> Self {
-         use ipc::RpcErrorKind::*;
+         use rpc::ErrorKind::*;
 
          let (kind, details) = match error {
              BufferError::UnknownBuffer => (InvalidArgs, format!("unknown_buffer")),
          };
 
-         ipc::RpcError {
+         rpc::Error {
              kind: kind,
              details: Some(json::to_value(&details)),
          }
      }
 }
 
-impl From<io::Error> for ipc::RpcError {
+impl From<io::Error> for rpc::Error {
      fn from(error: io::Error) -> Self {
          let details = match error.kind() {
              io::ErrorKind::NotFound => "not_found",
@@ -56,8 +56,8 @@ impl From<io::Error> for ipc::RpcError {
              io::ErrorKind::Interrupted => "interrupted",
              _ => "unknown",
          };
-         ipc::RpcError {
-             kind: ipc::RpcErrorKind::Io,
+         rpc::Error {
+             kind: rpc::ErrorKind::Io,
              details: Some(json::to_value(&details)),
          }
      }
@@ -98,7 +98,7 @@ impl client::RemoteProcedure for New {
         let response = NewResponse {
             buffer_index: buffers.new_buffer(buffer),
         };
-        sender.finish(ipc::RpcResult::success(response));
+        sender.finish(rpc::Result::success(response));
     }
 }
 
@@ -121,7 +121,7 @@ impl client::RemoteProcedure for Delete {
         try_rpc!(sender, buffers.delete_buffer(request.buffer_index));
 
         let response = DeleteResponse;
-        sender.finish(ipc::RpcResult::success(response));
+        sender.finish(rpc::Result::success(response));
     }
 }
 
@@ -149,7 +149,7 @@ impl client::RemoteProcedure for GetContent {
         let response = GetContentResponse {
             content: buffer.to_string(),
         };
-        sender.finish(ipc::RpcResult::success(response));
+        sender.finish(rpc::Result::success(response));
     }
 }
 
@@ -172,7 +172,7 @@ impl client::RemoteProcedure for Open {
         const FILE_PREFIX: &'static str = "file://";
         let mut request: OpenRequest = try_rpc!(sender, json::from_value(args));
         if !request.uri.starts_with(FILE_PREFIX) {
-            sender.finish(ipc::RpcResult::NotHandled);
+            sender.finish(rpc::Result::NotHandled);
             return;
         }
         request.uri.drain(..FILE_PREFIX.len());
@@ -187,7 +187,7 @@ impl client::RemoteProcedure for Open {
         let response = OpenResponse {
             buffer_index: buffers.new_buffer(buffer),
         };
-        sender.finish(ipc::RpcResult::success(response));
+        sender.finish(rpc::Result::success(response));
     }
 }
 
@@ -212,7 +212,7 @@ impl client::RemoteProcedure for List {
         let response = ListResponse {
             buffer_indices: buffers.keys().map(|c| *c).collect(),
         };
-        sender.finish(ipc::RpcResult::success(response));
+        sender.finish(rpc::Result::success(response));
     }
 }
 

@@ -6,7 +6,7 @@ use std::thread;
 use super::CallbackProcedure;
 use support::TestHarness;
 use switchboard::client;
-use switchboard::ipc::{RpcErrorKind, RpcResult, RpcError};
+use switchboard::rpc;
 use switchboard::server::Server;
 use uuid::Uuid;
 
@@ -38,7 +38,7 @@ fn shutdown_server_with_no_clients_connected() {
 
 struct TestCall {
     priority: u16,
-    result: RpcResult,
+    result: rpc::Result,
 }
 
 impl client::RemoteProcedure for TestCall {
@@ -60,11 +60,11 @@ fn new_rpc_simple() {
 
     client1.new_rpc("test.test", Box::new(TestCall {
         priority: 0,
-        result: RpcResult::Ok(test_msg.clone()),
+        result: rpc::Result::Ok(test_msg.clone()),
     }));
 
     let mut rpc = client2.call("test.test", &test_msg);
-    assert_eq!(rpc.wait().unwrap(), RpcResult::Ok(test_msg));
+    assert_eq!(rpc.wait().unwrap(), rpc::Result::Ok(test_msg));
 }
 
 #[test]
@@ -74,19 +74,19 @@ fn new_rpc_with_priority() {
     let client1 = client::Client::connect(&t.socket_name);
     client1.new_rpc("test.test", Box::new(TestCall {
         priority: 100,
-        result: RpcResult::Ok(as_json(r#"{ "from": "client1" }"#)),
+        result: rpc::Result::Ok(as_json(r#"{ "from": "client1" }"#)),
     }));
 
 
     let client2 = client::Client::connect(&t.socket_name);
     client2.new_rpc("test.test", Box::new(TestCall {
         priority: 50,
-        result: RpcResult::Ok(as_json(r#"{ "from": "client2" }"#)),
+        result: rpc::Result::Ok(as_json(r#"{ "from": "client2" }"#)),
     }));
 
     let client3 = client::Client::connect(&t.socket_name);
     let mut rpc = client3.call("test.test", &as_json(r#"{}"#));
-    assert_eq!(RpcResult::Ok(as_json(r#"{ "from": "client2" }"#)), rpc.wait().unwrap());
+    assert_eq!(rpc::Result::Ok(as_json(r#"{ "from": "client2" }"#)), rpc.wait().unwrap());
 }
 
 #[test]
@@ -96,19 +96,19 @@ fn new_rpc_with_priority_first_does_not_handle() {
     let client1 = client::Client::connect(&t.socket_name);
     client1.new_rpc("test.test", Box::new(TestCall {
         priority: 100,
-        result: RpcResult::Ok(as_json(r#"{ "from": "client1" }"#)),
+        result: rpc::Result::Ok(as_json(r#"{ "from": "client1" }"#)),
     }));
 
 
     let client2 = client::Client::connect(&t.socket_name);
     client2.new_rpc("test.test", Box::new(TestCall {
         priority: 50,
-        result: RpcResult::NotHandled,
+        result: rpc::Result::NotHandled,
     }));
 
     let client3 = client::Client::connect(&t.socket_name);
     let mut rpc = client3.call("test.test", &as_json(r#"{}"#));
-    assert_eq!(RpcResult::Ok(as_json(r#"{ "from": "client1" }"#)), rpc.wait().unwrap());
+    assert_eq!(rpc::Result::Ok(as_json(r#"{ "from": "client1" }"#)), rpc.wait().unwrap());
 }
 
 #[test]
@@ -137,48 +137,48 @@ fn client_disconnects_should_not_stop_handling_of_rpcs() {
 
     let client0 = client::Client::connect(&t.socket_name);
     client0.new_rpc("test.test", Box::new(TestCall {
-            priority: 100, result: RpcResult::NotHandled,
+            priority: 100, result: rpc::Result::NotHandled,
     }));
 
     let client1 = client::Client::connect(&t.socket_name);
     client1.new_rpc("test.test", Box::new(TestCall {
             priority: 101, result:
-                RpcResult::Ok(as_json(r#"{ "from": "client1" }"#)),
+                rpc::Result::Ok(as_json(r#"{ "from": "client1" }"#)),
     }));
 
     let client2 = client::Client::connect(&t.socket_name);
     client2.new_rpc("test.test", Box::new(TestCall {
-            priority: 102, result: RpcResult::NotHandled,
+            priority: 102, result: rpc::Result::NotHandled,
     }));
 
     let client3 = client::Client::connect(&t.socket_name);
     client3.new_rpc("test.test", Box::new(TestCall {
             priority: 103, result:
-                RpcResult::Ok(as_json(r#"{ "from": "client3" }"#)),
+                rpc::Result::Ok(as_json(r#"{ "from": "client3" }"#)),
     }));
 
     let client = client::Client::connect(&t.socket_name);
 
     let mut rpc = client.call("test.test", &as_json(r#"{}"#));
-    assert_eq!(RpcResult::Ok(as_json(r#"{ "from": "client1" }"#)), rpc.wait().unwrap());
+    assert_eq!(rpc::Result::Ok(as_json(r#"{ "from": "client1" }"#)), rpc.wait().unwrap());
 
     drop(client1); // clients: 0 2 3
     let mut rpc = client.call("test.test", &as_json(r#"{}"#));
-    assert_eq!(RpcResult::Ok(as_json(r#"{ "from": "client3" }"#)), rpc.wait().unwrap());
+    assert_eq!(rpc::Result::Ok(as_json(r#"{ "from": "client3" }"#)), rpc.wait().unwrap());
 
     drop(client0); // clients: 2 3
     let mut rpc = client.call("test.test", &as_json(r#"{}"#));
-    assert_eq!(RpcResult::Ok(as_json(r#"{ "from": "client3" }"#)), rpc.wait().unwrap());
+    assert_eq!(rpc::Result::Ok(as_json(r#"{ "from": "client3" }"#)), rpc.wait().unwrap());
 
     drop(client3); // clients: 2
     let mut rpc = client.call("test.test", &as_json(r#"{}"#));
-    assert_eq!(RpcResult::NotHandled, rpc.wait().unwrap());
+    assert_eq!(rpc::Result::NotHandled, rpc.wait().unwrap());
 
     drop(client2); // clients:
 
     let mut rpc = client.call("test.test", &as_json(r#"{}"#));
-    assert_eq!(RpcResult::Err(RpcError {
-        kind: RpcErrorKind::UnknownRpc,
+    assert_eq!(rpc::Result::Err(rpc::Error {
+        kind: rpc::ErrorKind::UnknownRpc,
         details: None,
     }), rpc.wait().unwrap());
 }
@@ -189,8 +189,8 @@ fn call_not_existing_rpc() {
 
     let client = client::Client::connect(&t.socket_name);
     let mut rpc = client.call("not_existing", &as_json("{}"));
-    assert_eq!(RpcResult::Err(RpcError {
-        kind: RpcErrorKind::UnknownRpc,
+    assert_eq!(rpc::Result::Err(rpc::Error {
+        kind: rpc::ErrorKind::UnknownRpc,
         details: None,
     }), rpc.wait().unwrap());
 }
@@ -210,7 +210,7 @@ fn call_streaming_rpc_simple() {
                     rpc_sender.update(&as_json(r#"{ "msg": "one" }"#));
                     rpc_sender.update(&as_json(r#"{ "msg": "two" }"#));
                     rpc_sender.update(&as_json(r#"{ "msg": "three" }"#));
-                    rpc_sender.finish(RpcResult::success(&as_json(r#"{ "foo": "blah" }"#)));
+                    rpc_sender.finish(rpc::Result::success(&as_json(r#"{ "foo": "blah" }"#)));
                 });
             },
         }));
@@ -221,7 +221,7 @@ fn call_streaming_rpc_simple() {
         assert_eq!(as_json(r#"{ "msg": "one" }"#), rpc.recv().unwrap().unwrap());
         assert_eq!(as_json(r#"{ "msg": "two" }"#), rpc.recv().unwrap().unwrap());
         assert_eq!(as_json(r#"{ "msg": "three" }"#), rpc.recv().unwrap().unwrap());
-        assert_eq!(RpcResult::success(as_json(r#"{ "foo": "blah" }"#)), rpc.wait().unwrap());
+        assert_eq!(rpc::Result::success(as_json(r#"{ "foo": "blah" }"#)), rpc.wait().unwrap());
     }
     assert!(!callback_called.load(Ordering::Relaxed));
 }

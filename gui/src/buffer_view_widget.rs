@@ -18,7 +18,6 @@ use std::path;
 use std::rc::Rc;
 use std::sync::{RwLock, Arc};
 use switchboard::client;
-use switchboard::ipc;
 use switchboard::plugin_buffer;
 use ::completion_widget::CompletionWidget;
 use time;

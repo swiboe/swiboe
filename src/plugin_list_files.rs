@@ -1,3 +1,6 @@
+use ::client;
+use ::ipc;
+use ::rpc;
 use serde::json;
 use std::borrow::Cow;
 use std::collections::HashMap;
@@ -10,8 +13,6 @@ use std::path::Path;
 use std::path;
 use std::string;
 use std::thread;
-use super::client;
-use super::ipc;
 use time;
 use uuid::Uuid;
 
@@ -66,7 +67,7 @@ impl client::RemoteProcedure for ListFiles {
             });
 
             let response = ListFilesResponse;
-            sender.finish(ipc::RpcResult::success(response));
+            sender.finish(rpc::Result::success(response));
         });
 
     }

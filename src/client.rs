@@ -1,5 +1,9 @@
 #![allow(deprecated)]
 
+use ::Result;
+use ::ipc;
+use ::plugin_core::NewRpcRequest;
+use ::rpc;
 use mio::unix::UnixStream;
 use mio;
 use serde::{json, Serialize, Deserialize};
@@ -7,9 +11,6 @@ use std::collections::HashMap;
 use std::path;
 use std::sync::mpsc;
 use std::thread;
-use super::Result;
-use super::ipc;
-use super::plugin_core::NewRpcRequest;
 use uuid::Uuid;
 
 const CLIENT: mio::Token = mio::Token(1);
@@ -21,12 +22,12 @@ pub trait RemoteProcedure: Send {
 
 pub struct Rpc {
     // NOCOM(#sirver): something more structured?
-    values: mpsc::Receiver<ipc::RpcResponse>,
-    result: Option<ipc::RpcResult>,
+    values: mpsc::Receiver<rpc::Response>,
+    result: Option<rpc::Result>,
 }
 
 impl Rpc {
-    fn new(values: mpsc::Receiver<ipc::RpcResponse>) -> Self {
+    fn new(values: mpsc::Receiver<rpc::Response>) -> Self {
         // NOCOM(#sirver): implement drop so that we can cancel an RPC.
         Rpc {
             values: values,
@@ -42,15 +43,15 @@ impl Rpc {
 
         let rpc_response = try!(self.values.recv());
         match rpc_response.kind {
-            ipc::RpcResponseKind::Partial(value) => Ok(Some(value)),
-            ipc::RpcResponseKind::Last(result) => {
+            rpc::ResponseKind::Partial(value) => Ok(Some(value)),
+            rpc::ResponseKind::Last(result) => {
                 self.result = Some(result);
                 Ok(None)
             },
         }
     }
 
-    pub fn wait(&mut self) -> Result<ipc::RpcResult> {
+    pub fn wait(&mut self) -> Result<rpc::Result> {
         while let Some(_) = try!(self.recv()) {
         }
         Ok(self.result.take().unwrap())
@@ -59,8 +60,8 @@ impl Rpc {
     // NOCOM(#sirver): figure out error handling for clients, not use Server error?
     pub fn wait_for<T: Deserialize>(&mut self) -> Result<T> {
         match try!(self.wait()) {
-            ipc::RpcResult::Ok(value) => Ok(try!(json::from_value(value))),
-            ipc::RpcResult::Err(err) => panic!("#sirver err: {:#?}", err),
+            rpc::Result::Ok(value) => Ok(try!(json::from_value(value))),
+            rpc::Result::Err(err) => panic!("#sirver err: {:#?}", err),
             // NOCOM(#sirver): probably should ignore other errors.
             other => panic!("#sirver other: {:#?}", other),
         }
@@ -70,13 +71,13 @@ impl Rpc {
 pub enum EventLoopThreadCommand {
     Quit,
     Send(ipc::Message),
-    Call(String, mpsc::Sender<ipc::RpcResponse>, ipc::Message),
+    Call(String, mpsc::Sender<rpc::Response>, ipc::Message),
 }
 
 // NOCOM(#sirver): bad name
 struct Handler<'a> {
-    stream: ipc::IpcStream<UnixStream>,
-    running_function_calls: HashMap<String, mpsc::Sender<ipc::RpcResponse>>,
+    stream: ipc::Stream<UnixStream>,
+    running_function_calls: HashMap<String, mpsc::Sender<rpc::Response>>,
     function_thread_sender: mpsc::Sender<FunctionThreadCommand<'a>>,
 }
 
@@ -162,7 +163,7 @@ impl<'a> mio::Handler for Handler<'a> {
 enum FunctionThreadCommand<'a> {
     Quit,
     NewRpc(String, Box<RemoteProcedure + 'a>),
-    Call(ipc::RpcCall),
+    Call(rpc::Call),
 }
 
 struct FunctionThread<'a> {
@@ -195,7 +196,7 @@ impl<'a> FunctionThread<'a> {
 fn call<T: Serialize>(event_loop_sender: &mio::Sender<EventLoopThreadCommand>, function: &str, args: &T) -> Rpc {
     let args = json::to_value(&args);
     let context = Uuid::new_v4().to_hyphenated_string();
-    let message = ipc::Message::RpcCall(ipc::RpcCall {
+    let message = ipc::Message::RpcCall(rpc::Call {
         function: function.into(),
         context: context.clone(),
         args: args,
@@ -222,7 +223,7 @@ impl<'a> Client<'a> {
 
         let (commands_tx, commands_rx) = mpsc::channel();
         let mut handler = Handler {
-            stream: ipc::IpcStream::new(stream),
+            stream: ipc::Stream::new(stream),
             running_function_calls: HashMap::new(),
             function_thread_sender: commands_tx.clone(),
         };
@@ -319,20 +320,20 @@ impl RpcSender {
     pub fn update<T: Serialize>(&self, args: &T) {
         assert!(!self.finish_called, "Finish has already been called!");
 
-        let msg = ipc::Message::RpcResponse(ipc::RpcResponse {
+        let msg = ipc::Message::RpcResponse(rpc::Response {
             context: self.context.clone(),
-            kind: ipc::RpcResponseKind::Partial(json::to_value(args)),
+            kind: rpc::ResponseKind::Partial(json::to_value(args)),
         });
         self.event_loop_sender.send(EventLoopThreadCommand::Send(msg)).expect("Send");
     }
 
-    pub fn finish(&mut self, result: ipc::RpcResult) {
+    pub fn finish(&mut self, result: rpc::Result) {
         assert!(!self.finish_called, "Finish has already been called!");
         self.finish_called = true;
 
-        let msg = ipc::Message::RpcResponse(ipc::RpcResponse {
+        let msg = ipc::Message::RpcResponse(rpc::Response {
             context: self.context.clone(),
-            kind: ipc::RpcResponseKind::Last(result),
+            kind: rpc::ResponseKind::Last(result),
         });
         self.event_loop_sender.send(EventLoopThreadCommand::Send(msg)).expect("Send");
     }

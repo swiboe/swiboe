@@ -1,131 +1,15 @@
+use ::Result;
+use ::rpc;
 use libc::consts::os::posix88;
 use mio::{TryRead};
 use serde::{self, json};
 use std::error::Error;
 use std::io::{self, Read, Write};
-use super::Result;
-
-// NOCOM(#sirver): add documentation (using this lint that forbids not having documentation).
-//
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub enum RpcResponseKind {
-    Last(RpcResult),
-    Partial(json::Value),
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct RpcResponse {
-    pub context: String,
-    pub kind: RpcResponseKind,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct RpcStreamingResult {
-    pub context: String,
-    pub value: json::Value,
-}
-
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
-pub enum RpcErrorKind {
-    UnknownRpc,
-    Io,
-    InvalidArgs,
-}
-
-// TODO(sirver): To get really nice looking JSON, a lot of this serialization has to be tweaked.
-// Maybe ask on the serde tracker how to get beautiful serialization. This is here just to
-// understand how it would work. Maybe remove in the future?
-// impl serde::Serialize for RpcErrorKind {
-    // fn serialize<S>(&self, serializer: &mut S) -> result::Result<(), S::Error>
-        // where S: serde::Serializer,
-    // {
-        // let s = match *self {
-            // RpcErrorKind::UnknownRpc => "unknown_rpc",
-            // RpcErrorKind::InvalidArgs => "invalid_args",
-            // RpcErrorKind::Io => "io",
-        // };
-        // serializer.visit_str(s)
-    // }
-// }
-
-// struct RpcErrorKindVisitor;
-
-// impl serde::de::Visitor for RpcErrorKindVisitor {
-    // type Value = RpcErrorKind;
-
-    // fn visit_str<E>(&mut self, value: &str) -> result::Result<RpcErrorKind, E>
-        // where E: serde::de::Error
-    // {
-        // match value {
-            // "unknown_rpc" => Ok(RpcErrorKind::UnknownRpc),
-            // "invalid_args" => Ok(RpcErrorKind::InvalidArgs),
-            // _ => Err(serde::de::Error::unknown_field_error(value)),
-        // }
-    // }
-// }
-
-// impl serde::Deserialize for RpcErrorKind {
-    // fn deserialize<D>(deserializer: &mut D) -> result::Result<Self, D::Error>
-        // where D: serde::de::Deserializer {
-        // deserializer.visit(RpcErrorKindVisitor)
-    // }
-// }
-
-#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
-pub struct RpcError {
-    pub kind: RpcErrorKind,
-    pub details: Option<json::Value>,
-}
-
-impl From<json::error::Error> for RpcError {
-     fn from(error: json::error::Error) -> Self {
-         RpcError {
-             kind: RpcErrorKind::InvalidArgs,
-             details: Some(json::to_value(&error.description())),
-         }
-     }
-}
-
-#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
-pub enum RpcHandlerReply {
-    Inhibit,
-    Propagate,
-}
-
-#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
-pub enum RpcResult {
-    // NOCOM(#sirver): mention success as a convenient creating for this.
-    Ok(json::Value),
-    Err(RpcError),
-    NotHandled,
-}
-
-
-impl RpcResult {
-    pub fn success<T: serde::Serialize>(value: T) -> RpcResult {
-        RpcResult::Ok(json::to_value(&value))
-    }
-
-    pub fn unwrap_err(self) -> RpcError {
-        use self::RpcResult::*;
-        match self {
-            Ok(_) | NotHandled => panic!("Called unwrap_rpc_error on a non_error."),
-            Err(e) => e,
-        }
-    }
-}
-
-#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
-pub struct RpcCall {
-    pub function: String,
-    pub context: String,
-    pub args: json::Value,
-}
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum Message {
-    RpcCall(RpcCall),
-    RpcResponse(RpcResponse),
+    RpcCall(rpc::Call),
+    RpcResponse(rpc::Response),
 }
 
 
@@ -149,14 +33,14 @@ fn write_all<T: Write>(writer: &mut T, buffer: &[u8]) -> io::Result<()> {
     Ok(())
 }
 
-pub struct IpcStream<T: Read> {
+pub struct Stream<T> {
     pub socket: T,
     read_buffer: Vec<u8>,
 }
 
-impl<T: Read + Write> IpcStream<T> {
+impl<T: Read + Write> Stream<T> {
     pub fn new(socket: T) -> Self {
-        IpcStream {
+        Stream {
             socket: socket,
             read_buffer: Vec::with_capacity(1024),
         }

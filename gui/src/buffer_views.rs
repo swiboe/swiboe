@@ -22,8 +22,8 @@ use std::rc::Rc;
 use std::sync::mpsc;
 use std::sync::{RwLock, Arc, Mutex};
 use switchboard::client;
-use switchboard::ipc;
 use switchboard::plugin_buffer;
+use switchboard::rpc;
 use time;
 use uuid::Uuid;
 
@@ -33,15 +33,15 @@ pub enum BufferViewError {
     UnknownCursor,
 }
 
-impl From<BufferViewError> for ipc::RpcError {
+impl From<BufferViewError> for rpc::Error {
      fn from(error: BufferViewError) -> Self {
-         use switchboard::ipc::RpcErrorKind::*;
+         use switchboard::rpc::ErrorKind::*;
 
          let (kind, details) = match error {
              BufferViewError::UnknownCursor => (InvalidArgs, format!("unknown_cursor")),
          };
 
-         ipc::RpcError {
+         rpc::Error {
              kind: kind,
              details: Some(json::to_value(&details)),
          }
@@ -70,7 +70,7 @@ impl client::RemoteProcedure for Scroll {
         buffer_views.scroll(&request.buffer_view_id, request.delta);
 
         let response = ScrollResponse;
-        sender.finish(ipc::RpcResult::success(response))
+        sender.finish(rpc::Result::success(response))
     }
 }
 
@@ -138,7 +138,7 @@ impl client::RemoteProcedure for MoveCursor {
 
         try_rpc!(sender, buffer_views.move_cursor(&request.cursor_id, request.delta));
         println!("#sirver End of MoveCursor: {:#?}", time::precise_time_ns());
-        sender.finish(ipc::RpcResult::success(MoveCursorResponse))
+        sender.finish(rpc::Result::success(MoveCursorResponse))
     }
 }
 
@@ -318,7 +318,7 @@ impl client::RemoteProcedure for OnBufferCreated {
             buffer_index: info.buffer_index,
         });
         match rpc.wait().unwrap() {
-            ipc::RpcResult::Ok(value) => {
+            rpc::Result::Ok(value) => {
                 let response: plugin_buffer::GetContentResponse = json::from_value(value).unwrap();
                 let mut buffer_views = self.buffer_views.write().unwrap();
                 buffer_views.get_or_create(info.buffer_index)
@@ -326,6 +326,6 @@ impl client::RemoteProcedure for OnBufferCreated {
             }
             _ => {},
         }
-        sender.finish(ipc::RpcResult::success(()))
+        sender.finish(rpc::Result::success(()))
     }
 }

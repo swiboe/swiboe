@@ -1,7 +1,8 @@
+use ::ipc;
+use ::ipc_bridge;
+use ::rpc;
+use ::server;
 use serde::json;
-use super::ipc;
-use super::ipc_bridge;
-use super::server;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct NewRpcRequest {
@@ -20,11 +21,11 @@ impl CorePlugin {
         }
     }
 
-    pub fn call(&self, caller: ipc_bridge::ClientId, rpc_call: &ipc::RpcCall) -> ipc::RpcResult {
+    pub fn call(&self, caller: ipc_bridge::ClientId, rpc_call: &rpc::Call) -> rpc::Result {
         match &rpc_call.function as &str {
             "core.exit" => {
                 self.commands.send(server::Command::Quit).unwrap();
-                ipc::RpcResult::success(())
+                rpc::Result::success(())
             },
             // NOCOM(#sirver): These args can be pulled out into Serializable structs.
             "core.new_rpc" => {
@@ -36,7 +37,7 @@ impl CorePlugin {
 
                 self.commands.send(
                     server::Command::NewRpc(caller, args.name, args.priority)).unwrap();
-                ipc::RpcResult::success(())
+                rpc::Result::success(())
             },
             // NOCOM(#sirver): this should not panic, but return an error.
             _ => panic!("{} was called, but is not a core function.", rpc_call.function),

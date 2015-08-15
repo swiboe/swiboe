@@ -10,7 +10,6 @@ use std::fs;
 use std::io::Write;
 use std::path;
 use switchboard::client;
-use switchboard::ipc;
 
 mod support;
 
