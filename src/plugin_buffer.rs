@@ -84,9 +84,9 @@ pub struct NewResponse {
 
 // NOCOM(#sirver): what does serde do if there are extra values in the JSON?
 impl client::rpc::server::Rpc for New {
-    fn call(&mut self, mut sender: client::rpc::server::Context, args: json::Value) {
+    fn call(&mut self, mut context: client::rpc::server::Context, args: json::Value) {
         // NOCOM(#sirver): need testing for bad request results
-        let request: NewRequest = try_rpc!(sender, json::from_value(args));
+        let request: NewRequest = try_rpc!(context, json::from_value(args));
         let mut buffers = self.buffers.write().unwrap();
 
         let buffer = match request.content {
@@ -97,7 +97,7 @@ impl client::rpc::server::Rpc for New {
         let response = NewResponse {
             buffer_index: buffers.new_buffer(buffer),
         };
-        sender.finish(rpc::Result::success(response)).unwrap();
+        context.finish(rpc::Result::success(response)).unwrap();
     }
 }
 
@@ -114,13 +114,13 @@ struct Delete {
 }
 
 impl client::rpc::server::Rpc for Delete {
-    fn call(&mut self, mut sender: client::rpc::server::Context, args: json::Value) {
-        let request: DeleteRequest = try_rpc!(sender, json::from_value(args));
+    fn call(&mut self, mut context: client::rpc::server::Context, args: json::Value) {
+        let request: DeleteRequest = try_rpc!(context, json::from_value(args));
         let mut buffers = self.buffers.write().unwrap();
-        try_rpc!(sender, buffers.delete_buffer(request.buffer_index));
+        try_rpc!(context, buffers.delete_buffer(request.buffer_index));
 
         let response = DeleteResponse;
-        sender.finish(rpc::Result::success(response)).unwrap();
+        context.finish(rpc::Result::success(response)).unwrap();
     }
 }
 
@@ -139,16 +139,16 @@ struct GetContent {
 }
 
 impl client::rpc::server::Rpc for GetContent {
-    fn call(&mut self, mut sender: client::rpc::server::Context, args: json::Value) {
-        let request: GetContentRequest = try_rpc!(sender, json::from_value(args));
+    fn call(&mut self, mut context: client::rpc::server::Context, args: json::Value) {
+        let request: GetContentRequest = try_rpc!(context, json::from_value(args));
         let buffers = self.buffers.read().unwrap();
 
-        let buffer = try_rpc!(sender, buffers.get(request.buffer_index));
+        let buffer = try_rpc!(context, buffers.get(request.buffer_index));
 
         let response = GetContentResponse {
             content: buffer.to_string(),
         };
-        sender.finish(rpc::Result::success(response)).unwrap();
+        context.finish(rpc::Result::success(response)).unwrap();
     }
 }
 
@@ -167,18 +167,18 @@ struct Open {
 }
 
 impl client::rpc::server::Rpc for Open {
-    fn call(&mut self, mut sender: client::rpc::server::Context, args: json::Value) {
+    fn call(&mut self, mut context: client::rpc::server::Context, args: json::Value) {
         const FILE_PREFIX: &'static str = "file://";
-        let mut request: OpenRequest = try_rpc!(sender, json::from_value(args));
+        let mut request: OpenRequest = try_rpc!(context, json::from_value(args));
         if !request.uri.starts_with(FILE_PREFIX) {
-            sender.finish(rpc::Result::NotHandled).unwrap();
+            context.finish(rpc::Result::NotHandled).unwrap();
             return;
         }
         request.uri.drain(..FILE_PREFIX.len());
 
-        let mut file = try_rpc!(sender, fs::File::open(path::Path::new(&request.uri)));
+        let mut file = try_rpc!(context, fs::File::open(path::Path::new(&request.uri)));
         let mut content = String::new();
-        try_rpc!(sender, file.read_to_string(&mut content));
+        try_rpc!(context, file.read_to_string(&mut content));
 
         let buffer = Buffer::from_string(content);
 
@@ -186,7 +186,7 @@ impl client::rpc::server::Rpc for Open {
         let response = OpenResponse {
             buffer_index: buffers.new_buffer(buffer),
         };
-        sender.finish(rpc::Result::success(response)).unwrap();
+        context.finish(rpc::Result::success(response)).unwrap();
     }
 }
 
@@ -204,14 +204,14 @@ struct List {
 }
 
 impl client::rpc::server::Rpc for List {
-    fn call(&mut self, mut sender: client::rpc::server::Context, args: json::Value) {
-        let _: ListRequest = try_rpc!(sender, json::from_value(args));
+    fn call(&mut self, mut context: client::rpc::server::Context, args: json::Value) {
+        let _: ListRequest = try_rpc!(context, json::from_value(args));
 
         let buffers = self.buffers.read().unwrap();
         let response = ListResponse {
             buffer_indices: buffers.keys().map(|c| *c).collect(),
         };
-        sender.finish(rpc::Result::success(response)).unwrap();
+        context.finish(rpc::Result::success(response)).unwrap();
     }
 }
 
@@ -241,15 +241,15 @@ impl Buffer {
 struct BuffersManager {
     next_buffer_index: usize,
     buffers: HashMap<usize, Buffer>,
-    sender: client::Sender,
+    client: client::ThinClient,
 }
 
 impl BuffersManager {
-    fn new(sender: client::Sender) -> Self {
+    fn new(client: client::ThinClient) -> Self {
         BuffersManager {
             next_buffer_index: 0,
             buffers: HashMap::new(),
-            sender: sender
+            client: client
         }
     }
 
@@ -261,7 +261,7 @@ impl BuffersManager {
 
         // NOCOM(#sirver): new is not good. should be create.
         // Fire the callback, but we do not wait for it's conclusion.
-        let _ = self.sender.call("on.buffer.new", &BufferCreated {
+        let _ = self.client.call("on.buffer.new", &BufferCreated {
             buffer_index: current_buffer_index,
         });
         current_buffer_index
@@ -271,7 +271,7 @@ impl BuffersManager {
         try!(self.buffers.remove(&buffer_index).ok_or(BufferError::UnknownBuffer));
 
         // Fire the callback, but we do not wait for it's conclusion.
-        let _ = self.sender.call("on.buffer.deleted", &BufferDeleted {
+        let _ = self.client.call("on.buffer.deleted", &BufferDeleted {
             buffer_index: buffer_index,
         });
 
@@ -304,7 +304,7 @@ impl<'a> BufferPlugin<'a> {
         let client = client::Client::connect(socket_name);
 
         let plugin = BufferPlugin {
-            buffers: Arc::new(RwLock::new(BuffersManager::new(client.new_sender()))),
+            buffers: Arc::new(RwLock::new(BuffersManager::new(client.clone()))),
             client: client,
         };
 

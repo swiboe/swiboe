@@ -54,14 +54,14 @@ pub struct ListFilesResponse;
 struct ListFiles;
 
 impl client::rpc::server::Rpc for ListFiles {
-    fn call(&mut self, mut sender: client::rpc::server::Context, args: json::Value) {
-        let request: ListFilesRequest = try_rpc!(sender, json::from_value(args));
+    fn call(&mut self, mut context: client::rpc::server::Context, args: json::Value) {
+        let request: ListFilesRequest = try_rpc!(context, json::from_value(args));
 
         thread::spawn(move || {
             let mut files = Vec::new();
             let mut last = time::SteadyTime::now();
             visit_dirs(Path::new(&request.directory), &mut |entry| {
-                if sender.cancelled() {
+                if context.cancelled() {
                     return Continue::No;
                 }
 
@@ -69,7 +69,7 @@ impl client::rpc::server::Rpc for ListFiles {
                 let now = time::SteadyTime::now();
                 if now - last > time::Duration::milliseconds(50) {
                     last = now;
-                    if sender.update(&ListFilesUpdate {
+                    if context.update(&ListFilesUpdate {
                         files: mem::replace(&mut files, Vec::new())
                     }).is_err() {
                         return Continue::No;
@@ -79,11 +79,11 @@ impl client::rpc::server::Rpc for ListFiles {
             }).unwrap();
 
             // Ignore errors: we might have been cancelled.
-            let _ = sender.update(&ListFilesUpdate {
+            let _ = context.update(&ListFilesUpdate {
                 files: mem::replace(&mut files, Vec::new())
             });
             let response = ListFilesResponse;
-            let _ = sender.finish(rpc::Result::success(response));
+            let _ = context.finish(rpc::Result::success(response));
         });
 
     }

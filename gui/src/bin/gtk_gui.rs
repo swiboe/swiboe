@@ -93,7 +93,7 @@ impl SwitchboardGtkGui {
 
         // let drawing_area_clone = drawing_area.clone();
         let buffers_clone = gui.buffer_views.clone();
-        let sender = client.new_sender();
+        let thin_client = client.clone();
         window.connect_key_press_event(move |window, key| {
             // println!("#sirver key: {:#?}", key);
             let state = (*key).state;
@@ -106,14 +106,14 @@ impl SwitchboardGtkGui {
                     println!("#sirver keypress: {}", time::precise_time_ns());
                     match &name_str as &str {
                         "F2" => {
-                            let mut rpc = sender.call("buffer.open", &plugin_buffer::OpenRequest {
+                            let mut rpc = thin_client.call("buffer.open", &plugin_buffer::OpenRequest {
                                 uri: "file:///Users/sirver/Desktop/Programming/rust/Switchboard/src/client.rs".into(),
                             });
                             let b: plugin_buffer::OpenResponse = rpc.wait_for().unwrap();
                             println!("#sirver b: {:#?}", b);
                         },
                         "F3" => {
-                            let mut rpc = sender.call("list_files", &plugin_list_files::ListFilesRequest {
+                            let mut rpc = thin_client.call("list_files", &plugin_list_files::ListFilesRequest {
                                 directory: "/Users/sirver/Desktop/Programming/".into(),
                             });
                             let mut num = 0;
@@ -137,25 +137,25 @@ impl SwitchboardGtkGui {
                             });
                         },
                         "Up" => {
-                            sender.call("gui.buffer_view.move_cursor", &buffer_views::MoveCursorRequest {
+                            thin_client.call("gui.buffer_view.move_cursor", &buffer_views::MoveCursorRequest {
                                 cursor_id: cursor_id.clone(),
                                 delta: buffer_views::Position { line_index: -1, column_index: 0, },
                             });
                         },
                         "Down" => {
-                            sender.call("gui.buffer_view.move_cursor", &buffer_views::MoveCursorRequest {
+                            thin_client.call("gui.buffer_view.move_cursor", &buffer_views::MoveCursorRequest {
                                 cursor_id: cursor_id.clone(),
                                 delta: buffer_views::Position { line_index: 1, column_index: 0, },
                             });
                         }
                         "Left" => {
-                            sender.call("gui.buffer_view.move_cursor", &buffer_views::MoveCursorRequest {
+                            thin_client.call("gui.buffer_view.move_cursor", &buffer_views::MoveCursorRequest {
                                 cursor_id: cursor_id.clone(),
                                 delta: buffer_views::Position { line_index: 0, column_index: -1, },
                             });
                         },
                         "Right" => {
-                            sender.call("gui.buffer_view.move_cursor", &buffer_views::MoveCursorRequest {
+                            thin_client.call("gui.buffer_view.move_cursor", &buffer_views::MoveCursorRequest {
                                 cursor_id: cursor_id.clone(),
                                 delta: buffer_views::Position { line_index: 0, column_index: 1, },
                             });

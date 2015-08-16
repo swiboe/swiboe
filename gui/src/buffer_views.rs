@@ -63,14 +63,14 @@ struct Scroll {
 }
 
 impl client::rpc::server::Rpc for Scroll {
-    fn call(&mut self, mut sender: client::rpc::server::Context, args: json::Value) {
-        let request: ScrollRequest = try_rpc!(sender, json::from_value(args));
+    fn call(&mut self, mut context: client::rpc::server::Context, args: json::Value) {
+        let request: ScrollRequest = try_rpc!(context, json::from_value(args));
 
         let mut buffer_views = self.buffer_views.write().unwrap();
         buffer_views.scroll(&request.buffer_view_id, request.delta);
 
         let response = ScrollResponse;
-        sender.finish(rpc::Result::success(response))
+        context.finish(rpc::Result::success(response))
     }
 }
 
@@ -130,15 +130,15 @@ struct MoveCursor {
 }
 
 impl client::rpc::server::Rpc for MoveCursor {
-    fn call(&mut self,  mut sender: client::rpc::server::Context, args: json::Value) {
+    fn call(&mut self,  mut context: client::rpc::server::Context, args: json::Value) {
         println!("#sirver Beginning of MoveCursor: {:#?}", time::precise_time_ns());
-        let request: MoveCursorRequest = try_rpc!(sender, json::from_value(args));
+        let request: MoveCursorRequest = try_rpc!(context, json::from_value(args));
 
         let mut buffer_views = self.buffer_views.write().unwrap();
 
-        try_rpc!(sender, buffer_views.move_cursor(&request.cursor_id, request.delta));
+        try_rpc!(context, buffer_views.move_cursor(&request.cursor_id, request.delta));
         println!("#sirver End of MoveCursor: {:#?}", time::precise_time_ns());
-        sender.finish(rpc::Result::success(MoveCursorResponse))
+        context.finish(rpc::Result::success(MoveCursorResponse))
     }
 }
 
@@ -179,7 +179,7 @@ pub struct BufferViews {
     // NOCOM(#sirver): is the gui id needed?
     gui_id: String,
     buffer_views: HashMap<usize, BufferView>,
-    sender: client::Sender,
+    client: client::ThinClient,
     // NOCOM(#sirver): are these mutex really needed?
     commands: Mutex<mpsc::Sender<GuiCommand>>,
 }
@@ -189,7 +189,7 @@ impl BufferViews {
         let mut buffer_view = Arc::new(RwLock::new(BufferViews {
             gui_id: gui_id.to_string(),
             buffer_views: HashMap::new(),
-            sender: client.new_sender(),
+            client: client.clone(),
             commands: Mutex::new(commands),
         }));
 
@@ -205,7 +205,7 @@ impl BufferViews {
 
         let on_buffer_created = OnBufferCreated {
             buffer_views: buffer_view.clone(),
-            sender: client.new_sender(),
+            client: client.clone(),
         };
         client.new_rpc("on.buffer.new", Box::new(on_buffer_created));
 
@@ -219,11 +219,11 @@ impl BufferViews {
 
     fn update_all_buffers_blocking(&mut self) {
         // NOCOM(#sirver): all these unwraps are very dangerous.
-        let mut rpc = self.sender.call("buffer.list", &plugin_buffer::ListRequest);
+        let mut rpc = self.client.call("buffer.list", &plugin_buffer::ListRequest);
         let result: plugin_buffer::ListResponse = rpc.wait_for().unwrap();
 
         for buffer_index in result.buffer_indices {
-            let mut rpc = self.sender.call("buffer.get_content", &plugin_buffer::GetContentRequest {
+            let mut rpc = self.client.call("buffer.get_content", &plugin_buffer::GetContentRequest {
                 buffer_index: buffer_index,
             });
             let response: plugin_buffer::GetContentResponse = rpc.wait_for().unwrap();
@@ -307,14 +307,14 @@ impl BufferViews {
 // weak_refs?
 struct OnBufferCreated {
     buffer_views: Arc<RwLock<BufferViews>>,
-    sender: client::Sender,
+    client: client::Sender,
 }
 
 impl client::rpc::server::Rpc for OnBufferCreated {
-    fn call(&mut self, mut sender: client::rpc::server::Context, args: json::Value) {
-        let info: plugin_buffer::BufferCreated = try_rpc!(sender, json::from_value(args));
+    fn call(&mut self, mut client: client::rpc::server::Context, args: json::Value) {
+        let info: plugin_buffer::BufferCreated = try_rpc!(client, json::from_value(args));
 
-        let mut rpc = self.sender.call("buffer.get_content", &plugin_buffer::GetContentRequest {
+        let mut rpc = self.client.call("buffer.get_content", &plugin_buffer::GetContentRequest {
             buffer_index: info.buffer_index,
         });
         match rpc.wait().unwrap() {
@@ -326,6 +326,6 @@ impl client::rpc::server::Rpc for OnBufferCreated {
             }
             _ => {},
         }
-        sender.finish(rpc::Result::success(()))
+        client.finish(rpc::Result::success(()))
     }
 }

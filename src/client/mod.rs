@@ -33,11 +33,11 @@ impl<'a> Client<'a> {
 
     pub fn new_rpc(&self, name: &str, rpc: Box<rpc::server::Rpc + 'a>) {
         // NOCOM(#sirver): what happens when this is already inserted? crash probably
-        let mut rpc = self.call("core.new_rpc", &NewRpcRequest {
+        let mut new_rpc = self.call("core.new_rpc", &NewRpcRequest {
             priority: rpc.priority(),
             name: name.into(),
         });
-        let success = rpc.wait().unwrap();
+        let success = new_rpc.wait().unwrap();
         // NOCOM(#sirver): report failure.
 
         self.rpc_loop_commands.send(rpc_loop::Command::NewRpc(name.into(), rpc)).expect("NewRpc");
@@ -47,8 +47,8 @@ impl<'a> Client<'a> {
         rpc::client::Context::new(&self.event_loop_commands, function, args).unwrap()
     }
 
-    pub fn new_sender(&self) -> Sender {
-        Sender {
+    pub fn clone(&self) -> ThinClient {
+        ThinClient {
             event_loop_commands: self.event_loop_commands.clone(),
         }
     }
@@ -64,13 +64,13 @@ impl<'a> Drop for Client<'a> {
 }
 
 #[derive(Clone)]
-pub struct Sender {
+pub struct ThinClient {
     event_loop_commands: mio::Sender<event_loop::Command>,
 }
 
 // NOCOM(#sirver): figure out the difference between a Sender, an Context and come up with better
 // names.
-impl Sender {
+impl ThinClient {
     pub fn call<T: serde::Serialize>(&self, function: &str, args: &T) -> rpc::client::Context {
         rpc::client::Context::new(&self.event_loop_commands, function, args).unwrap()
     }
