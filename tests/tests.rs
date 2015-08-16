@@ -16,13 +16,13 @@ mod support;
 mod core;
 mod plugin_buffer;
 
-pub struct CallbackProcedure<F> {
+pub struct CallbackRpc<F> {
     pub priority: u16,
     pub callback: F,
 }
 
-impl<F> client::RemoteProcedure for CallbackProcedure<F> where F: Fn(client::RpcServerContext, json::Value) + Send {
-    fn call(&mut self, sender: client::RpcServerContext, args: json::Value) {
+impl<F> client::rpc::server::Rpc for CallbackRpc<F> where F: Fn(client::rpc::server::Context, json::Value) + Send {
+    fn call(&mut self, sender: client::rpc::server::Context, args: json::Value) {
         (self.callback)(sender, args);
     }
     fn priority(&self) -> u16 { self.priority }

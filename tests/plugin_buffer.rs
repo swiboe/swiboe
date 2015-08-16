@@ -1,5 +1,5 @@
 use std::sync::atomic::{AtomicBool, Ordering};
-use super::{CallbackProcedure, create_file};
+use super::{CallbackRpc, create_file};
 use support::TestHarness;
 use switchboard::client;
 use switchboard::plugin_buffer;
@@ -22,9 +22,9 @@ fn buffer_new() {
     let callback_called  = AtomicBool::new(true);
     {
         let client = client::Client::connect(&t.socket_name);
-        client.new_rpc("on.buffer.new", Box::new(CallbackProcedure {
+        client.new_rpc("on.buffer.new", Box::new(CallbackRpc {
             priority: 100,
-            callback: |mut sender: client::RpcServerContext, _| {
+            callback: |mut sender: client::rpc::server::Context, _| {
                 callback_called.store(true, Ordering::Relaxed);
                 sender.finish(rpc::Result::success(())).unwrap();
             }
@@ -92,9 +92,9 @@ fn buffer_delete() {
 
     {
         let client = client::Client::connect(&t.socket_name);
-        client.new_rpc("on.buffer.deleted", Box::new(CallbackProcedure {
+        client.new_rpc("on.buffer.deleted", Box::new(CallbackRpc {
             priority: 100,
-            callback: |mut sender: client::RpcServerContext, _| {
+            callback: |mut sender: client::rpc::server::Context, _| {
                 callback_called.store(true, Ordering::Relaxed);
                 sender.finish(rpc::Result::success(())).unwrap();
             }

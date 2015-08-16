@@ -3,7 +3,6 @@
 use ::Result;
 use ::ipc;
 use ::plugin_core::NewRpcRequest;
-use ::rpc;
 use mio::unix::UnixStream;
 use mio;
 use serde::{json, Serialize, Deserialize};
@@ -16,15 +15,10 @@ use uuid::Uuid;
 
 const CLIENT: mio::Token = mio::Token(1);
 
-pub trait RemoteProcedure: Send {
-    fn priority(&self) -> u16 { u16::max_value() }
-    fn call(&mut self, context: RpcServerContext, args: json::Value);
-}
-
 pub struct RpcClientContext {
     context: String,
-    values: mpsc::Receiver<rpc::Response>,
-    result: Option<rpc::Result>,
+    values: mpsc::Receiver<::rpc::Response>,
+    result: Option<::rpc::Result>,
     event_loop_sender: mio::Sender<EventLoopThreadCommand>,
 }
 
@@ -62,7 +56,7 @@ impl RpcClientContext {
                          args: &T) -> result::Result<Self, mio::NotifyError<EventLoopThreadCommand>> {
         let args = json::to_value(&args);
         let context = Uuid::new_v4().to_hyphenated_string();
-        let message = ipc::Message::RpcCall(rpc::Call {
+        let message = ipc::Message::RpcCall(::rpc::Call {
             function: function.into(),
             context: context.clone(),
             args: args,
@@ -87,15 +81,15 @@ impl RpcClientContext {
 
         let rpc_response = try!(self.values.recv());
         match rpc_response.kind {
-            rpc::ResponseKind::Partial(value) => Ok(Some(value)),
-            rpc::ResponseKind::Last(result) => {
+            ::rpc::ResponseKind::Partial(value) => Ok(Some(value)),
+            ::rpc::ResponseKind::Last(result) => {
                 self.result = Some(result);
                 Ok(None)
             },
         }
     }
 
-    pub fn wait(&mut self) -> RpcClientContextResult<rpc::Result> {
+    pub fn wait(&mut self) -> RpcClientContextResult<::rpc::Result> {
         while let Some(_) = try!(self.recv()) {
         }
         Ok(self.result.take().unwrap())
@@ -104,15 +98,15 @@ impl RpcClientContext {
     // NOCOM(#sirver): figure out error handling for clients, not use Server error?
     pub fn wait_for<T: Deserialize>(&mut self) -> RpcClientContextResult<T> {
         match try!(self.wait()) {
-            rpc::Result::Ok(value) => Ok(try!(json::from_value(value))),
-            rpc::Result::Err(err) => panic!("#sirver err: {:#?}", err),
+            ::rpc::Result::Ok(value) => Ok(try!(json::from_value(value))),
+            ::rpc::Result::Err(err) => panic!("#sirver err: {:#?}", err),
             // NOCOM(#sirver): probably should ignore other errors.
             other => panic!("#sirver other: {:#?}", other),
         }
     }
 
     pub fn cancel(self) -> RpcClientContextResult<()> {
-        let msg = ipc::Message::RpcCancel(rpc::Cancel {
+        let msg = ipc::Message::RpcCancel(::rpc::Cancel {
             context: self.context.clone(),
         });
         try!(self.event_loop_sender.send(EventLoopThreadCommand::Send(msg)));
@@ -123,13 +117,13 @@ impl RpcClientContext {
 pub enum EventLoopThreadCommand {
     Quit,
     Send(ipc::Message),
-    Call(String, mpsc::Sender<rpc::Response>, ipc::Message),
+    Call(String, mpsc::Sender<::rpc::Response>, ipc::Message),
 }
 
 // NOCOM(#sirver): bad name
 struct Handler<'a> {
     stream: ipc::Stream<UnixStream>,
-    running_function_calls: HashMap<String, mpsc::Sender<rpc::Response>>,
+    running_function_calls: HashMap<String, mpsc::Sender<::rpc::Response>>,
     function_thread_sender: mpsc::Sender<FunctionThreadCommand<'a>>,
 }
 
@@ -218,21 +212,17 @@ impl<'a> mio::Handler for Handler<'a> {
 
 enum FunctionThreadCommand<'a> {
     Quit,
-    NewRpc(String, Box<RemoteProcedure + 'a>),
-    Call(rpc::Call),
-    Cancel(rpc::Cancel),
-}
-
-enum RpcServerContextCommand {
-    Cancel,
+    NewRpc(String, Box<rpc::server::Rpc + 'a>),
+    Call(::rpc::Call),
+    Cancel(::rpc::Cancel),
 }
 
 struct RunningRpc {
-    commands: mpsc::Sender<RpcServerContextCommand>,
+    commands: mpsc::Sender<rpc::server::Command>,
 }
 
 impl RunningRpc {
-    fn new(commands: mpsc::Sender<RpcServerContextCommand>) -> Self {
+    fn new(commands: mpsc::Sender<rpc::server::Command>) -> Self {
         RunningRpc {
             commands: commands,
         }
@@ -240,7 +230,7 @@ impl RunningRpc {
 }
 
 struct FunctionThread<'a> {
-    remote_procedures: HashMap<String, Box<RemoteProcedure + 'a>>,
+    remote_procedures: HashMap<String, Box<rpc::server::Rpc + 'a>>,
     commands: mpsc::Receiver<FunctionThreadCommand<'a>>,
     event_loop_sender: mio::Sender<EventLoopThreadCommand>,
     running_rpc_calls: HashMap<String, RunningRpc>,
@@ -257,7 +247,7 @@ impl<'a> FunctionThread<'a> {
                 FunctionThreadCommand::Call(rpc_call) => {
                     if let Some(function) = self.remote_procedures.get_mut(&rpc_call.function) {
                         let (tx, rx) = mpsc::channel();
-                        function.call(RpcServerContext::new(
+                        function.call(rpc::server::Context::new(
                             rpc_call.context.clone(), rx, self.event_loop_sender.clone()), rpc_call.args);
                         self.running_rpc_calls.insert(rpc_call.context.clone(), RunningRpc::new(tx));
                     }
@@ -269,7 +259,7 @@ impl<'a> FunctionThread<'a> {
                     // NOCOM(#sirver): on drop, the rpcservercontext must delete the entry.
                     if let Some(function) = self.running_rpc_calls.remove(&rpc_cancel.context) {
                         // The function might be dead already, so we ignore errors.
-                        let _ = function.commands.send(RpcServerContextCommand::Cancel);
+                        let _ = function.commands.send(rpc::server::Command::Cancel);
                     }
                 }
             }
@@ -324,7 +314,7 @@ impl<'a> Client<'a> {
         }
     }
 
-    pub fn new_rpc(&self, name: &str, remote_procedure: Box<RemoteProcedure + 'a>) {
+    pub fn new_rpc(&self, name: &str, remote_procedure: Box<rpc::server::Rpc + 'a>) {
         // NOCOM(#sirver): what happens when this is already inserted? crash probably
         let mut rpc = self.call("core.new_rpc", &NewRpcRequest {
             priority: remote_procedure.priority(),
@@ -362,7 +352,7 @@ pub struct Sender {
     event_loop_sender: mio::Sender<EventLoopThreadCommand>,
 }
 
-// NOCOM(#sirver): figure out the difference between a Sender, an RpcServerContext and come up with better
+// NOCOM(#sirver): figure out the difference between a Sender, an Context and come up with better
 // names.
 impl Sender {
     pub fn call<T: Serialize>(&self, function: &str, args: &T) -> RpcClientContext {
@@ -370,112 +360,4 @@ impl Sender {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
-enum RpcServerContextState {
-    Alive,
-    Finished,
-    Cancelled,
-}
-
-pub struct RpcServerContext {
-    context: String,
-    commands: mpsc::Receiver<RpcServerContextCommand>,
-    event_loop_sender: mio::Sender<EventLoopThreadCommand>,
-    state: RpcServerContextState,
-}
-
-#[derive(Debug)]
-pub enum RpcServerContextError {
-    Finished,
-    Cancelled,
-    Disconnected,
-}
-
-// NOCOM(#sirver): impl error::Error for RpcServerContextError?
-
-impl From<mio::NotifyError<EventLoopThreadCommand>> for RpcServerContextError {
-    fn from(_: mio::NotifyError<EventLoopThreadCommand>) -> Self {
-        RpcServerContextError::Disconnected
-    }
-}
-
-
-pub type RpcServerContextResult<T> = result::Result<T, RpcServerContextError>;
-
-impl RpcServerContext {
-    fn new(context: String, commands: mpsc::Receiver<RpcServerContextCommand>,
-           event_loop_sender: mio::Sender<EventLoopThreadCommand>) -> Self {
-        RpcServerContext {
-            context: context,
-            commands: commands,
-            event_loop_sender: event_loop_sender,
-            state: RpcServerContextState::Alive
-        }
-    }
-
-    fn update_state(&mut self) {
-        match self.commands.try_recv() {
-            Ok(value) => match value {
-                RpcServerContextCommand::Cancel => self.state = RpcServerContextState::Cancelled,
-            },
-            Err(err) => match err {
-                mpsc::TryRecvError::Empty => (),
-                mpsc::TryRecvError::Disconnected => {
-                    // The FunctionThread terminated - that means that the client must be shutting
-                    // down. That is like we are canceled.
-                    self.state = RpcServerContextState::Cancelled;
-                }
-            }
-        }
-    }
-    fn check_liveness(&mut self) -> RpcServerContextResult<()> {
-        self.update_state();
-
-        match self.state {
-            RpcServerContextState::Alive => Ok(()),
-            RpcServerContextState::Finished => Err(RpcServerContextError::Finished),
-            RpcServerContextState::Cancelled => Err(RpcServerContextError::Cancelled),
-        }
-    }
-
-    pub fn call<T: Serialize>(&mut self, function: &str, args: &T) -> RpcServerContextResult<RpcClientContext> {
-        try!(self.check_liveness());
-        Ok(try!(RpcClientContext::new(&self.event_loop_sender, function, args)))
-    }
-
-    pub fn update<T: Serialize>(&mut self, args: &T) -> RpcServerContextResult<()> {
-        try!(self.check_liveness());
-
-        let msg = ipc::Message::RpcResponse(rpc::Response {
-            context: self.context.clone(),
-            kind: rpc::ResponseKind::Partial(json::to_value(args)),
-        });
-        Ok(try!(self.event_loop_sender.send(EventLoopThreadCommand::Send(msg))))
-    }
-
-    pub fn cancelled(&mut self) -> bool {
-        self.update_state();
-        self.state == RpcServerContextState::Cancelled
-    }
-
-    // NOCOM(#sirver): can consume self?
-    pub fn finish(&mut self, result: rpc::Result) -> RpcServerContextResult<()> {
-        try!(self.check_liveness());
-
-        self.state = RpcServerContextState::Finished;
-        let msg = ipc::Message::RpcResponse(rpc::Response {
-            context: self.context.clone(),
-            kind: rpc::ResponseKind::Last(result),
-        });
-        Ok(try!(self.event_loop_sender.send(EventLoopThreadCommand::Send(msg))))
-    }
-}
-
-impl Drop for RpcServerContext {
-    fn drop(&mut self) {
-        match self.state {
-            RpcServerContextState::Finished | RpcServerContextState::Cancelled => (),
-            RpcServerContextState::Alive => panic!("RpcServerContext dropped while still alive. Call finish()!."),
-        }
-    }
-}
+pub mod rpc;

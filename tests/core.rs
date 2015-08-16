@@ -3,7 +3,7 @@ use std::env;
 use std::path;
 use std::sync;
 use std::thread;
-use super::CallbackProcedure;
+use super::CallbackRpc;
 use support::TestHarness;
 use switchboard::client;
 use switchboard::rpc;
@@ -41,9 +41,9 @@ struct TestCall {
     result: rpc::Result,
 }
 
-impl client::RemoteProcedure for TestCall {
+impl client::rpc::server::Rpc for TestCall {
     fn priority(&self) -> u16 { self.priority }
-    fn call(&mut self, mut sender: client::RpcServerContext, _: json::Value) {
+    fn call(&mut self, mut sender: client::rpc::server::Context, _: json::Value) {
         sender.finish(self.result.clone()).unwrap();
     }
 }
@@ -117,7 +117,7 @@ fn rpc_not_calling_finish() {
     let t = TestHarness::new();
 
     let client1 = client::Client::connect(&t.socket_name);
-    client1.new_rpc("test.test", Box::new(CallbackProcedure {
+    client1.new_rpc("test.test", Box::new(CallbackRpc {
         priority: 100,
         callback: |_, _| {},
     }));
@@ -201,9 +201,9 @@ fn call_streaming_rpc_simple() {
     let t = TestHarness::new();
 
     let streaming_client = client::Client::connect(&t.socket_name);
-    streaming_client.new_rpc("test.test", Box::new(CallbackProcedure {
+    streaming_client.new_rpc("test.test", Box::new(CallbackRpc {
         priority: 50,
-        callback: |mut context: client::RpcServerContext, _| {
+        callback: |mut context: client::rpc::server::Context, _| {
             thread::spawn(move || {
                 context.update(&as_json(r#"{ "msg": "one" }"#)).unwrap();
                 context.update(&as_json(r#"{ "msg": "two" }"#)).unwrap();
@@ -228,9 +228,9 @@ fn call_streaming_rpc_cancelled() {
 
     let t = TestHarness::new();
     let streaming_client = client::Client::connect(&t.socket_name);
-    streaming_client.new_rpc("test.test", Box::new(CallbackProcedure {
+    streaming_client.new_rpc("test.test", Box::new(CallbackRpc {
         priority: 50,
-        callback: |mut context: client::RpcServerContext, _| {
+        callback: |mut context: client::rpc::server::Context, _| {
             let cancelled = cancelled.clone();
             thread::spawn(move || {
                 let mut count = 0;

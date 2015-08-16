@@ -53,8 +53,8 @@ pub struct ListFilesResponse;
 
 struct ListFiles;
 
-impl client::RemoteProcedure for ListFiles {
-    fn call(&mut self, mut sender: client::RpcServerContext, args: json::Value) {
+impl client::rpc::server::Rpc for ListFiles {
+    fn call(&mut self, mut sender: client::rpc::server::Context, args: json::Value) {
         let request: ListFilesRequest = try_rpc!(sender, json::from_value(args));
 
         thread::spawn(move || {
