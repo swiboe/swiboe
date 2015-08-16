@@ -6,14 +6,13 @@ use mio;
 use serde;
 use std::path;
 use std::sync::mpsc;
-use std::thread;
 
 pub struct Client<'a> {
     event_loop_commands: mio::Sender<event_loop::Command>,
     rpc_loop_commands: mpsc::Sender<rpc_loop::Command<'a>>,
 
-    _rpc_loop_thread_join_guard: thread::JoinGuard<'a, ()>,
-    _event_loop_thread_join_guard: thread::JoinGuard<'a, ()>,
+    _rpc_loop_thread_join_guard: ::thread_scoped::JoinGuard<'a, ()>,
+    _event_loop_thread_join_guard: ::thread_scoped::JoinGuard<'a, ()>,
 }
 
 impl<'a> Client<'a> {

@@ -3,7 +3,6 @@ use mio::unix::UnixStream;
 use mio;
 use std::collections::HashMap;
 use std::sync::mpsc;
-use std::thread;
 use ::client::rpc_loop;
 
 const CLIENT: mio::Token = mio::Token(1);
@@ -105,7 +104,7 @@ impl<'a> mio::Handler for Handler<'a> {
 }
 
 pub fn spawn<'a>(stream: UnixStream, commands_tx: mpsc::Sender<rpc_loop::Command<'a>>)
-    -> (thread::JoinGuard<'a, ()>, mio::Sender<Command>)
+    -> (::thread_scoped::JoinGuard<'a, ()>, mio::Sender<Command>)
 {
     let mut event_loop = mio::EventLoop::<Handler>::new().unwrap();
     let event_loop_sender = event_loop.channel();
@@ -118,9 +117,11 @@ pub fn spawn<'a>(stream: UnixStream, commands_tx: mpsc::Sender<rpc_loop::Command
     event_loop.register_opt(
         &handler.stream.socket, CLIENT, mio::EventSet::readable(), mio::PollOpt::edge() |
         mio::PollOpt::oneshot()).unwrap();
-    let event_loop_thread = thread::scoped(move || {
-        event_loop.run(&mut handler).unwrap();
-    });
+    let event_loop_thread = unsafe {
+        ::thread_scoped::scoped(move || {
+            event_loop.run(&mut handler).unwrap();
+        })
+    };
 
     (event_loop_thread, event_loop_sender)
 }

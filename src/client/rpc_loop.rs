@@ -3,7 +3,6 @@ use ::client::rpc;
 use mio;
 use std::collections::HashMap;
 use std::sync::mpsc;
-use std::thread;
 
 pub enum Command<'a> {
     Quit,
@@ -63,15 +62,17 @@ impl<'a> RpcLoop<'a> {
 }
 
 pub fn spawn<'a>(commands_rx: mpsc::Receiver<Command<'a>>,
-                 event_loop_sender: mio::Sender<event_loop::Command>) -> thread::JoinGuard<'a, ()>
+                 event_loop_sender: mio::Sender<event_loop::Command>) -> ::thread_scoped::JoinGuard<'a, ()>
 {
-    thread::scoped(move || {
-        let mut thread = RpcLoop {
-            remote_procedures: HashMap::new(),
-            running_rpc_calls: HashMap::new(),
-            commands: commands_rx,
-            event_loop_sender: event_loop_sender,
-        };
-        thread.spin_forever();
-    })
+    unsafe {
+        ::thread_scoped::scoped(move || {
+            let mut thread = RpcLoop {
+                remote_procedures: HashMap::new(),
+                running_rpc_calls: HashMap::new(),
+                commands: commands_rx,
+                event_loop_sender: event_loop_sender,
+            };
+            thread.spin_forever();
+        })
+    }
 }
