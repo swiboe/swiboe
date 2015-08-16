@@ -1,12 +1,8 @@
-use ::ipc;
-use ::rpc;
+use ::client::event_loop;
 use mio;
 use serde::{json, Serialize};
 use std::result;
 use std::sync::mpsc;
-
-// NOCOM(#sirver): not *
-use super::super::{EventLoopThreadCommand, RpcClientContext};
 
 #[derive(Clone, Debug, PartialEq)]
 enum ContextState {
@@ -24,12 +20,11 @@ pub enum Error {
 
 // NOCOM(#sirver): impl error::Error for Error?
 
-impl From<mio::NotifyError<EventLoopThreadCommand>> for Error {
-    fn from(_: mio::NotifyError<EventLoopThreadCommand>) -> Self {
+impl From<mio::NotifyError<event_loop::Command>> for Error {
+    fn from(_: mio::NotifyError<event_loop::Command>) -> Self {
         Error::Disconnected
     }
 }
-
 
 pub enum Command {
     Cancel,
@@ -45,13 +40,13 @@ pub type Result<T> = result::Result<T, Error>;
 pub struct Context {
     context: String,
     commands: mpsc::Receiver<Command>,
-    event_loop_sender: mio::Sender<EventLoopThreadCommand>,
+    event_loop_sender: mio::Sender<event_loop::Command>,
     state: ContextState,
 }
 
 impl Context {
     pub fn new(context: String, commands: mpsc::Receiver<Command>,
-           event_loop_sender: mio::Sender<EventLoopThreadCommand>) -> Self {
+           event_loop_sender: mio::Sender<event_loop::Command>) -> Self {
         Context {
             context: context,
             commands: commands,
@@ -86,19 +81,19 @@ impl Context {
         }
     }
 
-    pub fn call<T: Serialize>(&mut self, function: &str, args: &T) -> Result<RpcClientContext> {
+    pub fn call<T: Serialize>(&mut self, function: &str, args: &T) -> Result<::client::rpc::client::Context> {
         try!(self.check_liveness());
-        Ok(try!(RpcClientContext::new(&self.event_loop_sender, function, args)))
+        Ok(try!(::client::rpc::client::Context::new(&self.event_loop_sender, function, args)))
     }
 
     pub fn update<T: Serialize>(&mut self, args: &T) -> Result<()> {
         try!(self.check_liveness());
 
-        let msg = ipc::Message::RpcResponse(rpc::Response {
+        let msg = ::ipc::Message::RpcResponse(::rpc::Response {
             context: self.context.clone(),
-            kind: rpc::ResponseKind::Partial(json::to_value(args)),
+            kind: ::rpc::ResponseKind::Partial(json::to_value(args)),
         });
-        Ok(try!(self.event_loop_sender.send(EventLoopThreadCommand::Send(msg))))
+        Ok(try!(self.event_loop_sender.send(event_loop::Command::Send(msg))))
     }
 
     pub fn cancelled(&mut self) -> bool {
@@ -107,15 +102,15 @@ impl Context {
     }
 
     // NOCOM(#sirver): can consume self?
-    pub fn finish(&mut self, result: rpc::Result) -> Result<()> {
+    pub fn finish(&mut self, result: ::rpc::Result) -> Result<()> {
         try!(self.check_liveness());
 
         self.state = ContextState::Finished;
-        let msg = ipc::Message::RpcResponse(rpc::Response {
+        let msg = ::ipc::Message::RpcResponse(::rpc::Response {
             context: self.context.clone(),
-            kind: rpc::ResponseKind::Last(result),
+            kind: ::rpc::ResponseKind::Last(result),
         });
-        Ok(try!(self.event_loop_sender.send(EventLoopThreadCommand::Send(msg))))
+        Ok(try!(self.event_loop_sender.send(event_loop::Command::Send(msg))))
     }
 }
 
