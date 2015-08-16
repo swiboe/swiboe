@@ -2,6 +2,8 @@ use serde::json;
 use std::env;
 use std::path;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc;
+use std::sync;
 use std::thread;
 use super::CallbackProcedure;
 use support::TestHarness;
@@ -43,7 +45,7 @@ struct TestCall {
 
 impl client::RemoteProcedure for TestCall {
     fn priority(&self) -> u16 { self.priority }
-    fn call(&mut self, mut sender: client::RpcSender, _: json::Value) {
+    fn call(&mut self, mut sender: client::RpcServerContext, _: json::Value) {
         sender.finish(self.result.clone());
     }
 }
@@ -203,12 +205,12 @@ fn call_streaming_rpc_simple() {
     let streaming_client = client::Client::connect(&t.socket_name);
     streaming_client.new_rpc("test.test", Box::new(CallbackProcedure {
         priority: 50,
-        callback: |mut rpc_sender: client::RpcSender, _| {
+        callback: |mut context: client::RpcServerContext, _| {
             thread::spawn(move || {
-                rpc_sender.update(&as_json(r#"{ "msg": "one" }"#));
-                rpc_sender.update(&as_json(r#"{ "msg": "two" }"#));
-                rpc_sender.update(&as_json(r#"{ "msg": "three" }"#));
-                rpc_sender.finish(rpc::Result::success(&as_json(r#"{ "foo": "blah" }"#)));
+                context.update(&as_json(r#"{ "msg": "one" }"#));
+                context.update(&as_json(r#"{ "msg": "two" }"#));
+                context.update(&as_json(r#"{ "msg": "three" }"#));
+                context.finish(rpc::Result::success(&as_json(r#"{ "foo": "blah" }"#)));
             });
         },
     }));
@@ -222,39 +224,48 @@ fn call_streaming_rpc_simple() {
     assert_eq!(rpc::Result::success(as_json(r#"{ "foo": "blah" }"#)), rpc.wait().unwrap());
 }
 
-// #[test]
-// fn call_streaming_rpc_cancelled() {
-    // let callback_canceled = AtomicBool::new(false);
-    // {
-        // let t = TestHarness::new();
+#[test]
+fn call_streaming_rpc_cancelled() {
+    let cancelled = sync::Arc::new(sync::Mutex::new(false));
 
-        // let streaming_client = client::Client::connect(&t.socket_name);
-        // streaming_client.new_rpc("test.test", Box::new(CallbackProcedure {
-            // priority: 50,
-            // callback: |mut rpc_sender: client::RpcSender, _| {
-                // thread::spawn(move || {
-                    // let mut count = 0;
-                    // // NOCOM(#sirver): cancelled? grep for that.
-                    // while !rpc_sender.cancelled() {
-                        // rpc_sender.update(&as_json(
-                                    // // NOCOM(#sirver): how to escape?
-                                    // &format!(r#"{} "value": "{}" {}"#, "{", count, "}")));
-                        // count += 1
-                    // }
-                // });
-            // },
-        // }));
+    let t = TestHarness::new();
+    let streaming_client = client::Client::connect(&t.socket_name);
+    streaming_client.new_rpc("test.test", Box::new(CallbackProcedure {
+        priority: 50,
+        callback: |mut context: client::RpcServerContext, _| {
+            let cancelled = cancelled.clone();
+            thread::spawn(move || {
+                let mut count = 0;
+                // NOCOM(#sirver): cancelled? grep for that.
+                while !context.cancelled() {
+                    context.update(
+                        &as_json(&format!(r#"{{ "value": "{}" }}"#, count)));
+                    thread::sleep_ms(10);
+                    count += 1
+                }
+                assert!(context.finish(rpc::Result::success(
+                            &as_json(r#"{ "foo": "blah" }"#))).is_err());
+                let mut cancelled = cancelled.lock().unwrap();
+                *cancelled = true;
+            });
+        },
+    }));
 
-        // let client = client::Client::connect(&t.socket_name);
-        // let mut rpc = client.call("test.test", &as_json("{}"));
+    let client = client::Client::connect(&t.socket_name);
+    let mut rpc = client.call("test.test", &as_json("{}"));
 
-        // assert_eq!(as_json(r#"{ "value": "0" }"#), rpc.recv().unwrap().unwrap());
-        // assert_eq!(as_json(r#"{ "value": "1" }"#), rpc.recv().unwrap().unwrap());
+    assert_eq!(as_json(r#"{ "value": "0" }"#), rpc.recv().unwrap().unwrap());
+    assert_eq!(as_json(r#"{ "value": "1" }"#), rpc.recv().unwrap().unwrap());
+    assert_eq!(as_json(r#"{ "value": "2" }"#), rpc.recv().unwrap().unwrap());
+    assert_eq!(as_json(r#"{ "value": "3" }"#), rpc.recv().unwrap().unwrap());
 
-        // // rpc.cancel();
-        // // NOCOM(#sirver): check for error on recv
-        // // NOCOM(#sirver): check for error on wait()'
-        // // assert_eq!(as_json(r#"{ "value": "1" }"#), rpc.recv().unwrap());
-        // // assert_eq!(rpc::Result::success(as_json(r#"{ "foo": "blah" }"#)), rpc.wait().unwrap());
-    // }
-// }
+    rpc.cancel().unwrap();
+
+    // Wait for the server thread to end. If anything went wrong this will sit forever.
+    loop {
+        let cancelled = cancelled.lock().unwrap();
+        if *cancelled == true {
+            break;
+        }
+    }
+}

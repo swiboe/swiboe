@@ -21,8 +21,8 @@ pub struct CallbackProcedure<F> {
     pub callback: F,
 }
 
-impl<F> client::RemoteProcedure for CallbackProcedure<F> where F: Fn(client::RpcSender, json::Value) + Send {
-    fn call(&mut self, mut sender: client::RpcSender, args: json::Value) {
+impl<F> client::RemoteProcedure for CallbackProcedure<F> where F: Fn(client::RpcServerContext, json::Value) + Send {
+    fn call(&mut self, mut sender: client::RpcServerContext, args: json::Value) {
         (self.callback)(sender, args);
     }
     fn priority(&self) -> u16 { self.priority }

@@ -24,7 +24,7 @@ fn buffer_new() {
         let client = client::Client::connect(&t.socket_name);
         client.new_rpc("on.buffer.new", Box::new(CallbackProcedure {
             priority: 100,
-            callback: |mut sender: client::RpcSender, _| {
+            callback: |mut sender: client::RpcServerContext, _| {
                 callback_called.store(true, Ordering::Relaxed);
                 sender.finish(rpc::Result::success(()));
             }
@@ -94,7 +94,7 @@ fn buffer_delete() {
         let client = client::Client::connect(&t.socket_name);
         client.new_rpc("on.buffer.deleted", Box::new(CallbackProcedure {
             priority: 100,
-            callback: |mut sender: client::RpcSender, _| {
+            callback: |mut sender: client::RpcServerContext, _| {
                 callback_called.store(true, Ordering::Relaxed);
                 sender.finish(rpc::Result::success(()));
             }

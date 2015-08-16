@@ -1,20 +1,15 @@
 use ::client;
-use ::ipc;
 use ::rpc;
 use serde::json;
-use std::borrow::Cow;
-use std::collections::HashMap;
 use std::convert;
 use std::fs::{self, DirEntry};
 use std::io;
 use std::mem;
-use std::ops;
 use std::path::Path;
 use std::path;
 use std::string;
 use std::thread;
 use time;
-use uuid::Uuid;
 
 // NOCOM(#sirver): rewrite
 // one possible implementation of fs::walk_dir only visiting files
@@ -49,7 +44,7 @@ pub struct ListFilesResponse;
 struct ListFiles;
 
 impl client::RemoteProcedure for ListFiles {
-    fn call(&mut self, mut sender: client::RpcSender, args: json::Value) {
+    fn call(&mut self, mut sender: client::RpcServerContext, args: json::Value) {
         let request: ListFilesRequest = try_rpc!(sender, json::from_value(args));
 
         thread::spawn(move || {

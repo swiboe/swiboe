@@ -23,6 +23,7 @@ pub enum Command {
     NewRpc(ipc_bridge::ClientId, String, u16),
     RpcCall(ipc_bridge::ClientId, rpc::Call),
     RpcResponse(rpc::Response),
+    RpcCancel(rpc::Cancel),
     ClientConnected(ipc_bridge::ClientId),
     ClientDisconnected(ipc_bridge::ClientId),
     SendDataFailed(ipc_bridge::ClientId, ipc::Message, Error),
@@ -121,12 +122,15 @@ impl Switchboard {
                 Command::RpcResponse(rpc_response) => {
                     self.on_rpc_response(rpc_response)
                 },
+                Command::RpcCancel(rpc_cancel) => {
+                    self.on_rpc_cancel(rpc_cancel)
+                },
                 Command::SendDataFailed(client_id, msg, err) => {
                     let action = match msg {
-                        ipc::Message::RpcResponse(_) => {
+                        ipc::Message::RpcResponse(_) | ipc::Message::RpcCancel(_) => {
                             // NOCOM(#sirver): on a streaming rpc, this should also try to cancel
                             // the RPC.
-                            "dropped the RpcResponse."
+                            "dropped the RpcResponse/RpcCall."
                         },
                         ipc::Message::RpcCall(rpc_call) => {
                             self.on_rpc_response(rpc::Response {
@@ -175,6 +179,37 @@ impl Switchboard {
                 }
             }
         }
+    }
+
+    fn on_rpc_cancel(&mut self, rpc_cancel: rpc::Cancel) {
+        let mut running_rpc = match self.running_rpcs.entry(rpc_cancel.context.clone()) {
+            Entry::Occupied(running_rpc) => running_rpc,
+            Entry::Vacant(_) => {
+                // NOCOM(#sirver): what if the context is unknown? drop the client?
+                unimplemented!();
+            }
+        };
+
+        // NOCOM(#sirver): only the original caller can cancel, really.
+        let running_rpc = running_rpc.remove();
+        match {
+            // NOCOM(#sirver): quite some code duplication with RpcCall
+            self.functions.get(&running_rpc.rpc_call.function as &str).and_then(|vec| {
+                vec.get(running_rpc.last_index)
+            })
+        } {
+            Some(function) => {
+                // NOCOM(#sirver): eventually, when we keep proper track of our rpc calls, this should be
+                // able to move again.
+                self.ipc_bridge_commands.send(ipc_bridge::Command::SendData(
+                        function.client_id,
+                        ipc::Message::RpcCancel(rpc_cancel)
+                        )).unwrap();
+            },
+            None => {
+                // NOCOM(#sirver): Wait what... nothing to cancel?
+            }
+        };
     }
 
     fn on_rpc_response(&mut self, rpc_response: rpc::Response) {

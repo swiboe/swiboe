@@ -4,6 +4,7 @@ use std::path::Path;
 use super::error::{ErrorKind, Error};
 use super::ipc;
 use super::server;
+use time;
 
 #[derive(PartialEq, Eq, Clone, Copy, Hash, Debug)]
 pub struct ClientId {
@@ -124,12 +125,16 @@ impl mio::Handler for IpcBridge {
                                 // println!("{:?}: {:?} -> Server: {:#?}", time::precise_time_ns(),
                                     // conn.client_id, message);
                                 match message {
+                                    // NOCOM(#sirver): pack them together in one message?
                                     ipc::Message::RpcCall(rpc_call) => {
                                         self.commands.send(server::Command::RpcCall(
                                                 conn.client_id, rpc_call)).expect("RpcCall");
                                     },
                                     ipc::Message::RpcResponse(rpc_response) => {
                                         self.commands.send(server::Command::RpcResponse(rpc_response)).expect("RpcResponse");
+                                    },
+                                    ipc::Message::RpcCancel(rpc_cancel) => {
+                                        self.commands.send(server::Command::RpcCancel(rpc_cancel)).expect("RpcCancel");
                                     },
                                 }
                             }

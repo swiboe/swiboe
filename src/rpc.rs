@@ -65,9 +65,15 @@ impl Result {
     }
 }
 
+// NOCOM(#sirver): check in this file what needs to be derived. seems too much.
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 pub struct Call {
     pub function: String,
     pub context: String,
     pub args: json::Value,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct Cancel {
+    pub context: String,
 }

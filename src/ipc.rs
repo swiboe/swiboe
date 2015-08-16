@@ -10,6 +10,7 @@ use std::io::{self, Read, Write};
 pub enum Message {
     RpcCall(rpc::Call),
     RpcResponse(rpc::Response),
+    RpcCancel(rpc::Cancel),
 }
 
 
