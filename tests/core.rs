@@ -1,8 +1,6 @@
 use serde::json;
 use std::env;
 use std::path;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc;
 use std::sync;
 use std::thread;
 use super::CallbackProcedure;
@@ -46,7 +44,7 @@ struct TestCall {
 impl client::RemoteProcedure for TestCall {
     fn priority(&self) -> u16 { self.priority }
     fn call(&mut self, mut sender: client::RpcServerContext, _: json::Value) {
-        sender.finish(self.result.clone());
+        sender.finish(self.result.clone()).unwrap();
     }
 }
 
@@ -121,12 +119,12 @@ fn rpc_not_calling_finish() {
     let client1 = client::Client::connect(&t.socket_name);
     client1.new_rpc("test.test", Box::new(CallbackProcedure {
         priority: 100,
-        callback: |sender, args| {},
+        callback: |_, _| {},
     }));
 
     let client2 = client::Client::connect(&t.socket_name);
     // TODO(sirver): This should timeout, but that is not implemented yet.
-    let mut rpc = client2.call("test.test", &as_json(r#"{}"#));
+    client2.call("test.test", &as_json(r#"{}"#));
 
     // Should be plenty to have test.test being handled.
     thread::sleep_ms(500);
@@ -207,10 +205,10 @@ fn call_streaming_rpc_simple() {
         priority: 50,
         callback: |mut context: client::RpcServerContext, _| {
             thread::spawn(move || {
-                context.update(&as_json(r#"{ "msg": "one" }"#));
-                context.update(&as_json(r#"{ "msg": "two" }"#));
-                context.update(&as_json(r#"{ "msg": "three" }"#));
-                context.finish(rpc::Result::success(&as_json(r#"{ "foo": "blah" }"#)));
+                context.update(&as_json(r#"{ "msg": "one" }"#)).unwrap();
+                context.update(&as_json(r#"{ "msg": "two" }"#)).unwrap();
+                context.update(&as_json(r#"{ "msg": "three" }"#)).unwrap();
+                context.finish(rpc::Result::success(&as_json(r#"{ "foo": "blah" }"#))).unwrap();
             });
         },
     }));
@@ -239,7 +237,7 @@ fn call_streaming_rpc_cancelled() {
                 // NOCOM(#sirver): cancelled? grep for that.
                 while !context.cancelled() {
                     context.update(
-                        &as_json(&format!(r#"{{ "value": "{}" }}"#, count)));
+                        &as_json(&format!(r#"{{ "value": "{}" }}"#, count))).unwrap();
                     thread::sleep_ms(10);
                     count += 1
                 }

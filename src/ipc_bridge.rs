@@ -4,7 +4,6 @@ use std::path::Path;
 use super::error::{ErrorKind, Error};
 use super::ipc;
 use super::server;
-use time;
 
 #[derive(PartialEq, Eq, Clone, Copy, Hash, Debug)]
 pub struct ClientId {

@@ -1,4 +1,3 @@
-use ::ipc;
 use ::ipc_bridge;
 use ::rpc;
 use ::server;

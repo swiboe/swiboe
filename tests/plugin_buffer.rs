@@ -26,7 +26,7 @@ fn buffer_new() {
             priority: 100,
             callback: |mut sender: client::RpcServerContext, _| {
                 callback_called.store(true, Ordering::Relaxed);
-                sender.finish(rpc::Result::success(()));
+                sender.finish(rpc::Result::success(())).unwrap();
             }
         }));
         create_buffer(&client, 0, None);
@@ -96,7 +96,7 @@ fn buffer_delete() {
             priority: 100,
             callback: |mut sender: client::RpcServerContext, _| {
                 callback_called.store(true, Ordering::Relaxed);
-                sender.finish(rpc::Result::success(()));
+                sender.finish(rpc::Result::success(())).unwrap();
             }
         }));
 

@@ -182,7 +182,7 @@ impl Switchboard {
     }
 
     fn on_rpc_cancel(&mut self, rpc_cancel: rpc::Cancel) {
-        let mut running_rpc = match self.running_rpcs.entry(rpc_cancel.context.clone()) {
+        let running_rpc = match self.running_rpcs.entry(rpc_cancel.context.clone()) {
             Entry::Occupied(running_rpc) => running_rpc,
             Entry::Vacant(_) => {
                 // NOCOM(#sirver): what if the context is unknown? drop the client?

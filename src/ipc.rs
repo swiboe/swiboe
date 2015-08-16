@@ -2,7 +2,7 @@ use ::Result;
 use ::rpc;
 use libc::consts::os::posix88;
 use mio::{TryRead};
-use serde::{self, json};
+use serde::json;
 use std::error::Error;
 use std::io::{self, Read, Write};
 

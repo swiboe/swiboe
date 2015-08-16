@@ -12,7 +12,6 @@ use std::path;
 use std::result;
 use std::sync::mpsc;
 use std::thread;
-use time;
 use uuid::Uuid;
 
 const CLIENT: mio::Token = mio::Token(1);
@@ -38,13 +37,13 @@ pub enum RpcClientContextError {
 // NOCOM(#sirver): impl error::Error for RpcClientContextError?
 
 impl From<mio::NotifyError<EventLoopThreadCommand>> for RpcClientContextError {
-    fn from(error: mio::NotifyError<EventLoopThreadCommand>) -> Self {
+    fn from(_: mio::NotifyError<EventLoopThreadCommand>) -> Self {
         RpcClientContextError::Disconnected
     }
 }
 
 impl From<mpsc::RecvError> for RpcClientContextError {
-    fn from(error: mpsc::RecvError) -> Self {
+    fn from(_: mpsc::RecvError) -> Self {
         RpcClientContextError::Disconnected
     }
 }
@@ -82,7 +81,7 @@ impl RpcClientContext {
 
     // NOCOM(#sirver): timeout?
     pub fn recv(&mut self) -> RpcClientContextResult<Option<json::Value>> {
-        if (self.result.is_some()) {
+        if self.result.is_some() {
             return Ok(None);
         }
 
@@ -395,7 +394,7 @@ pub enum RpcServerContextError {
 // NOCOM(#sirver): impl error::Error for RpcServerContextError?
 
 impl From<mio::NotifyError<EventLoopThreadCommand>> for RpcServerContextError {
-    fn from(error: mio::NotifyError<EventLoopThreadCommand>) -> Self {
+    fn from(_: mio::NotifyError<EventLoopThreadCommand>) -> Self {
         RpcServerContextError::Disconnected
     }
 }
@@ -419,7 +418,7 @@ impl RpcServerContext {
             Ok(value) => match value {
                 RpcServerContextCommand::Cancel => self.state = RpcServerContextState::Cancelled,
             },
-            Err(err) => match (err) {
+            Err(err) => match err {
                 mpsc::TryRecvError::Empty => (),
                 mpsc::TryRecvError::Disconnected => {
                     // The FunctionThread terminated - that means that the client must be shutting
