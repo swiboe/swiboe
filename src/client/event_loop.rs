@@ -4,7 +4,7 @@ use mio;
 use std::collections::HashMap;
 use std::sync::mpsc;
 use std::thread;
-use super::FunctionThreadCommand;
+use ::client::rpc_loop;
 
 const CLIENT: mio::Token = mio::Token(1);
 
@@ -18,7 +18,7 @@ pub enum Command {
 struct Handler<'a> {
     stream: ipc::Stream<UnixStream>,
     running_function_calls: HashMap<String, mpsc::Sender<::rpc::Response>>,
-    function_thread_sender: mpsc::Sender<FunctionThreadCommand<'a>>,
+    function_thread_sender: mpsc::Sender<rpc_loop::Command<'a>>,
 }
 
 impl<'a> Handler<'a> {
@@ -82,12 +82,12 @@ impl<'a> mio::Handler for Handler<'a> {
                                     });
                             },
                             ipc::Message::RpcCall(rpc_call) => {
-                                let command = FunctionThreadCommand::Call(rpc_call);
-                                self.function_thread_sender.send(command).expect("FunctionThreadCommand::Call");
+                                let command = rpc_loop::Command::Call(rpc_call);
+                                self.function_thread_sender.send(command).expect("rpc_loop::Command::Call");
                             },
                             ipc::Message::RpcCancel(rpc_cancel) => {
-                                let command = FunctionThreadCommand::Cancel(rpc_cancel);
-                                self.function_thread_sender.send(command).expect("FunctionThreadCommand::Cancel");
+                                let command = rpc_loop::Command::Cancel(rpc_cancel);
+                                self.function_thread_sender.send(command).expect("rpc_loop::Command::Cancel");
                             }
                         }
                     }
@@ -103,7 +103,7 @@ impl<'a> mio::Handler for Handler<'a> {
     }
 }
 
-pub fn spawn<'a>(stream: UnixStream, commands_tx: mpsc::Sender<FunctionThreadCommand<'a>>)
+pub fn spawn<'a>(stream: UnixStream, commands_tx: mpsc::Sender<rpc_loop::Command<'a>>)
     -> (thread::JoinGuard<'a, ()>, mio::Sender<Command>)
 {
     let mut event_loop = mio::EventLoop::<Handler>::new().unwrap();
