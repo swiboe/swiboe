@@ -27,7 +27,7 @@ fn write_all<T: Write>(writer: &mut T, buffer: &[u8]) -> io::Result<()> {
                 if err.raw_os_error() != Some(posix88::EAGAIN) {
                     return Err(err);
                 }
-                println!("#sirver write EAGAIN");
+                // println!("#sirver write EAGAIN");
             }
         }
     }

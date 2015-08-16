@@ -185,8 +185,8 @@ impl Switchboard {
         let running_rpc = match self.running_rpcs.entry(rpc_cancel.context.clone()) {
             Entry::Occupied(running_rpc) => running_rpc,
             Entry::Vacant(_) => {
-                // NOCOM(#sirver): what if the context is unknown? drop the client?
-                unimplemented!();
+                // Unknown RPC. We simply drop this message.
+                return;
             }
         };
 
@@ -216,8 +216,8 @@ impl Switchboard {
         let mut running_rpc = match self.running_rpcs.entry(rpc_response.context.clone()) {
             Entry::Occupied(running_rpc) => running_rpc,
             Entry::Vacant(_) => {
-                // NOCOM(#sirver): what if the context is unknown? drop the client?
-                unimplemented!();
+                // Unknown RPC. We simply drop this message.
+                return;
             }
         };
 

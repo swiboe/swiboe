@@ -50,6 +50,7 @@ impl<'a> mio::Handler for Handler<'a> {
         match token {
             CLIENT => {
                 if events.is_hup() {
+                    println!("Server closed connection. Closing down.");
                     event_loop.channel().send(Command::Quit).expect("Command::Quit");
                     return;
                 }

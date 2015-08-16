@@ -107,7 +107,7 @@ impl SwitchboardGtkGui {
                     match &name_str as &str {
                         "F2" => {
                             let mut rpc = thin_client.call("buffer.open", &plugin_buffer::OpenRequest {
-                                uri: "file:///Users/sirver/Desktop/Programming/rust/Switchboard/src/client.rs".into(),
+                                uri: "file:///Users/sirver/Desktop/Programming/rust/Switchboard/gui/src/bin/gtk_gui.rs".into(),
                             });
                             let b: plugin_buffer::OpenResponse = rpc.wait_for().unwrap();
                             println!("#sirver b: {:#?}", b);
@@ -122,9 +122,13 @@ impl SwitchboardGtkGui {
                                 let b: plugin_list_files::ListFilesUpdate = json::from_value(b).unwrap();
                                 num += b.files.len();
                                 println!("#sirver num: {:#?}", num);
+                                if num > 10000 {
+                                    break;
+                                }
                             }
-                            let b: plugin_list_files::ListFilesResponse = rpc.wait_for().unwrap();
-                            println!("#sirver b: {:#?}", b);
+                            rpc.cancel();
+                            // let b: plugin_list_files::ListFilesResponse = rpc.wait_for().unwrap();
+                            // println!("#sirver b: {:#?}", b);
                             let duration = time::SteadyTime::now() - start;
                             println!("#sirver duration: {:#?}", duration);
                         },

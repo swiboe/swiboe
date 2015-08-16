@@ -70,7 +70,7 @@ impl client::rpc::server::Rpc for Scroll {
         buffer_views.scroll(&request.buffer_view_id, request.delta);
 
         let response = ScrollResponse;
-        context.finish(rpc::Result::success(response))
+        context.finish(rpc::Result::success(response)).unwrap();
     }
 }
 
@@ -138,7 +138,7 @@ impl client::rpc::server::Rpc for MoveCursor {
 
         try_rpc!(context, buffer_views.move_cursor(&request.cursor_id, request.delta));
         println!("#sirver End of MoveCursor: {:#?}", time::precise_time_ns());
-        context.finish(rpc::Result::success(MoveCursorResponse))
+        context.finish(rpc::Result::success(MoveCursorResponse)).unwrap();
     }
 }
 
@@ -307,7 +307,7 @@ impl BufferViews {
 // weak_refs?
 struct OnBufferCreated {
     buffer_views: Arc<RwLock<BufferViews>>,
-    client: client::Sender,
+    client: client::ThinClient,
 }
 
 impl client::rpc::server::Rpc for OnBufferCreated {
@@ -326,6 +326,6 @@ impl client::rpc::server::Rpc for OnBufferCreated {
             }
             _ => {},
         }
-        client.finish(rpc::Result::success(()))
+        client.finish(rpc::Result::success(())).unwrap();
     }
 }
