@@ -1,6 +1,7 @@
 use ::client::event_loop;
 use mio;
-use serde::{json, Serialize};
+use serde::Serialize;
+use serde_json;
 use std::result;
 use std::sync::mpsc;
 
@@ -32,7 +33,7 @@ pub enum Command {
 
 pub trait Rpc: Send {
     fn priority(&self) -> u16 { u16::max_value() }
-    fn call(&mut self, context: Context, args: json::Value);
+    fn call(&mut self, context: Context, args: serde_json::Value);
 }
 
 pub type Result<T> = result::Result<T, Error>;
@@ -91,7 +92,7 @@ impl Context {
 
         let msg = ::ipc::Message::RpcResponse(::rpc::Response {
             context: self.context.clone(),
-            kind: ::rpc::ResponseKind::Partial(json::to_value(args)),
+            kind: ::rpc::ResponseKind::Partial(serde_json::to_value(args)),
         });
         Ok(try!(self.event_loop_sender.send(event_loop::Command::Send(msg))))
     }

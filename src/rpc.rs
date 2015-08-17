@@ -1,4 +1,5 @@
-use serde::{self, json};
+use serde;
+use serde_json;
 use std::error::Error as StdError;
 
 // NOCOM(#sirver): add documentation (using this lint that forbids not having documentation).
@@ -6,7 +7,7 @@ use std::error::Error as StdError;
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum ResponseKind {
     Last(Result),
-    Partial(json::Value),
+    Partial(serde_json::Value),
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -18,7 +19,7 @@ pub struct Response {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct StreamingResult {
     pub context: String,
-    pub value: json::Value,
+    pub value: serde_json::Value,
 }
 
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
@@ -31,14 +32,14 @@ pub enum ErrorKind {
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 pub struct Error {
     pub kind: ErrorKind,
-    pub details: Option<json::Value>,
+    pub details: Option<serde_json::Value>,
 }
 
-impl From<json::error::Error> for Error {
-     fn from(error: json::error::Error) -> Self {
+impl From<serde_json::error::Error> for Error {
+     fn from(error: serde_json::error::Error) -> Self {
          Error {
              kind: ErrorKind::InvalidArgs,
-             details: Some(json::to_value(&error.description())),
+             details: Some(serde_json::to_value(&error.description())),
          }
      }
 }
@@ -46,14 +47,14 @@ impl From<json::error::Error> for Error {
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 pub enum Result {
     // NOCOM(#sirver): mention success as a convenient creating for this.
-    Ok(json::Value),
+    Ok(serde_json::Value),
     Err(Error),
     NotHandled,
 }
 
 impl Result {
     pub fn success<T: serde::Serialize>(value: T) -> Result {
-        Result::Ok(json::to_value(&value))
+        Result::Ok(serde_json::to_value(&value))
     }
 
     pub fn unwrap_err(self) -> Error {
@@ -70,7 +71,7 @@ impl Result {
 pub struct Call {
     pub function: String,
     pub context: String,
-    pub args: json::Value,
+    pub args: serde_json::Value,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

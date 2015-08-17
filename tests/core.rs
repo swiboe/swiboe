@@ -1,4 +1,4 @@
-use serde::json;
+use serde_json;
 use std::env;
 use std::path;
 use std::sync;
@@ -16,8 +16,8 @@ fn temporary_socket_name() -> path::PathBuf {
     dir
 }
 
-fn as_json(s: &str) -> json::Value {
-    json::from_str(s).unwrap()
+fn as_json(s: &str) -> serde_json::Value {
+    serde_json::from_str(s).unwrap()
 }
 
 #[test]
@@ -43,7 +43,7 @@ struct TestCall {
 
 impl client::rpc::server::Rpc for TestCall {
     fn priority(&self) -> u16 { self.priority }
-    fn call(&mut self, mut context: client::rpc::server::Context, _: json::Value) {
+    fn call(&mut self, mut context: client::rpc::server::Context, _: serde_json::Value) {
         context.finish(self.result.clone()).unwrap();
     }
 }
@@ -56,7 +56,7 @@ fn new_rpc_simple() {
     let client1 = client::Client::connect(&t.socket_name);
     let client2 = client::Client::connect(&t.socket_name);
 
-    let test_msg: json::Value = as_json(r#"{ "blub": "blah" }"#);
+    let test_msg: serde_json::Value = as_json(r#"{ "blub": "blah" }"#);
 
     client1.new_rpc("test.test", Box::new(TestCall {
         priority: 0,

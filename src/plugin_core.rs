@@ -1,7 +1,7 @@
 use ::ipc_bridge;
 use ::rpc;
 use ::server;
-use serde::json;
+use serde_json;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct NewRpcRequest {
@@ -28,7 +28,7 @@ impl CorePlugin {
             },
             // NOCOM(#sirver): These args can be pulled out into Serializable structs.
             "core.new_rpc" => {
-                let args: NewRpcRequest = match json::from_value(rpc_call.args.clone()) {
+                let args: NewRpcRequest = match serde_json::from_value(rpc_call.args.clone()) {
                     Ok(args) => args,
                     // NOCOM(#sirver): report errors somehow?
                     Err(_) => panic!("Invalid arguments"),

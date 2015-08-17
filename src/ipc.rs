@@ -2,7 +2,7 @@ use ::Result;
 use ::rpc;
 use libc::consts::os::posix88;
 use mio::{TryRead};
-use serde::json;
+use serde_json;
 use std::error::Error;
 use std::io::{self, Read, Write};
 
@@ -66,13 +66,13 @@ impl<T: Read + Write> Stream<T> {
 
         // NOCOM(#sirver): this should not unwrap.
         let msg = String::from_utf8(self.read_buffer.drain(..4+msg_len).skip(4).collect()).unwrap();
-        let message: Message = try!(json::from_str(&msg));
+        let message: Message = try!(serde_json::from_str(&msg));
         return Ok(Some(message))
     }
 
     pub fn write_message(&mut self, message: &Message) -> Result<()> {
         // NOCOM(#sirver): is that maximal efficient?
-        let buffer = json::to_string(message).unwrap();
+        let buffer = serde_json::to_string(message).unwrap();
         let len = [
             (buffer.len() >> 0) as u8,
             (buffer.len() >> 8) as u8,

@@ -4,7 +4,6 @@ use cairo;
 use gtk::signal;
 use gtk::traits::*;
 use gtk;
-use serde::json;
 use std::cell::{RefCell, Cell};
 use std::clone::Clone;
 use std::cmp;

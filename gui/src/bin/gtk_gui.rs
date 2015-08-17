@@ -5,6 +5,7 @@ extern crate gdk;
 extern crate glib;
 extern crate gtk;
 extern crate serde;
+extern crate serde_json;
 extern crate switchboard;
 extern crate switchboard_gtk_gui;
 extern crate time;
@@ -14,7 +15,6 @@ use cairo::Context;
 use cairo::enums::{FontSlant, FontWeight};
 use gtk::signal;
 use gtk::traits::*;
-use serde::json;
 use std::cell::{RefCell, Cell};
 use std::clone::Clone;
 use std::cmp;
@@ -119,7 +119,7 @@ impl SwitchboardGtkGui {
                             let mut num = 0;
                             let start = time::SteadyTime::now();
                             while let Some(b) = rpc.recv().unwrap() {
-                                let b: plugin_list_files::ListFilesUpdate = json::from_value(b).unwrap();
+                                let b: plugin_list_files::ListFilesUpdate = serde_json::from_value(b).unwrap();
                                 num += b.files.len();
                                 println!("#sirver num: {:#?}", num);
                                 if num > 10000 {

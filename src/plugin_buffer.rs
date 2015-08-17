@@ -1,6 +1,6 @@
 use ::client;
 use ::rpc;
-use serde::json;
+use serde_json;
 use std::collections::HashMap;
 use std::convert;
 use std::fs;
@@ -29,7 +29,7 @@ impl From<BufferError> for rpc::Error {
 
          rpc::Error {
              kind: kind,
-             details: Some(json::to_value(&details)),
+             details: Some(serde_json::to_value(&details)),
          }
      }
 }
@@ -57,7 +57,7 @@ impl From<io::Error> for rpc::Error {
          };
          rpc::Error {
              kind: rpc::ErrorKind::Io,
-             details: Some(json::to_value(&details)),
+             details: Some(serde_json::to_value(&details)),
          }
      }
 }
@@ -84,9 +84,9 @@ pub struct NewResponse {
 
 // NOCOM(#sirver): what does serde do if there are extra values in the JSON?
 impl client::rpc::server::Rpc for New {
-    fn call(&mut self, mut context: client::rpc::server::Context, args: json::Value) {
+    fn call(&mut self, mut context: client::rpc::server::Context, args: serde_json::Value) {
         // NOCOM(#sirver): need testing for bad request results
-        let request: NewRequest = try_rpc!(context, json::from_value(args));
+        let request: NewRequest = try_rpc!(context, serde_json::from_value(args));
         let mut buffers = self.buffers.write().unwrap();
 
         let buffer = match request.content {
@@ -114,8 +114,8 @@ struct Delete {
 }
 
 impl client::rpc::server::Rpc for Delete {
-    fn call(&mut self, mut context: client::rpc::server::Context, args: json::Value) {
-        let request: DeleteRequest = try_rpc!(context, json::from_value(args));
+    fn call(&mut self, mut context: client::rpc::server::Context, args: serde_json::Value) {
+        let request: DeleteRequest = try_rpc!(context, serde_json::from_value(args));
         let mut buffers = self.buffers.write().unwrap();
         try_rpc!(context, buffers.delete_buffer(request.buffer_index));
 
@@ -139,8 +139,8 @@ struct GetContent {
 }
 
 impl client::rpc::server::Rpc for GetContent {
-    fn call(&mut self, mut context: client::rpc::server::Context, args: json::Value) {
-        let request: GetContentRequest = try_rpc!(context, json::from_value(args));
+    fn call(&mut self, mut context: client::rpc::server::Context, args: serde_json::Value) {
+        let request: GetContentRequest = try_rpc!(context, serde_json::from_value(args));
         let buffers = self.buffers.read().unwrap();
 
         let buffer = try_rpc!(context, buffers.get(request.buffer_index));
@@ -167,9 +167,9 @@ struct Open {
 }
 
 impl client::rpc::server::Rpc for Open {
-    fn call(&mut self, mut context: client::rpc::server::Context, args: json::Value) {
+    fn call(&mut self, mut context: client::rpc::server::Context, args: serde_json::Value) {
         const FILE_PREFIX: &'static str = "file://";
-        let mut request: OpenRequest = try_rpc!(context, json::from_value(args));
+        let mut request: OpenRequest = try_rpc!(context, serde_json::from_value(args));
         if !request.uri.starts_with(FILE_PREFIX) {
             context.finish(rpc::Result::NotHandled).unwrap();
             return;
@@ -204,8 +204,8 @@ struct List {
 }
 
 impl client::rpc::server::Rpc for List {
-    fn call(&mut self, mut context: client::rpc::server::Context, args: json::Value) {
-        let _: ListRequest = try_rpc!(context, json::from_value(args));
+    fn call(&mut self, mut context: client::rpc::server::Context, args: serde_json::Value) {
+        let _: ListRequest = try_rpc!(context, serde_json::from_value(args));
 
         let buffers = self.buffers.read().unwrap();
         let response = ListResponse {

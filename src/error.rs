@@ -1,6 +1,6 @@
 /// Errors for use with Switchboard.
 
-use serde::json;
+use serde_json;
 use std::error;
 use std::fmt;
 use std::io;
@@ -14,7 +14,7 @@ pub enum ErrorKind {
     ClientDisconnected,
     Disconnected(mpsc::RecvError),
     Io(io::Error),
-    JsonParsing(json::error::Error),
+    JsonParsing(serde_json::error::Error),
 }
 
 // NOCOM(#sirver): kill and just use the enum
@@ -69,8 +69,8 @@ impl From<mpsc::RecvError> for Error {
      }
 }
 
-impl From<json::error::Error> for Error {
-     fn from(error: json::error::Error) -> Self {
+impl From<serde_json::error::Error> for Error {
+     fn from(error: serde_json::error::Error) -> Self {
          Error::new(ErrorKind::JsonParsing(error))
      }
 }

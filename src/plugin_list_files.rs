@@ -1,6 +1,6 @@
 use ::client;
 use ::rpc;
-use serde::json;
+use serde_json;
 use std::convert;
 use std::fs::{self, DirEntry};
 use std::io;
@@ -54,8 +54,8 @@ pub struct ListFilesResponse;
 struct ListFiles;
 
 impl client::rpc::server::Rpc for ListFiles {
-    fn call(&mut self, mut context: client::rpc::server::Context, args: json::Value) {
-        let request: ListFilesRequest = try_rpc!(context, json::from_value(args));
+    fn call(&mut self, mut context: client::rpc::server::Context, args: serde_json::Value) {
+        let request: ListFilesRequest = try_rpc!(context, serde_json::from_value(args));
 
         thread::spawn(move || {
             let mut files = Vec::new();

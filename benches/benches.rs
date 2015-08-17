@@ -1,13 +1,13 @@
 #![feature(test)]
 
 extern crate serde;
+extern crate serde_json;
 extern crate switchboard;
 extern crate tempdir;
 extern crate test;
 
 #[path="../tests/support/mod.rs"] mod support;
 
-use serde::json;
 use support::{TestHarness};
 use switchboard::client::Client;
 use switchboard::plugin_buffer;
@@ -27,7 +27,7 @@ fn bench_create_and_delete_buffers(b: &mut Bencher) {
                 content: Some("bli\nbla\nblub".into()),
             }).wait().unwrap()
         {
-            rpc::Result::Ok(value) => json::from_value(value).unwrap(),
+            rpc::Result::Ok(value) => serde_json::from_value(value).unwrap(),
             err => panic!("{:?}", err),
         };
 
@@ -35,7 +35,7 @@ fn bench_create_and_delete_buffers(b: &mut Bencher) {
             "buffer.delete", &plugin_buffer::DeleteRequest {
                 buffer_index: new_response.buffer_index
             }).wait().unwrap() {
-            rpc::Result::Ok(value) => json::from_value(value).unwrap(),
+            rpc::Result::Ok(value) => serde_json::from_value(value).unwrap(),
             err => panic!("{:?}", err),
         };
     });

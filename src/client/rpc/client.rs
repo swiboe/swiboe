@@ -1,5 +1,6 @@
 use mio;
-use serde::{self, json};
+use serde;
+use serde_json;
 use std::sync::mpsc;
 use super::super::event_loop::Command;
 use uuid::Uuid;
@@ -14,7 +15,7 @@ pub struct Context {
 #[derive(Debug)]
 pub enum Error {
     Disconnected,
-    InvalidOrUnexpectedReply(json::Error),
+    InvalidOrUnexpectedReply(serde_json::Error),
 }
 
 // NOCOM(#sirver): impl error::Error for Error?
@@ -31,8 +32,8 @@ impl From<mpsc::RecvError> for Error {
     }
 }
 
-impl From<json::error::Error> for Error {
-     fn from(error: json::error::Error) -> Self {
+impl From<serde_json::error::Error> for Error {
+     fn from(error: serde_json::error::Error) -> Self {
          Error::InvalidOrUnexpectedReply(error)
      }
 }
@@ -43,7 +44,7 @@ impl Context {
     pub fn new<T: serde::Serialize>(event_loop_sender: &mio::Sender<Command>,
                          function: &str,
                          args: &T) -> ::std::result::Result<Self, mio::NotifyError<Command>> {
-        let args = json::to_value(&args);
+        let args = serde_json::to_value(&args);
         let context = Uuid::new_v4().to_hyphenated_string();
         let message = ::ipc::Message::RpcCall(::rpc::Call {
             function: function.into(),
@@ -63,7 +64,7 @@ impl Context {
     }
 
     // NOCOM(#sirver): timeout?
-    pub fn recv(&mut self) -> Result<Option<json::Value>> {
+    pub fn recv(&mut self) -> Result<Option<serde_json::Value>> {
         if self.result.is_some() {
             return Ok(None);
         }
@@ -86,7 +87,7 @@ impl Context {
 
     pub fn wait_for<T: serde::Deserialize>(&mut self) -> Result<T> {
         match try!(self.wait()) {
-            ::rpc::Result::Ok(value) => Ok(try!(json::from_value(value))),
+            ::rpc::Result::Ok(value) => Ok(try!(serde_json::from_value(value))),
             ::rpc::Result::Err(err) => panic!("#sirver err: {:#?}", err),
             // NOCOM(#sirver): probably should ignore other errors.
             other => panic!("#sirver other: {:#?}", other),

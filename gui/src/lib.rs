@@ -11,6 +11,7 @@ extern crate gdk;
 extern crate glib;
 extern crate gtk;
 extern crate serde;
+extern crate serde_json;
 extern crate time;
 extern crate uuid;
 

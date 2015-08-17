@@ -5,8 +5,8 @@ use cairo;
 use gtk::signal;
 use gtk::traits::*;
 use gtk;
-use serde::json;
 use serde;
+use serde_json;
 use std::cell::{RefCell, Cell};
 use std::clone::Clone;
 use std::cmp;
@@ -43,7 +43,7 @@ impl From<BufferViewError> for rpc::Error {
 
          rpc::Error {
              kind: kind,
-             details: Some(json::to_value(&details)),
+             details: Some(serde_json::to_value(&details)),
          }
      }
 }
@@ -63,8 +63,8 @@ struct Scroll {
 }
 
 impl client::rpc::server::Rpc for Scroll {
-    fn call(&mut self, mut context: client::rpc::server::Context, args: json::Value) {
-        let request: ScrollRequest = try_rpc!(context, json::from_value(args));
+    fn call(&mut self, mut context: client::rpc::server::Context, args: serde_json::Value) {
+        let request: ScrollRequest = try_rpc!(context, serde_json::from_value(args));
 
         let mut buffer_views = self.buffer_views.write().unwrap();
         buffer_views.scroll(&request.buffer_view_id, request.delta);
@@ -130,9 +130,9 @@ struct MoveCursor {
 }
 
 impl client::rpc::server::Rpc for MoveCursor {
-    fn call(&mut self,  mut context: client::rpc::server::Context, args: json::Value) {
+    fn call(&mut self,  mut context: client::rpc::server::Context, args: serde_json::Value) {
         println!("#sirver Beginning of MoveCursor: {:#?}", time::precise_time_ns());
-        let request: MoveCursorRequest = try_rpc!(context, json::from_value(args));
+        let request: MoveCursorRequest = try_rpc!(context, serde_json::from_value(args));
 
         let mut buffer_views = self.buffer_views.write().unwrap();
 
@@ -311,15 +311,15 @@ struct OnBufferCreated {
 }
 
 impl client::rpc::server::Rpc for OnBufferCreated {
-    fn call(&mut self, mut client: client::rpc::server::Context, args: json::Value) {
-        let info: plugin_buffer::BufferCreated = try_rpc!(client, json::from_value(args));
+    fn call(&mut self, mut client: client::rpc::server::Context, args: serde_json::Value) {
+        let info: plugin_buffer::BufferCreated = try_rpc!(client, serde_json::from_value(args));
 
         let mut rpc = self.client.call("buffer.get_content", &plugin_buffer::GetContentRequest {
             buffer_index: info.buffer_index,
         });
         match rpc.wait().unwrap() {
             rpc::Result::Ok(value) => {
-                let response: plugin_buffer::GetContentResponse = json::from_value(value).unwrap();
+                let response: plugin_buffer::GetContentResponse = serde_json::from_value(value).unwrap();
                 let mut buffer_views = self.buffer_views.write().unwrap();
                 buffer_views.get_or_create(info.buffer_index)
                     .set_contents(&response.content);
