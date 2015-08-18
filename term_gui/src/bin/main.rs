@@ -12,7 +12,6 @@ use rustbox::{Color, RustBox};
 use std::cmp;
 use std::default::Default;
 use std::path;
-use std::sync::{RwLock, Arc};
 use std::sync::mpsc;
 use switchboard::client;
 use uuid::Uuid;
@@ -74,11 +73,11 @@ impl CompleterWidget {
                 CompleterState::Running
             },
             rustbox::Key::Esc => {
-                self.rpc.take().unwrap().cancel();
+                self.rpc.take().unwrap().cancel().unwrap();
                 CompleterState::Canceled
             },
             rustbox::Key::Enter => {
-                self.rpc.take().unwrap().cancel();
+                self.rpc.take().unwrap().cancel().unwrap();
                 if self.results.is_empty() {
                     CompleterState::Canceled
                 } else {
@@ -237,7 +236,7 @@ fn main() {
         rustbox.clear();
         if let Some(ref mut widget) = buffer_view_widget {
             let buffer_views = buffer_views.read().unwrap();
-            let buffer_view = buffer_views.get_by_id(&widget.view_id).unwrap();
+            let buffer_view = buffer_views.get(&widget.view_id).unwrap();
             widget.draw(&buffer_view, &rustbox);
         }
         if let Some(ref mut completer) = completer {

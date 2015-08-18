@@ -233,16 +233,12 @@ impl BufferViews {
     }
 
 
-    pub fn get_by_id(&self, id: &str) -> Option<&BufferView> {
+    pub fn get(&self, id: &str) -> Option<&BufferView> {
         self.buffer_views.get(id)
     }
 
-    fn get_mut_by_id(&mut self, id: &str) -> Option<&mut BufferView> {
-        self.buffer_views.get_mut(id)
-    }
-
     fn scroll(&mut self, buffer_view_id: &str, delta: isize) {
-        self.get_mut_by_id(&buffer_view_id).and_then(|view| {
+        self.buffer_views.get_mut(buffer_view_id).and_then(|view| {
             Some(view.scroll(delta))
         }).and_then(|_| {
             let c = self.commands.lock().unwrap();
