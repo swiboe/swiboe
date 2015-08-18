@@ -49,7 +49,6 @@ impl<'a> RpcLoop<'a> {
                     // server messed up too.
                 }
                 Command::Cancel(rpc_cancel) => {
-                    println!("#sirver rpc_cancel: {:#?}", rpc_cancel);
                     // NOCOM(#sirver): on drop, the rpcservercontext must delete the entry.
                     if let Some(function) = self.running_rpc_calls.remove(&rpc_cancel.context) {
                         // The function might be dead already, so we ignore errors.
