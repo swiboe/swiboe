@@ -1,5 +1,6 @@
 #![allow(deprecated)]
 
+use ::error::Result;
 use ::plugin_core::NewRpcRequest;
 use mio::unix::UnixStream;
 use mio;
@@ -16,18 +17,18 @@ pub struct Client<'a> {
 }
 
 impl<'a> Client<'a> {
-    pub fn connect(socket_name: &path::Path) -> Self {
-        let stream = UnixStream::connect(&socket_name).unwrap();
+    pub fn connect(socket_name: &path::Path) -> Result<Self> {
+        let stream = try!(UnixStream::connect(&socket_name));
 
         let (commands_tx, commands_rx) = mpsc::channel();
         let (event_loop_thread, event_loop_commands) = event_loop::spawn(stream, commands_tx.clone());
 
-        Client {
+        Ok(Client {
             event_loop_commands: event_loop_commands.clone(),
             rpc_loop_commands: commands_tx,
             _rpc_loop_thread_join_guard: rpc_loop::spawn(commands_rx, event_loop_commands),
             _event_loop_thread_join_guard: event_loop_thread,
-        }
+        })
     }
 
     pub fn new_rpc(&self, name: &str, rpc: Box<rpc::server::Rpc + 'a>) {

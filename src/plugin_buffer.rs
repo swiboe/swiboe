@@ -301,7 +301,7 @@ pub struct BufferPlugin<'a> {
 
 impl<'a> BufferPlugin<'a> {
     pub fn new(socket_name: &path::Path) -> Self {
-        let client = client::Client::connect(socket_name);
+        let client = client::Client::connect(socket_name).unwrap();
 
         let plugin = BufferPlugin {
             buffers: Arc::new(RwLock::new(BuffersManager::new(client.clone()))),

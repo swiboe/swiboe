@@ -1,3 +1,5 @@
+#[macro_use]
+extern crate clap;
 extern crate rustbox;
 extern crate serde_json;
 extern crate subsequence_match;
@@ -27,7 +29,6 @@ struct CompleterWidget {
     results: Vec<subsequence_match::QueryResult>,
     selection_index: isize,
 }
-
 
 enum CompleterState {
     Running,
@@ -225,6 +226,17 @@ impl BufferViewWidget {
 }
 
 fn main() {
+    let matches = clap::App::new("term_gui")
+        .about("Terminal client for Switchboard")
+        .version(&crate_version!()[..])
+        .arg(clap::Arg::with_name("SOCKET")
+             .short("s")
+             .long("socket")
+             .help("Socket at which the master listens.")
+             .required(true)
+             .takes_value(true))
+        .get_matches();
+
     let rustbox = match RustBox::init(rustbox::InitOptions {
         input_mode: rustbox::InputMode::Current,
         buffer_stderr: true,
@@ -234,7 +246,8 @@ fn main() {
     };
 
 
-    let client = client::Client::connect(path::Path::new("/tmp/sb.socket"));
+    let path = path::Path::new(matches.value_of("SOCKET").unwrap());
+    let client = client::Client::connect(path).unwrap();
 
     let gui_id: String = Uuid::new_v4().to_hyphenated_string();
     let (gui_commands_tx, gui_commands_rx) = mpsc::channel();

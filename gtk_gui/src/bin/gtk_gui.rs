@@ -191,7 +191,7 @@ impl SwitchboardGtkGui {
 fn main() {
     gtk::init().unwrap_or_else(|_| panic!("Failed to initialize GTK."));
 
-    let client = client::Client::connect(path::Path::new("/tmp/sb.socket"));
+    let client = client::Client::connect(path::Path::new("/tmp/sb.socket").connect());
     let mut switchboard = SwitchboardGtkGui::new(&client);
 
     let join_handle = thread::spawn(move || {

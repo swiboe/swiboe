@@ -21,7 +21,7 @@ fn buffer_new() {
     let t = TestHarness::new();
     let callback_called  = AtomicBool::new(true);
     {
-        let client = client::Client::connect(&t.socket_name);
+        let client = client::Client::connect(&t.socket_name).unwrap();
         client.new_rpc("on.buffer.new", Box::new(CallbackRpc {
             priority: 100,
             callback: |mut sender: client::rpc::server::Context, _| {
@@ -37,7 +37,7 @@ fn buffer_new() {
 #[test]
 fn buffer_new_with_content() {
     let t = TestHarness::new();
-    let client = client::Client::connect(&t.socket_name);
+    let client = client::Client::connect(&t.socket_name).unwrap();
 
     let content = "blub\nblah\nbli";
     create_buffer(&client, 0, Some(content));
@@ -53,7 +53,7 @@ fn buffer_new_with_content() {
 #[test]
 fn buffer_open_unhandled_uri() {
     let t = TestHarness::new();
-    let client = client::Client::connect(&t.socket_name);
+    let client = client::Client::connect(&t.socket_name).unwrap();
 
     let mut rpc = client.call("buffer.open", &plugin_buffer::OpenRequest {
         uri: "blumba://foo".into(),
@@ -65,7 +65,7 @@ fn buffer_open_unhandled_uri() {
 #[test]
 fn buffer_open_file() {
     let t = TestHarness::new();
-    let client = client::Client::connect(&t.socket_name);
+    let client = client::Client::connect(&t.socket_name).unwrap();
 
     let content = "blub\nblah\nbli";
     let path = create_file(&t, "foo", &content);
@@ -91,7 +91,7 @@ fn buffer_delete() {
     let callback_called  = AtomicBool::new(false);
 
     {
-        let client = client::Client::connect(&t.socket_name);
+        let client = client::Client::connect(&t.socket_name).unwrap();
         client.new_rpc("on.buffer.deleted", Box::new(CallbackRpc {
             priority: 100,
             callback: |mut sender: client::rpc::server::Context, _| {
@@ -115,7 +115,7 @@ fn buffer_delete() {
 fn buffer_delete_non_existing() {
     let t = TestHarness::new();
 
-    let client = client::Client::connect(&t.socket_name);
+    let client = client::Client::connect(&t.socket_name).unwrap();
     let request = plugin_buffer::DeleteRequest {
         buffer_index: 0,
     };

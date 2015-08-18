@@ -14,7 +14,7 @@ use switchboard::plugin_buffer;
 
 fn main() {
     let t = TestHarness::new();
-    let active_client = Client::connect(&t.socket_name);
+    let active_client = Client::connect(&t.socket_name).unwrap();
 
     loop {
         let new_response: plugin_buffer::NewResponse = match active_client.call(

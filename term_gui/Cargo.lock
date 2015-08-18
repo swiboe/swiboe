@@ -2,6 +2,7 @@
 name = "term_gui"
 version = "0.1.0"
 dependencies = [
+ "clap 1.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "rustbox 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_json 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -21,6 +22,11 @@ dependencies = [
  "winapi 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "winapi-build 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
+
+[[package]]
+name = "ansi_term"
+version = "0.6.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "aster"
@@ -54,6 +60,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 name = "bytes"
 version = "0.2.10"
 source = "git+https://github.com/carllerche/bytes?rev=7edb577d0a#7edb577d0ae7302606636cb0154e0d067ad7affd"
+
+[[package]]
+name = "clap"
+version = "1.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+dependencies = [
+ "ansi_term 0.6.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "strsim 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
+]
 
 [[package]]
 name = "clock_ticks"
@@ -216,6 +231,11 @@ version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
+name = "strsim"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[[package]]
 name = "subsequence_match"
 version = "0.1.0"
 dependencies = [
@@ -226,6 +246,7 @@ dependencies = [
 name = "switchboard"
 version = "0.1.0"
 dependencies = [
+ "clap 1.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "libc 0.1.10 (registry+https://github.com/rust-lang/crates.io-index)",
  "mio 0.5.0-pre (git+https://github.com/carllerche/mio.git?rev=fcec179737411ac105f8b27d38cb7ceee8c5c5d7)",
  "serde 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
