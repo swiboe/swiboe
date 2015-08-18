@@ -15,6 +15,7 @@ uuid = "0.1"
 
 [dependencies.mio]
 git = "https://github.com/carllerche/mio.git"
+rev = "78722e909b332cd6397b62a697499e8e3d6f7430"
 
 [[test]]
 name = "tests"
