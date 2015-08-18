@@ -2,7 +2,7 @@
 name = "term_gui"
 version = "0.1.0"
 dependencies = [
- "rustbox 0.6.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rustbox 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_json 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_macros 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -159,7 +159,7 @@ dependencies = [
 
 [[package]]
 name = "rustbox"
-version = "0.6.3"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "bitflags 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",

@@ -4,4 +4,4 @@ version = "0.1.0"
 authors = ["Holger Rapp <hrapp@google.com>"]
 
 [dependencies]
-bit-set = "*"
+bit-set = "0.2.0"

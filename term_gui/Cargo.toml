@@ -1,16 +1,15 @@
 [package]
-rustbox = "*"
 name = "term_gui"
 version = "0.1.0"
 authors = ["Holger Rapp <HolgerRapp@gmx.net>"]
 
 [dependencies]
+rustbox = "0.7.0"
 serde = "0.5.1"
 serde_json = "0.5.1"
 serde_macros = "0.5.1"
-time = "*"
+time = "0.1.32"
 uuid = "0.1"
-rustbox = "*"
 
 [dependencies.switchboard]
 path = ".."
