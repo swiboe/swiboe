@@ -1,0 +1,30 @@
+[package]
+name = "switchboard_gtk_gui"
+version = "0.1.0"
+authors = ["Holger Rapp <HolgerRapp@gmx.net>"]
+
+[dependencies]
+serde = "0.5.1"
+serde_json = "0.5.1"
+serde_macros = "0.5.1"
+time = "*"
+uuid = "0.1"
+
+[dependencies.glib]
+git = "https://github.com/rust-gnome/glib.git"
+
+[dependencies.gdk]
+git = "https://github.com/rust-gnome/gdk"
+
+[dependencies.gtk]
+git = "https://github.com/rust-gnome/gtk.git"
+features = ["gtk_3_12"]
+
+[dependencies.cairo-rs]
+git = "https://github.com/rust-gnome/cairo.git"
+
+[dependencies.switchboard]
+path = ".."
+
+[dependencies.switchboard_gui]
+path = "../gui"

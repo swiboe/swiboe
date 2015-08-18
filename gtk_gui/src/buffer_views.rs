@@ -1,10 +1,24 @@
 use ::command::GuiCommand;
+use cairo::Context;
+use cairo::enums::{FontSlant, FontWeight};
+use cairo;
+use gtk::signal;
+use gtk::traits::*;
+use gtk;
+use serde;
 use serde_json;
+use std::cell::{RefCell, Cell};
 use std::clone::Clone;
 use std::cmp;
 use std::collections::HashMap;
 use std::convert;
+use std::f64::consts::PI;
+use std::fs::File;
+use std::io::BufReader;
+use std::io::prelude::*;
 use std::ops;
+use std::path;
+use std::rc::Rc;
 use std::sync::mpsc;
 use std::sync::{RwLock, Arc, Mutex};
 use switchboard::client;
@@ -172,7 +186,7 @@ pub struct BufferViews {
 
 impl BufferViews {
     pub fn new(gui_id: &str, commands: mpsc::Sender<GuiCommand>, client: &client::Client) -> Arc<RwLock<Self>> {
-        let buffer_view = Arc::new(RwLock::new(BufferViews {
+        let mut buffer_view = Arc::new(RwLock::new(BufferViews {
             gui_id: gui_id.to_string(),
             buffer_views: HashMap::new(),
             client: client.clone(),
