@@ -63,6 +63,28 @@ impl Context {
         })
     }
 
+    pub fn try_recv(&mut self) -> Result<Option<serde_json::Value>> {
+        if self.result.is_some() {
+            return Ok(None);
+        }
+
+        let rpc_response = match self.values.try_recv() {
+            Ok(value) => value,
+            Err(err) => match err {
+                mpsc::TryRecvError::Empty => return Ok(None),
+                err => return Err(Error::Disconnected),
+            }
+        };
+
+        match rpc_response.kind {
+            ::rpc::ResponseKind::Partial(value) => Ok(Some(value)),
+            ::rpc::ResponseKind::Last(result) => {
+                self.result = Some(result);
+                Ok(None)
+            },
+        }
+    }
+
     // NOCOM(#sirver): timeout?
     pub fn recv(&mut self) -> Result<Option<serde_json::Value>> {
         if self.result.is_some() {
@@ -83,6 +105,10 @@ impl Context {
         while let Some(_) = try!(self.recv()) {
         }
         Ok(self.result.take().unwrap())
+    }
+
+    pub fn done(&self) -> bool {
+        self.result.is_some()
     }
 
     pub fn wait_for<T: serde::Deserialize>(&mut self) -> Result<T> {

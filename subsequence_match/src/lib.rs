@@ -1,3 +1,4 @@
+#![feature(iter_arith)]
 #![feature(test)]
 
 /// The beginnings of a fuzzy matcher library. The algorithm is heavily inspired
@@ -50,26 +51,27 @@ impl Candidate {
 }
 
 #[derive(Debug)]
-pub struct QueryResult<'a> {
-    pub text: &'a str,
+pub struct QueryResult {
+    pub text: String,
+    pub matching_indices: Vec<usize>,
     score: usize,
 }
 
-impl<'a> cmp::PartialEq for QueryResult<'a> {
+impl cmp::PartialEq for QueryResult {
     fn eq(&self, other: &QueryResult) -> bool {
         self.score == other.score
     }
 }
 
-impl<'a> cmp::Eq for QueryResult<'a> {}
+impl cmp::Eq for QueryResult {}
 
-impl<'a> cmp::PartialOrd for QueryResult<'a> {
+impl cmp::PartialOrd for QueryResult {
       fn partial_cmp(&self, other: &QueryResult) -> Option<cmp::Ordering> {
           self.score.partial_cmp(&other.score)
       }
 }
 
-impl<'a> cmp::Ord for QueryResult<'a> {
+impl cmp::Ord for QueryResult {
     fn cmp(&self, other: &Self) -> cmp::Ordering {
         self.score.cmp(&other.score)
     }
@@ -91,24 +93,28 @@ impl CandidateSet {
         self.candidates.insert(Candidate::new(text));
     }
 
-    pub fn query<'a>(&'a self, query: &str, match_case: MatchCase) -> Vec<QueryResult<'a>> {
+    pub fn query(&self, query: &str, match_case: MatchCase, results: &mut Vec<QueryResult>) {
         let query_bitset = make_query_bitset(query);
 
-        let mut results = Vec::new();
+        results.clear();
         for candidate in &self.candidates {
             if !candidate.matches_query_bitset(&query_bitset) {
                 continue;
             }
 
-            if let Some(score) = is_subsequence(&candidate.text, query, match_case) {
+            if let Some(matching_indices) = is_subsequence(&candidate.text, query, match_case) {
                 results.push(QueryResult {
-                    text: &candidate.text,
-                    score: score,
+                    text: candidate.text.to_string(),
+                    score: matching_indices.iter().sum(),
+                    matching_indices: matching_indices,
                 })
             }
         }
         results.sort();
-        results
+    }
+
+    pub fn len(&self) -> usize {
+        self.candidates.len()
     }
 
 }
@@ -139,8 +145,8 @@ pub enum MatchCase {
 /// higher is worse or None if there was no match.
 // TODO(sirver): This is kinda the first algorithm I came up with. YCM seems to be
 // doing something more sophisticated which is likely faster.
-pub fn is_subsequence(candidate: &str, query: &str, match_case: MatchCase) -> Option<usize> {
-    let mut score = 0;
+pub fn is_subsequence(candidate: &str, query: &str, match_case: MatchCase) -> Option<Vec<usize>> {
+    let mut matching_indices = Vec::new();
     let mut query_iter = query.chars().peekable();
     for (index, c) in candidate.chars().enumerate() {
         if !c.is_ascii() {
@@ -151,16 +157,16 @@ pub fn is_subsequence(candidate: &str, query: &str, match_case: MatchCase) -> Op
                 MatchCase::Yes => *q == c,
                 MatchCase::No => q.to_ascii_lowercase() == c.to_ascii_lowercase(),
             },
-            None => return Some(score),
+            None => return Some(matching_indices),
         };
         if advance {
-            score += index;
+            matching_indices.push(index);
             query_iter.next();
         }
     }
     match query_iter.peek() {
         Some(_) => None,
-        None => Some(score),
+        None => Some(matching_indices),
     }
 }
 
@@ -263,19 +269,20 @@ mod tests {
         candidates.insert("surpriseExtreem");
         candidates.insert("barblub");
 
+        let mut results = Vec::new();
         {
-            let results = candidates.query("fbb", MatchCase::No);
+            candidates.query("fbb", MatchCase::No, &mut results);
             assert_eq!(2, results.len());
         }
 
         {
-            let results = candidates.query("bb", MatchCase::No);
+            candidates.query("bb", MatchCase::No, &mut results);
             assert_eq!(3, results.len());
             assert_eq!("barblub", results[0].text);
         }
 
         {
-            let results = candidates.query("sxee", MatchCase::No);
+            candidates.query("sxee", MatchCase::No, &mut results);
             assert_eq!(1, results.len());
         }
     }

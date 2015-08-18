@@ -15,3 +15,8 @@ rustbox = "*"
 [dependencies.switchboard]
 path = ".."
 
+[dependencies.switchboard_gui]
+path = "../gui"
+
+[dependencies.subsequence_match]
+path = "../subsequence_match/"
