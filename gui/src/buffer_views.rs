@@ -117,13 +117,11 @@ struct MoveCursor {
 
 impl client::rpc::server::Rpc for MoveCursor {
     fn call(&mut self,  mut context: client::rpc::server::Context, args: serde_json::Value) {
-        println!("#sirver Beginning of MoveCursor: {:#?}", time::precise_time_ns());
         let request: MoveCursorRequest = try_rpc!(context, serde_json::from_value(args));
 
         let mut buffer_views = self.buffer_views.write().unwrap();
 
         try_rpc!(context, buffer_views.move_cursor(&request.cursor_id, request.delta));
-        println!("#sirver End of MoveCursor: {:#?}", time::precise_time_ns());
         context.finish(rpc::Result::success(MoveCursorResponse)).unwrap();
     }
 }
@@ -194,7 +192,6 @@ impl BufferViews {
 
     // NOCOM(#sirver): write tests for move cursor.
     fn move_cursor(&mut self, id: &str, delta: Position) -> Result<(), BufferViewError> {
-        println!("#sirver id: {:#?},delta: {:#?}", id, delta);
         for (_, buffer_view) in self.buffer_views.iter_mut() {
             if buffer_view.cursor.id == id {
                 buffer_view.cursor.wanted_position = buffer_view.cursor.wanted_position + delta;
@@ -242,10 +239,7 @@ impl BufferViews {
             Some(view.scroll(delta))
         }).and_then(|_| {
             let c = self.commands.lock().unwrap();
-            let before_send = time::precise_time_ns();
             c.send(GuiCommand::Redraw).unwrap();
-            let after_send = time::precise_time_ns();
-            println!("#sirver before_send: {:#?},after_send: {:#?},diff: {:#?}", before_send, after_send, (after_send - before_send));
             Some(())
         });
     }

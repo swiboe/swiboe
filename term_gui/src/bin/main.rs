@@ -10,7 +10,6 @@ use gui::buffer_views;
 use rustbox::Key;
 use rustbox::{Color, RustBox};
 use std::cmp;
-use std::default::Default;
 use std::path;
 use std::sync::mpsc;
 use switchboard::client;
@@ -144,35 +143,92 @@ impl CompleterWidget {
 
 struct BufferViewWidget {
     view_id: String,
+    client: client::ThinClient,
+    cursor_id: String,
 }
 
 impl BufferViewWidget {
-    pub fn new(view_id: String) -> Self {
+    pub fn new(view_id: String, client: client::ThinClient) -> Self {
         BufferViewWidget {
             view_id: view_id,
+            client: client,
+            cursor_id: String::new(),
         }
     }
 
     fn draw(&mut self, buffer_view: &buffer_views::BufferView, rustbox: &rustbox::RustBox) {
         let mut row = 0;
-        let mut line_index = buffer_view.top_line_index as usize;
+        let line_index = buffer_view.top_line_index as usize;
+        self.cursor_id = buffer_view.cursor.id().to_string();
 
+        let mut cursor_drawn = false;
         while row < rustbox.height() {
             if let Some(line) = buffer_view.lines.get(line_index + row) {
                 for (col, c) in line.chars().enumerate() {
                     if col >= rustbox.width() {
                         break;
                     }
-                    rustbox.print_char(col, row, rustbox::RB_NORMAL, Color::Default, Color::Default, c);
+                    let bg = if buffer_view.cursor.position.line_index as usize == row &&
+                        buffer_view.cursor.position.column_index as usize == col {
+                        cursor_drawn = true;
+                        Color::Red
+                    } else {
+                        Color::Default
+                    };
+                    rustbox.print_char(col, row, rustbox::RB_NORMAL, Color::Default, bg, c);
                 }
             }
             row += 1;
+        }
+
+        if !cursor_drawn {
+            rustbox.print_char(buffer_view.cursor.position.column_index as usize,
+                               buffer_view.cursor.position.line_index as usize, rustbox::RB_NORMAL,
+                               Color::Default, Color::Red, ' ');
+        }
+    }
+
+
+    fn on_key(&mut self, key: rustbox::Key) {
+        if self.cursor_id.is_empty() {
+            return;
+        }
+
+        match key {
+            rustbox::Key::Up => {
+                self.client.call("gui.buffer_view.move_cursor", &buffer_views::MoveCursorRequest {
+                    cursor_id: self.cursor_id.clone(),
+                    delta: buffer_views::Position { line_index: -1, column_index: 0, },
+                });
+            },
+            rustbox::Key::Down => {
+                self.client.call("gui.buffer_view.move_cursor", &buffer_views::MoveCursorRequest {
+                    cursor_id: self.cursor_id.clone(),
+                    delta: buffer_views::Position { line_index: 1, column_index: 0, },
+                });
+            }
+            rustbox::Key::Left => {
+                self.client.call("gui.buffer_view.move_cursor", &buffer_views::MoveCursorRequest {
+                    cursor_id: self.cursor_id.clone(),
+                    delta: buffer_views::Position { line_index: 0, column_index: -1, },
+                });
+            },
+            rustbox::Key::Right => {
+                self.client.call("gui.buffer_view.move_cursor", &buffer_views::MoveCursorRequest {
+                    cursor_id: self.cursor_id.clone(),
+                    delta: buffer_views::Position { line_index: 0, column_index: 1, },
+                });
+            },
+            _ => (),
         }
     }
 }
 
 fn main() {
-    let rustbox = match RustBox::init(Default::default()) {
+    let rustbox = match RustBox::init(rustbox::InitOptions {
+        input_mode: rustbox::InputMode::Current,
+        buffer_stderr: true,
+    }) {
         Result::Ok(v) => v,
         Result::Err(e) => panic!("{}", e),
     };
@@ -188,7 +244,7 @@ fn main() {
     let mut completer: Option<CompleterWidget> = None;
     let mut buffer_view_widget: Option<BufferViewWidget> = None;
     loop {
-        match rustbox.peek_event(time::Duration::milliseconds(20), false) {
+        match rustbox.peek_event(time::Duration::milliseconds(5), false) {
             Ok(rustbox::Event::KeyEvent(key)) => {
                 if completer.is_some() {
                     let rv = completer.as_mut().unwrap().on_key(key.unwrap());
@@ -207,7 +263,7 @@ fn main() {
 
                             let mut buffer_views = buffer_views.write().unwrap();
                             let view_id = buffer_views.new_view(response.buffer_index, rustbox.width(), rustbox.height());
-                            buffer_view_widget = Some(BufferViewWidget::new(view_id));
+                            buffer_view_widget = Some(BufferViewWidget::new(view_id, client.clone()));
                         },
                     }
                 } else {
@@ -216,7 +272,11 @@ fn main() {
                         Some(Key::Ctrl('t')) => {
                             completer = Some(CompleterWidget::new(&client))
                         },
-                        _ => (),
+                        _ => {
+                            if let Some(ref mut widget) = buffer_view_widget {
+                                widget.on_key(key.unwrap());
+                            }
+                        }
                     }
                 }
             },
@@ -228,7 +288,6 @@ fn main() {
             match command {
                 gui::command::GuiCommand::Quit => break,
                 gui::command::GuiCommand::Redraw => {
-                    unimplemented!();
                 },
             }
         }
