@@ -205,6 +205,15 @@ impl BufferViews {
                 };
 
                 buffer_view.cursor.position = new_pos;
+                const SCROLLOFF: isize = 3;
+                let top_diff = new_pos.line_index as isize - buffer_view.top_line_index;
+                if top_diff < SCROLLOFF {
+                    buffer_view.scroll(top_diff - SCROLLOFF);
+                }
+                let bottom_diff = buffer_view.top_line_index + buffer_view.height as isize - new_pos.line_index;
+                if bottom_diff < SCROLLOFF {
+                    buffer_view.scroll(SCROLLOFF - bottom_diff);
+                }
 
                 // TODO(sirver): Publish the cursor position for other GUIs.
 

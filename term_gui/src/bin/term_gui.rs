@@ -159,17 +159,18 @@ impl BufferViewWidget {
 
     fn draw(&mut self, buffer_view: &buffer_views::BufferView, rustbox: &rustbox::RustBox) {
         let mut row = 0;
-        let line_index = buffer_view.top_line_index as usize;
+        let top_line_index = buffer_view.top_line_index as usize;
         self.cursor_id = buffer_view.cursor.id().to_string();
 
         let mut cursor_drawn = false;
         while row < rustbox.height() {
-            if let Some(line) = buffer_view.lines.get(line_index + row) {
+            let line_index = top_line_index + row;
+            if let Some(line) = buffer_view.lines.get(line_index) {
                 for (col, c) in line.chars().enumerate() {
                     if col >= rustbox.width() {
                         break;
                     }
-                    let bg = if buffer_view.cursor.position.line_index as usize == row &&
+                    let bg = if buffer_view.cursor.position.line_index == line_index as isize &&
                         buffer_view.cursor.position.column_index as usize == col {
                         cursor_drawn = true;
                         Color::Red
@@ -183,8 +184,9 @@ impl BufferViewWidget {
         }
 
         if !cursor_drawn {
+            let row = buffer_view.cursor.position.line_index - top_line_index as isize;
             rustbox.print_char(buffer_view.cursor.position.column_index as usize,
-                               buffer_view.cursor.position.line_index as usize, rustbox::RB_NORMAL,
+                               row as usize, rustbox::RB_NORMAL,
                                Color::Default, Color::Red, ' ');
         }
     }
