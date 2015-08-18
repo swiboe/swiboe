@@ -1,9 +1,9 @@
+use ::ipc;
+use ::server;
+use ::{ErrorKind, Error};
 use mio::unix::{UnixListener, UnixStream};
 use mio;
 use std::path::Path;
-use super::error::{ErrorKind, Error};
-use super::ipc;
-use super::server;
 
 #[derive(PartialEq, Eq, Clone, Copy, Hash, Debug)]
 pub struct ClientId {

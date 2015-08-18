@@ -10,7 +10,6 @@ use std::sync::{RwLock, Arc, Mutex};
 use switchboard::client;
 use switchboard::plugin_buffer;
 use switchboard::rpc;
-use time;
 use uuid::Uuid;
 
 // NOCOM(#sirver): nothing in this file is tested .

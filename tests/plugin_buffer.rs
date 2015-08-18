@@ -1,5 +1,5 @@
+use ::{CallbackRpc, create_file};
 use std::sync::atomic::{AtomicBool, Ordering};
-use super::{CallbackRpc, create_file};
 use support::TestHarness;
 use switchboard::client;
 use switchboard::plugin_buffer;

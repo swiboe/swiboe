@@ -1,9 +1,9 @@
+use ::CallbackRpc;
 use serde_json;
 use std::env;
 use std::path;
 use std::sync;
 use std::thread;
-use super::CallbackRpc;
 use support::TestHarness;
 use switchboard::client;
 use switchboard::rpc;

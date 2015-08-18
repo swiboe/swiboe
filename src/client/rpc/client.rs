@@ -1,8 +1,8 @@
+use ::client::event_loop::Command;
 use mio;
 use serde;
 use serde_json;
 use std::sync::mpsc;
-use super::super::event_loop::Command;
 use uuid::Uuid;
 
 pub struct Context {
