@@ -131,22 +131,22 @@ impl client::rpc::server::Rpc for MoveCursor {
 pub struct BufferView {
     id: String,
     pub cursor: Cursor,
+    pub width: usize,
+    pub height: usize,
     pub top_line_index: isize,
     pub lines: Vec<String>,
 }
 
 impl BufferView {
-    pub fn new() -> Self {
+    pub fn new(width: usize, height: usize, content: &str) -> Self {
         BufferView {
             id: Uuid::new_v4().to_hyphenated_string(),
             top_line_index: 0,
-            lines: Vec::new(),
+            width: width,
+            height: height,
+            lines: content.split("\n").map(|s| s.into()).collect(),
             cursor: Cursor::new(),
         }
-    }
-
-    pub fn set_contents(&mut self, text: &str) {
-        self.lines = text.split("\n").map(|s| s.into()).collect();
     }
 
     fn scroll(&mut self, delta: isize) {
@@ -164,7 +164,7 @@ impl BufferView {
 pub struct BufferViews {
     // NOCOM(#sirver): is the gui id needed?
     gui_id: String,
-    buffer_views: HashMap<usize, BufferView>,
+    buffer_views: HashMap<String, BufferView>,
     client: client::ThinClient,
     // NOCOM(#sirver): are these mutex really needed?
     commands: Mutex<mpsc::Sender<GuiCommand>>,
@@ -189,33 +189,7 @@ impl BufferViews {
         };
         client.new_rpc("gui.buffer_view.move_cursor", Box::new(move_cursor));
 
-        let on_buffer_created = OnBufferCreated {
-            buffer_views: buffer_view.clone(),
-            client: client.clone(),
-        };
-        client.new_rpc("on.buffer.new", Box::new(on_buffer_created));
-
-
-        {
-            let mut bv = buffer_view.write().unwrap();
-            bv.update_all_buffers_blocking();
-        }
         buffer_view
-    }
-
-    fn update_all_buffers_blocking(&mut self) {
-        // NOCOM(#sirver): all these unwraps are very dangerous.
-        let mut rpc = self.client.call("buffer.list", &plugin_buffer::ListRequest);
-        let result: plugin_buffer::ListResponse = rpc.wait_for().unwrap();
-
-        for buffer_index in result.buffer_indices {
-            let mut rpc = self.client.call("buffer.get_content", &plugin_buffer::GetContentRequest {
-                buffer_index: buffer_index,
-            });
-            let response: plugin_buffer::GetContentResponse = rpc.wait_for().unwrap();
-            let buffer = self.get_or_create(buffer_index);
-            buffer.set_contents(&response.content);
-        }
     }
 
     // NOCOM(#sirver): write tests for move cursor.
@@ -246,31 +220,25 @@ impl BufferViews {
         Err(BufferViewError::UnknownCursor)
     }
 
-    pub fn insert(&mut self, buffer_index: usize, buffer_view: BufferView) {
-        self.buffer_views.insert(buffer_index, buffer_view);
+    pub fn new_view(&mut self, buffer_index: usize, width: usize, height: usize) -> String {
+        let mut rpc = self.client.call("buffer.get_content", &plugin_buffer::GetContentRequest {
+            buffer_index: buffer_index,
+        });
+
+        let response: plugin_buffer::GetContentResponse = rpc.wait_for().unwrap();
+        let buffer_view = BufferView::new(width, height, &response.content);
+        let view_id = buffer_view.id().to_string();
+        self.buffer_views.insert(buffer_view.id().to_string(), buffer_view);
+        view_id
     }
 
-    // NOCOM(#sirver): does this need to be public?
-    pub fn get_or_create(&mut self, buffer_index: usize) -> &mut BufferView {
-        self.buffer_views.entry(buffer_index).or_insert_with(BufferView::new)
-    }
 
-    fn get_by_id(&self, id: &str) -> Option<&BufferView> {
-        for (_, buffer_view) in self.buffer_views.iter() {
-            if buffer_view.id == id {
-                return Some(buffer_view);
-            }
-        }
-        None
+    pub fn get_by_id(&self, id: &str) -> Option<&BufferView> {
+        self.buffer_views.get(id)
     }
 
     fn get_mut_by_id(&mut self, id: &str) -> Option<&mut BufferView> {
-        for (_, buffer_view) in self.buffer_views.iter_mut() {
-            if buffer_view.id == id {
-                return Some(buffer_view);
-            }
-        }
-        None
+        self.buffer_views.get_mut(id)
     }
 
     fn scroll(&mut self, buffer_view_id: &str, delta: isize) {
@@ -284,34 +252,5 @@ impl BufferViews {
             println!("#sirver before_send: {:#?},after_send: {:#?},diff: {:#?}", before_send, after_send, (after_send - before_send));
             Some(())
         });
-    }
-}
-
-// NOCOM(#sirver): reconsider if the client takes ownership of the RPCs. If it would not, handing
-// out references to the RPCs accessing their owners would be much simpler. On the other hand the
-// lieftimes of the RPCs could be non-expressible inside the client. Maybe if the client would take
-// weak_refs?
-struct OnBufferCreated {
-    buffer_views: Arc<RwLock<BufferViews>>,
-    client: client::ThinClient,
-}
-
-impl client::rpc::server::Rpc for OnBufferCreated {
-    fn call(&mut self, mut client: client::rpc::server::Context, args: serde_json::Value) {
-        let info: plugin_buffer::BufferCreated = try_rpc!(client, serde_json::from_value(args));
-
-        let mut rpc = self.client.call("buffer.get_content", &plugin_buffer::GetContentRequest {
-            buffer_index: info.buffer_index,
-        });
-        match rpc.wait().unwrap() {
-            rpc::Result::Ok(value) => {
-                let response: plugin_buffer::GetContentResponse = serde_json::from_value(value).unwrap();
-                let mut buffer_views = self.buffer_views.write().unwrap();
-                buffer_views.get_or_create(info.buffer_index)
-                    .set_contents(&response.content);
-            }
-            _ => {},
-        }
-        client.finish(rpc::Result::success(())).unwrap();
     }
 }

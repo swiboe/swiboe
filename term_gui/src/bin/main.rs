@@ -6,11 +6,13 @@ extern crate switchboard_gui as gui;
 extern crate time;
 extern crate uuid;
 
+use gui::buffer_views;
 use rustbox::Key;
 use rustbox::{Color, RustBox};
 use std::cmp;
 use std::default::Default;
 use std::path;
+use std::sync::{RwLock, Arc};
 use std::sync::mpsc;
 use switchboard::client;
 use uuid::Uuid;
@@ -141,6 +143,35 @@ impl CompleterWidget {
     }
 }
 
+struct BufferViewWidget {
+    view_id: String,
+}
+
+impl BufferViewWidget {
+    pub fn new(view_id: String) -> Self {
+        BufferViewWidget {
+            view_id: view_id,
+        }
+    }
+
+    fn draw(&mut self, buffer_view: &buffer_views::BufferView, rustbox: &rustbox::RustBox) {
+        let mut row = 0;
+        let mut line_index = buffer_view.top_line_index as usize;
+
+        while row < rustbox.height() {
+            if let Some(line) = buffer_view.lines.get(line_index + row) {
+                for (col, c) in line.chars().enumerate() {
+                    if col >= rustbox.width() {
+                        break;
+                    }
+                    rustbox.print_char(col, row, rustbox::RB_NORMAL, Color::Default, Color::Default, c);
+                }
+            }
+            row += 1;
+        }
+    }
+}
+
 fn main() {
     let rustbox = match RustBox::init(Default::default()) {
         Result::Ok(v) => v,
@@ -156,6 +187,7 @@ fn main() {
 
 
     let mut completer: Option<CompleterWidget> = None;
+    let mut buffer_view_widget: Option<BufferViewWidget> = None;
     loop {
         match rustbox.peek_event(time::Duration::milliseconds(20), false) {
             Ok(rustbox::Event::KeyEvent(key)) => {
@@ -167,8 +199,16 @@ fn main() {
                             completer = None;
                         },
                         CompleterState::Selected(result) => {
-                            println!("#sirver result: {:#?}", result);
                             completer = None;
+
+                            let mut rpc = client.call("buffer.open", &switchboard::plugin_buffer::OpenRequest {
+                                uri: format!("file://{}", result),
+                            });
+                            let response: switchboard::plugin_buffer::OpenResponse = rpc.wait_for().unwrap();
+
+                            let mut buffer_views = buffer_views.write().unwrap();
+                            let view_id = buffer_views.new_view(response.buffer_index, rustbox.width(), rustbox.height());
+                            buffer_view_widget = Some(BufferViewWidget::new(view_id));
                         },
                     }
                 } else {
@@ -195,6 +235,11 @@ fn main() {
         }
 
         rustbox.clear();
+        if let Some(ref mut widget) = buffer_view_widget {
+            let buffer_views = buffer_views.read().unwrap();
+            let buffer_view = buffer_views.get_by_id(&widget.view_id).unwrap();
+            widget.draw(&buffer_view, &rustbox);
+        }
         if let Some(ref mut completer) = completer {
             completer.draw(&rustbox);
         }
