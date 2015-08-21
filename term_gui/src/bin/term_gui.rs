@@ -12,6 +12,7 @@ use gui::buffer_views;
 use rustbox::Key;
 use rustbox::{Color, RustBox};
 use std::cmp;
+use std::env;
 use std::path;
 use std::sync::mpsc;
 use swiboe::client;
@@ -39,8 +40,13 @@ enum CompleterState {
 impl CompleterWidget {
     fn new(client: &client::Client) -> Self {
 
+        // TODO(sirver): This should use the current work directory of the server, since the server
+        // might run on a different machine than the client - and certainly in a different
+        // directory.
+        let current_dir = env::current_dir().unwrap();
+
         let rpc = client.call("list_files", &swiboe::plugin_list_files::ListFilesRequest {
-            directory: "/Users/sirver/Desktop/Programming/rust/Swiboe".into(),
+            directory: current_dir.to_string_lossy().into_owned(),
         });
 
         CompleterWidget {
