@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/swiboe/swiboe.svg)](https://travis-ci.org/swiboe/swiboe)
+
 # Swiboe
 
 This is the groundwork the [ideal text
