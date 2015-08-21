@@ -1,20 +1,31 @@
 #![cfg(not(test))]
 
+#[macro_use]
+extern crate clap;
 extern crate serde;
 extern crate serde_json;
 extern crate swiboe;
 extern crate tempdir;
 
-#[path="../../tests/support/mod.rs"] mod support;
-
-use support::{TestHarness};
+use std::path;
 use swiboe::client::Client;
-use swiboe::rpc;
 use swiboe::plugin_buffer;
+use swiboe::rpc;
 
 fn main() {
-    let t = TestHarness::new();
-    let active_client = Client::connect(&t.socket_name).unwrap();
+    let matches = clap::App::new("term_gui")
+        .about("Terminal client for Swiboe")
+        .version(&crate_version!()[..])
+        .arg(clap::Arg::with_name("SOCKET")
+             .short("s")
+             .long("socket")
+             .help("Socket at which the master listens.")
+             .required(true)
+             .takes_value(true))
+        .get_matches();
+
+    let path = path::Path::new(matches.value_of("SOCKET").unwrap());
+    let active_client = Client::connect(path).unwrap();
 
     loop {
         let new_response: plugin_buffer::NewResponse = match active_client.call(
