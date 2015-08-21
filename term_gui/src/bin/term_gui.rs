@@ -3,8 +3,8 @@ extern crate clap;
 extern crate rustbox;
 extern crate serde_json;
 extern crate subsequence_match;
-extern crate switchboard;
-extern crate switchboard_gui as gui;
+extern crate swiboe;
+extern crate swiboe_gui as gui;
 extern crate time;
 extern crate uuid;
 
@@ -14,7 +14,7 @@ use rustbox::{Color, RustBox};
 use std::cmp;
 use std::path;
 use std::sync::mpsc;
-use switchboard::client;
+use swiboe::client;
 use uuid::Uuid;
 
 fn clamp<T: Copy + cmp::Ord + std::fmt::Debug>(min: T, max: T, v: &mut T) {
@@ -39,8 +39,8 @@ enum CompleterState {
 impl CompleterWidget {
     fn new(client: &client::Client) -> Self {
 
-        let rpc = client.call("list_files", &switchboard::plugin_list_files::ListFilesRequest {
-            directory: "/Users/sirver/Desktop/Programming/rust/Switchboard".into(),
+        let rpc = client.call("list_files", &swiboe::plugin_list_files::ListFilesRequest {
+            directory: "/Users/sirver/Desktop/Programming/rust/Swiboe".into(),
         });
 
         CompleterWidget {
@@ -92,7 +92,7 @@ impl CompleterWidget {
     fn draw(&mut self, rustbox: &rustbox::RustBox) {
         while let Some(b) = self.rpc.as_mut().unwrap().try_recv().unwrap() {
             self.results.clear();
-            let b: switchboard::plugin_list_files::ListFilesUpdate = serde_json::from_value(b).unwrap();
+            let b: swiboe::plugin_list_files::ListFilesUpdate = serde_json::from_value(b).unwrap();
             for file in &b.files {
                 self.candidates.insert(file);
             }
@@ -229,7 +229,7 @@ impl BufferViewWidget {
 
 fn main() {
     let matches = clap::App::new("term_gui")
-        .about("Terminal client for Switchboard")
+        .about("Terminal client for Swiboe")
         .version(&crate_version!()[..])
         .arg(clap::Arg::with_name("SOCKET")
              .short("s")
@@ -271,10 +271,10 @@ fn main() {
                         CompleterState::Selected(result) => {
                             completer = None;
 
-                            let mut rpc = client.call("buffer.open", &switchboard::plugin_buffer::OpenRequest {
+                            let mut rpc = client.call("buffer.open", &swiboe::plugin_buffer::OpenRequest {
                                 uri: format!("file://{}", result),
                             });
-                            let response: switchboard::plugin_buffer::OpenResponse = rpc.wait_for().unwrap();
+                            let response: swiboe::plugin_buffer::OpenResponse = rpc.wait_for().unwrap();
 
                             let mut buffer_views = buffer_views.write().unwrap();
                             let view_id = buffer_views.new_view(response.buffer_index, rustbox.width(), rustbox.height());

@@ -1,11 +1,11 @@
 [root]
-name = "switchboard_gui"
+name = "swiboe_gui"
 version = "0.1.0"
 dependencies = [
  "serde 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_json 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_macros 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "switchboard 0.1.0",
+ "swiboe 0.1.0",
  "time 0.1.32 (registry+https://github.com/rust-lang/crates.io-index)",
  "uuid 0.1.17 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -193,7 +193,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "switchboard"
+name = "swiboe"
 version = "0.1.0"
 dependencies = [
  "libc 0.1.10 (registry+https://github.com/rust-lang/crates.io-index)",

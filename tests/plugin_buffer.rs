@@ -1,9 +1,9 @@
 use ::{CallbackRpc, create_file};
 use std::sync::atomic::{AtomicBool, Ordering};
 use support::TestHarness;
-use switchboard::client;
-use switchboard::plugin_buffer;
-use switchboard::rpc;
+use swiboe::client;
+use swiboe::plugin_buffer;
+use swiboe::rpc;
 
 
 fn create_buffer(client: &client::Client, expected_index: usize, content: Option<&str>) {

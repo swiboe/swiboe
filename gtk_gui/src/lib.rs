@@ -5,7 +5,7 @@
 #![feature(str_split_at)]
 #![plugin(serde_macros)]
 
-#[macro_use] extern crate switchboard;
+#[macro_use] extern crate swiboe;
 extern crate cairo;
 extern crate gdk;
 extern crate glib;

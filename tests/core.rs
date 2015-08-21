@@ -5,9 +5,9 @@ use std::path;
 use std::sync;
 use std::thread;
 use support::TestHarness;
-use switchboard::client;
-use switchboard::rpc;
-use switchboard::server::Server;
+use swiboe::client;
+use swiboe::rpc;
+use swiboe::server::Server;
 use uuid::Uuid;
 
 fn temporary_socket_name() -> path::PathBuf {

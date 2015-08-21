@@ -1,5 +1,5 @@
 use std::path::PathBuf;
-use switchboard::server::Server;
+use swiboe::server::Server;
 use tempdir::TempDir;
 
 pub struct TestHarness<'a> {
@@ -10,7 +10,7 @@ pub struct TestHarness<'a> {
 
 impl<'a> TestHarness<'a> {
     pub fn new() -> Self {
-        let temp_directory = TempDir::new("switchboard").unwrap();
+        let temp_directory = TempDir::new("swiboe").unwrap();
 
         let mut socket_name = temp_directory.path().to_path_buf();
         socket_name.push("_socket");

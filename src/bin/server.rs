@@ -2,13 +2,13 @@
 
 #[macro_use]
 extern crate clap;
-extern crate switchboard;
+extern crate swiboe;
 
 use std::path::Path;
 
 fn main() {
     let matches = clap::App::new("server")
-        .about("Switchboard stand alone server.")
+        .about("Swiboe stand alone server.")
         .version(&crate_version!()[..])
         .arg(clap::Arg::with_name("SOCKET")
              .short("s")
@@ -19,6 +19,6 @@ fn main() {
         .get_matches();
 
     let path = Path::new(matches.value_of("SOCKET").unwrap());
-    let mut server = switchboard::server::Server::launch(path);
+    let mut server = swiboe::server::Server::launch(path);
     server.wait_for_shutdown();
 }

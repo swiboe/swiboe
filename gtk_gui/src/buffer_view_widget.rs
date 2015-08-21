@@ -16,8 +16,8 @@ use std::io::prelude::*;
 use std::path;
 use std::rc::Rc;
 use std::sync::{RwLock, Arc};
-use switchboard::client;
-use switchboard::plugin_buffer;
+use swiboe::client;
+use swiboe::plugin_buffer;
 use ::completion_widget::CompletionWidget;
 use time;
 

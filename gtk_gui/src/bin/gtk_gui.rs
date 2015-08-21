@@ -6,8 +6,8 @@ extern crate glib;
 extern crate gtk;
 extern crate serde;
 extern crate serde_json;
-extern crate switchboard;
-extern crate switchboard_gtk_gui;
+extern crate swiboe;
+extern crate swiboe_gtk_gui;
 extern crate time;
 extern crate uuid;
 
@@ -28,39 +28,39 @@ use std::rc::Rc;
 use std::sync::mpsc;
 use std::sync::{RwLock, Arc};
 use std::thread;
-use switchboard::client;
-use switchboard::plugin_buffer;
-use switchboard::plugin_list_files;
-use switchboard_gtk_gui::buffer_view_widget;
-use switchboard_gtk_gui::buffer_views;
-use switchboard_gtk_gui::command::GuiCommand;
+use swiboe::client;
+use swiboe::plugin_buffer;
+use swiboe::plugin_list_files;
+use swiboe_gtk_gui::buffer_view_widget;
+use swiboe_gtk_gui::buffer_views;
+use swiboe_gtk_gui::command::GuiCommand;
 use uuid::Uuid;
 
 thread_local!(
     static GLOBAL: RefCell<Option<(buffer_view_widget::BufferViewWidget)>> = RefCell::new(None)
 );
 
-struct SwitchboardGtkGui {
+struct SwiboeGtkGui {
     // NOCOM(#sirver): Is the Arc needed?
     buffer_views: Arc<RwLock<buffer_views::BufferViews>>,
     gui_id: String,
     gui_commands: mpsc::Receiver<GuiCommand>,
 }
 
-impl SwitchboardGtkGui {
+impl SwiboeGtkGui {
     fn new(client: &client::Client) -> Self {
 
         let gui_id: String = Uuid::new_v4().to_hyphenated_string();
 
         let (tx, rx) = mpsc::channel();
-        let mut gui = SwitchboardGtkGui {
+        let mut gui = SwiboeGtkGui {
             buffer_views: buffer_views::BufferViews::new(&gui_id, tx.clone(), &client),
             gui_id: gui_id.clone(),
             gui_commands: rx,
         };
 
         let window = gtk::Window::new(gtk::WindowType::TopLevel).unwrap();
-        window.set_title("Switchboard");
+        window.set_title("Swiboe");
         window.set_window_position(gtk::WindowPosition::Center);
         window.set_default_size(800, 600);
 
@@ -107,7 +107,7 @@ impl SwitchboardGtkGui {
                     match &name_str as &str {
                         "F2" => {
                             let mut rpc = thin_client.call("buffer.open", &plugin_buffer::OpenRequest {
-                                uri: "file:///Users/sirver/Desktop/Programming/rust/Switchboard/gui/src/bin/gtk_gui.rs".into(),
+                                uri: "file:///Users/sirver/Desktop/Programming/rust/Swiboe/gui/src/bin/gtk_gui.rs".into(),
                             });
                             let b: plugin_buffer::OpenResponse = rpc.wait_for().unwrap();
                             println!("#sirver b: {:#?}", b);
@@ -192,10 +192,10 @@ fn main() {
     gtk::init().unwrap_or_else(|_| panic!("Failed to initialize GTK."));
 
     let client = client::Client::connect(path::Path::new("/tmp/sb.socket").connect());
-    let mut switchboard = SwitchboardGtkGui::new(&client);
+    let mut swiboe = SwiboeGtkGui::new(&client);
 
     let join_handle = thread::spawn(move || {
-        while let Ok(command) = switchboard.gui_commands.recv() {
+        while let Ok(command) = swiboe.gui_commands.recv() {
             match command {
                 GuiCommand::Quit => break,
                 GuiCommand::Redraw => {

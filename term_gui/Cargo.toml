@@ -12,10 +12,10 @@ serde_macros = "0.5.1"
 time = "0.1.32"
 uuid = "0.1"
 
-[dependencies.switchboard]
+[dependencies.swiboe]
 path = ".."
 
-[dependencies.switchboard_gui]
+[dependencies.swiboe_gui]
 path = "../gui"
 
 [dependencies.subsequence_match]

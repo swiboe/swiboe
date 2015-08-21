@@ -43,7 +43,7 @@ struct RunningRpc {
     last_index: usize,
 }
 
-pub struct Switchboard {
+pub struct Swiboe {
     functions: HashMap<String, Vec<RegisteredFunction>>,
     commands: Receiver<Command>,
     clients: HashSet<ipc_bridge::ClientId>,
@@ -52,7 +52,7 @@ pub struct Switchboard {
     plugin_core: plugin_core::CorePlugin,
 }
 
-impl Switchboard {
+impl Swiboe {
     pub fn spin_forever(&mut self) {
         while let Ok(command) = self.commands.recv() {
             match command {
@@ -285,7 +285,7 @@ pub struct Server<'a> {
     socket_name: PathBuf,
     commands: CommandSender,
     ipc_bridge_commands: mio::Sender<ipc_bridge::Command>,
-    switchboard_thread: Option<thread::JoinHandle<()>>,
+    swiboe_thread: Option<thread::JoinHandle<()>>,
     event_loop_thread: Option<thread::JoinHandle<()>>,
     buffer_plugin: Option<plugin_buffer::BufferPlugin<'a>>,
     list_files_plugin: Option<plugin_list_files::ListFilesPlugin<'a>>,
@@ -304,11 +304,11 @@ impl<'a> Server<'a> {
             ipc_bridge_commands: event_loop.channel(),
             buffer_plugin: None,
             list_files_plugin: None,
-            switchboard_thread: None,
+            swiboe_thread: None,
             event_loop_thread: None,
         };
 
-        let mut switchboard = Switchboard {
+        let mut swiboe = Swiboe {
             functions: HashMap::new(),
             clients: HashSet::new(),
             running_rpcs: HashMap::new(),
@@ -324,8 +324,8 @@ impl<'a> Server<'a> {
             event_loop.run(&mut ipc_bridge).unwrap();
         }));
 
-        server.switchboard_thread = Some(thread::spawn(move || {
-            switchboard.spin_forever();
+        server.swiboe_thread = Some(thread::spawn(move || {
+            swiboe.spin_forever();
         }));
 
         server.buffer_plugin = Some(
@@ -343,8 +343,8 @@ impl<'a> Server<'a> {
     }
 
     pub fn wait_for_shutdown(&mut self) {
-        if let Some(thread) = self.switchboard_thread.take() {
-            thread.join().expect("Could not join switchboard_thread.");
+        if let Some(thread) = self.swiboe_thread.take() {
+            thread.join().expect("Could not join swiboe_thread.");
         }
         if let Some(thread) = self.event_loop_thread.take() {
             thread.join().expect("Could not join event_loop_thread.");

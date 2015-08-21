@@ -1,5 +1,5 @@
 [root]
-name = "switchboard"
+name = "swiboe"
 version = "0.1.0"
 dependencies = [
  "clap 1.2.1 (registry+https://github.com/rust-lang/crates.io-index)",

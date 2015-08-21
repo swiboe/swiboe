@@ -2,14 +2,14 @@
 
 extern crate serde;
 extern crate serde_json;
-extern crate switchboard;
+extern crate swiboe;
 extern crate tempdir;
 extern crate uuid;
 
 use std::fs;
 use std::io::Write;
 use std::path;
-use switchboard::client;
+use swiboe::client;
 
 mod support;
 

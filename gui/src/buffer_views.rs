@@ -7,9 +7,9 @@ use std::convert;
 use std::ops;
 use std::sync::mpsc;
 use std::sync::{RwLock, Arc, Mutex};
-use switchboard::client;
-use switchboard::plugin_buffer;
-use switchboard::rpc;
+use swiboe::client;
+use swiboe::plugin_buffer;
+use swiboe::rpc;
 use uuid::Uuid;
 
 // NOCOM(#sirver): nothing in this file is tested .
@@ -20,7 +20,7 @@ pub enum BufferViewError {
 
 impl From<BufferViewError> for rpc::Error {
      fn from(error: BufferViewError) -> Self {
-         use switchboard::rpc::ErrorKind::*;
+         use swiboe::rpc::ErrorKind::*;
 
          let (kind, details) = match error {
              BufferViewError::UnknownCursor => (InvalidArgs, format!("unknown_cursor")),

@@ -1,4 +1,4 @@
-/// Errors for use with Switchboard.
+/// Errors for use with Swiboe.
 
 use serde_json;
 use std::error;

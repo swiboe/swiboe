@@ -2,16 +2,16 @@
 
 extern crate serde;
 extern crate serde_json;
-extern crate switchboard;
+extern crate swiboe;
 extern crate tempdir;
 extern crate test;
 
 #[path="../tests/support/mod.rs"] mod support;
 
 use support::{TestHarness};
-use switchboard::client::Client;
-use switchboard::plugin_buffer;
-use switchboard::rpc;
+use swiboe::client::Client;
+use swiboe::plugin_buffer;
+use swiboe::rpc;
 use test::Bencher;
 
 
