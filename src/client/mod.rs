@@ -7,10 +7,11 @@ use mio;
 use serde;
 use std::path;
 use std::sync::mpsc;
+use std::sync::Mutex;
 
 pub struct Client<'a> {
     event_loop_commands: mio::Sender<event_loop::Command>,
-    rpc_loop_commands: mpsc::Sender<rpc_loop::Command>,
+    rpc_loop_commands: rpc_loop::CommandSender,
     rpc_loop_new_rpcs: mpsc::Sender<rpc_loop::NewRpc<'a>>,
 
     _rpc_loop_thread_join_guard: ::thread_scoped::JoinGuard<'a, ()>,
@@ -27,9 +28,9 @@ impl<'a> Client<'a> {
 
         Ok(Client {
             event_loop_commands: event_loop_commands.clone(),
-            rpc_loop_commands: commands_tx,
+            rpc_loop_commands: commands_tx.clone(),
             rpc_loop_new_rpcs: new_rpcs_tx,
-            _rpc_loop_thread_join_guard: rpc_loop::spawn(commands_rx, new_rpcs_rx, event_loop_commands),
+            _rpc_loop_thread_join_guard: rpc_loop::spawn(commands_rx, commands_tx, new_rpcs_rx, event_loop_commands),
             _event_loop_thread_join_guard: event_loop_thread,
         })
     }
@@ -47,12 +48,12 @@ impl<'a> Client<'a> {
     }
 
     pub fn call<T: serde::Serialize>(&self, function: &str, args: &T) -> rpc::client::Context {
-        rpc::client::Context::new(&self.commands_tx.clone(), function, args).unwrap()
+        rpc::client::Context::new(self.rpc_loop_commands.clone(), function, args).unwrap()
     }
 
     pub fn clone(&self) -> ThinClient {
         ThinClient {
-            commands: self.commands_tx.clone(),
+            rpc_loop_commands: Mutex::new(self.rpc_loop_commands.clone()),
         }
     }
 }
@@ -66,16 +67,29 @@ impl<'a> Drop for Client<'a> {
     }
 }
 
-#[derive(Clone)]
 pub struct ThinClient {
-    commands: mpsc::Sender<rpc_loop::Command>,
+    rpc_loop_commands: Mutex<rpc_loop::CommandSender>,
 }
 
 // NOCOM(#sirver): figure out the difference between a Sender, an Context and come up with better
 // names.
 impl ThinClient {
     pub fn call<T: serde::Serialize>(&self, function: &str, args: &T) -> rpc::client::Context {
-        rpc::client::Context::new(&self.commands, function, args).unwrap()
+        let commands = {
+            let commands = self.rpc_loop_commands.lock().unwrap();
+            commands.clone()
+        };
+        rpc::client::Context::new(commands, function, args).unwrap()
+    }
+
+    pub fn clone(&self) -> Self {
+        let commands = {
+            let commands = self.rpc_loop_commands.lock().unwrap();
+            commands.clone()
+        };
+        ThinClient {
+            rpc_loop_commands: Mutex::new(commands),
+        }
     }
 }
 

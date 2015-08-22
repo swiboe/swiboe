@@ -1,5 +1,4 @@
-use ::client::event_loop;
-use mio;
+use ::client::rpc_loop;
 use serde::Serialize;
 use serde_json;
 use std::result;
@@ -21,8 +20,14 @@ pub enum Error {
 
 // NOCOM(#sirver): impl error::Error for Error?
 
-impl From<mio::NotifyError<event_loop::Command>> for Error {
-    fn from(_: mio::NotifyError<event_loop::Command>) -> Self {
+impl From<::client::rpc::client::Error> for Error {
+    fn from(_: ::client::rpc::client::Error) -> Self {
+        Error::Disconnected
+    }
+}
+
+impl From<mpsc::SendError<::client::rpc_loop::Command>> for Error {
+    fn from(_: mpsc::SendError<::client::rpc_loop::Command>) -> Self {
         Error::Disconnected
     }
 }
@@ -41,17 +46,17 @@ pub type Result<T> = result::Result<T, Error>;
 pub struct Context {
     context: String,
     commands: mpsc::Receiver<Command>,
-    event_loop_sender: mio::Sender<event_loop::Command>,
+    rpc_loop_commands: rpc_loop::CommandSender,
     state: ContextState,
 }
 
 impl Context {
     pub fn new(context: String, commands: mpsc::Receiver<Command>,
-           event_loop_sender: mio::Sender<event_loop::Command>) -> Self {
+           rpc_loop_commands: rpc_loop::CommandSender) -> Self {
         Context {
             context: context,
             commands: commands,
-            event_loop_sender: event_loop_sender,
+            rpc_loop_commands: rpc_loop_commands,
             state: ContextState::Alive
         }
     }
@@ -84,7 +89,7 @@ impl Context {
 
     pub fn call<T: Serialize>(&mut self, function: &str, args: &T) -> Result<::client::rpc::client::Context> {
         try!(self.check_liveness());
-        Ok(try!(::client::rpc::client::Context::new(&self.event_loop_sender, function, args)))
+        Ok(try!(::client::rpc::client::Context::new(self.rpc_loop_commands.clone(), function, args)))
     }
 
     pub fn update<T: Serialize>(&mut self, args: &T) -> Result<()> {
@@ -94,7 +99,7 @@ impl Context {
             context: self.context.clone(),
             kind: ::rpc::ResponseKind::Partial(serde_json::to_value(args)),
         });
-        Ok(try!(self.event_loop_sender.send(event_loop::Command::Send(msg))))
+        Ok(try!(self.rpc_loop_commands.send(rpc_loop::Command::Send(msg))))
     }
 
     pub fn cancelled(&mut self) -> bool {
@@ -111,7 +116,7 @@ impl Context {
             context: self.context.clone(),
             kind: ::rpc::ResponseKind::Last(result),
         });
-        Ok(try!(self.event_loop_sender.send(event_loop::Command::Send(msg))))
+        Ok(try!(self.rpc_loop_commands.send(rpc_loop::Command::Send(msg))))
     }
 }
 

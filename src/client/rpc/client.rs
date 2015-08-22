@@ -31,10 +31,16 @@ impl From<serde_json::error::Error> for Error {
      }
 }
 
+impl From<mpsc::SendError<Command>> for Error {
+     fn from(error: mpsc::SendError<Command>) -> Self {
+         Error::Disconnected
+     }
+}
+
 pub type Result<T> = ::std::result::Result<T, Error>;
 
 impl Context {
-    pub fn new<T: serde::Serialize>(commands: &CommandSender,
+    pub fn new<T: serde::Serialize>(commands: CommandSender,
                          function: &str,
                          args: &T) -> Result<Self> {
         let args = serde_json::to_value(&args);
@@ -46,11 +52,13 @@ impl Context {
         });
 
         let (tx, rx) = mpsc::channel();
-        try!(commands.send(Command::OutoingCall(context.clone(), tx, message)));
+        // NOCOM(#sirver): this tx is only for cancelling. Maybe this can be avoided.
+        // NOCOM(#sirver): the next one should be done with try!
+        commands.send(Command::OutgoingCall(context.clone(), tx, message)).unwrap();
         // NOCOM(#sirver): implement drop so that we can cancel an RPC.
         Ok(Context {
             values: rx,
-            commands: commands.clone(),
+            commands: commands,
             context: context,
             result: None,
         })

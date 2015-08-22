@@ -18,7 +18,7 @@ struct Handler {
     reader: ipc::Reader<UnixStream>,
     writer: ipc::Writer<UnixStream>,
     running_function_calls: HashMap<String, mpsc::Sender<::rpc::Response>>,
-    function_thread_sender: mpsc::Sender<rpc_loop::Command>,
+    function_thread_sender: rpc_loop::CommandSender,
 }
 
 impl Handler {
@@ -100,7 +100,7 @@ impl mio::Handler for Handler {
     }
 }
 
-pub fn spawn<'a>(stream: UnixStream, commands_tx: mpsc::Sender<rpc_loop::Command>)
+pub fn spawn<'a>(stream: UnixStream, commands_tx: rpc_loop::CommandSender)
     -> (::thread_scoped::JoinGuard<'a, ()>, mio::Sender<Command>)
 {
     let mut event_loop = mio::EventLoop::<Handler>::new().unwrap();
