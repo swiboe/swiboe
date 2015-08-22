@@ -9,7 +9,6 @@ extern crate libc;
 extern crate mio;
 extern crate serde;
 extern crate serde_json;
-extern crate thread_scoped;
 extern crate threadpool;
 extern crate time;
 extern crate uuid;

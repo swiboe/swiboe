@@ -2,13 +2,13 @@ use std::path::PathBuf;
 use swiboe::server::Server;
 use tempdir::TempDir;
 
-pub struct TestHarness<'a> {
-    server: Option<Server<'a>>,
+pub struct TestHarness {
+    server: Option<Server>,
     pub socket_name: PathBuf,
     pub temp_directory: TempDir,
 }
 
-impl<'a> TestHarness<'a> {
+impl TestHarness {
     pub fn new() -> Self {
         let temp_directory = TempDir::new("swiboe").unwrap();
 
@@ -25,7 +25,7 @@ impl<'a> TestHarness<'a> {
     }
 }
 
-impl<'a> Drop for TestHarness<'a> {
+impl Drop for TestHarness {
     fn drop(&mut self) {
         self.server.take().unwrap().shutdown();
     }

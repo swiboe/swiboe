@@ -5,6 +5,7 @@ use mio;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::mpsc;
+use std::thread;
 use threadpool::ThreadPool;
 
 
@@ -110,20 +111,18 @@ impl RpcLoop {
 
 pub fn spawn<'a>(commands: mpsc::Receiver<Command>,
                  command_sender: CommandSender,
-                 event_loop_sender: mio::Sender<event_loop::Command>) -> ::thread_scoped::JoinGuard<'a, ()>
+                 event_loop_sender: mio::Sender<event_loop::Command>) -> thread::JoinHandle<()>
 {
-    unsafe {
-        ::thread_scoped::scoped(move || {
-            let mut thread = RpcLoop {
-                remote_procedures: HashMap::new(),
-                running_function_calls: HashMap::new(),
-                running_rpc_calls: HashMap::new(),
-                event_loop_sender: event_loop_sender,
-                command_sender: command_sender,
-                // NOCOM(#sirver): that seems silly.
-                thread_pool: ThreadPool::new(1),
-            };
-            thread.spin_forever(commands);
-        })
-    }
+    thread::spawn(move || {
+        let mut thread = RpcLoop {
+            remote_procedures: HashMap::new(),
+            running_function_calls: HashMap::new(),
+            running_rpc_calls: HashMap::new(),
+            event_loop_sender: event_loop_sender,
+            command_sender: command_sender,
+            // NOCOM(#sirver): that seems silly.
+            thread_pool: ThreadPool::new(1),
+        };
+        thread.spin_forever(commands);
+    })
 }

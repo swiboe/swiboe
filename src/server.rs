@@ -281,17 +281,17 @@ impl Swiboe {
     }
 }
 
-pub struct Server<'a> {
+pub struct Server {
     socket_name: PathBuf,
     commands: CommandSender,
     ipc_bridge_commands: mio::Sender<ipc_bridge::Command>,
     swiboe_thread: Option<thread::JoinHandle<()>>,
     event_loop_thread: Option<thread::JoinHandle<()>>,
-    buffer_plugin: Option<plugin_buffer::BufferPlugin<'a>>,
-    list_files_plugin: Option<plugin_list_files::ListFilesPlugin<'a>>,
+    buffer_plugin: Option<plugin_buffer::BufferPlugin>,
+    list_files_plugin: Option<plugin_list_files::ListFilesPlugin>,
 }
 
-impl<'a> Server<'a> {
+impl Server {
     pub fn launch(socket_name: &Path) -> Self {
         let (tx, rx) = channel();
 

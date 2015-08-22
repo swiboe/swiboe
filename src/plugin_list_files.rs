@@ -89,11 +89,11 @@ impl client::rpc::server::Rpc for ListFiles {
     }
 }
 
-pub struct ListFilesPlugin<'a> {
-    client: client::Client<'a>,
+pub struct ListFilesPlugin {
+    client: client::Client,
 }
 
-impl<'a> ListFilesPlugin<'a> {
+impl ListFilesPlugin {
     pub fn new(socket_name: &path::Path) -> Self {
         let client = client::Client::connect(socket_name).unwrap();
 

@@ -294,12 +294,12 @@ impl ops::Deref for BuffersManager {
 
 
 
-pub struct BufferPlugin<'a> {
-    client: client::Client<'a>,
+pub struct BufferPlugin {
+    client: client::Client,
     buffers: Arc<RwLock<BuffersManager>>,
 }
 
-impl<'a> BufferPlugin<'a> {
+impl BufferPlugin {
     pub fn new(socket_name: &path::Path) -> Self {
         let client = client::Client::connect(socket_name).unwrap();
 

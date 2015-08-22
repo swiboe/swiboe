@@ -2,6 +2,7 @@ use ::client::rpc_loop;
 use ::ipc;
 use mio::unix::UnixStream;
 use mio;
+use std::thread;
 
 const CLIENT: mio::Token = mio::Token(1);
 
@@ -72,7 +73,7 @@ impl mio::Handler for Handler {
 }
 
 pub fn spawn<'a>(stream: UnixStream, commands_tx: rpc_loop::CommandSender)
-    -> (::thread_scoped::JoinGuard<'a, ()>, mio::Sender<Command>)
+    -> (thread::JoinHandle<()>, mio::Sender<Command>)
 {
     let mut event_loop = mio::EventLoop::<Handler>::new().unwrap();
     let event_loop_sender = event_loop.channel();
@@ -85,11 +86,9 @@ pub fn spawn<'a>(stream: UnixStream, commands_tx: rpc_loop::CommandSender)
     event_loop.register_opt(
         &handler.reader.socket, CLIENT, mio::EventSet::readable(), mio::PollOpt::edge() |
         mio::PollOpt::oneshot()).unwrap();
-    let event_loop_thread = unsafe {
-        ::thread_scoped::scoped(move || {
-            event_loop.run(&mut handler).unwrap();
-        })
-    };
+    let event_loop_thread = thread::spawn(move || {
+        event_loop.run(&mut handler).unwrap();
+    });
 
     (event_loop_thread, event_loop_sender)
 }

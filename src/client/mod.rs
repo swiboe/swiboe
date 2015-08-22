@@ -6,18 +6,19 @@ use mio::unix::UnixStream;
 use mio;
 use serde;
 use std::path;
-use std::sync::mpsc;
 use std::sync::Mutex;
+use std::sync::mpsc;
+use std::thread;
 
-pub struct Client<'a> {
+pub struct Client {
     event_loop_commands: mio::Sender<event_loop::Command>,
     rpc_loop_commands: rpc_loop::CommandSender,
 
-    _rpc_loop_thread_join_guard: ::thread_scoped::JoinGuard<'a, ()>,
-    _event_loop_thread_join_guard: ::thread_scoped::JoinGuard<'a, ()>,
+    rpc_loop_thread: Option<thread::JoinHandle<()>>,
+    event_loop_thread: Option<thread::JoinHandle<()>>,
 }
 
-impl<'a> Client<'a> {
+impl Client {
     pub fn connect(socket_name: &path::Path) -> Result<Self> {
         let stream = try!(UnixStream::connect(&socket_name));
 
@@ -27,8 +28,8 @@ impl<'a> Client<'a> {
         Ok(Client {
             event_loop_commands: event_loop_commands.clone(),
             rpc_loop_commands: commands_tx.clone(),
-            _rpc_loop_thread_join_guard: rpc_loop::spawn(commands_rx, commands_tx, event_loop_commands),
-            _event_loop_thread_join_guard: event_loop_thread,
+            rpc_loop_thread: Some(rpc_loop::spawn(commands_rx, commands_tx, event_loop_commands)),
+            event_loop_thread: Some(event_loop_thread),
         })
     }
 
@@ -55,12 +56,19 @@ impl<'a> Client<'a> {
     }
 }
 
-impl<'a> Drop for Client<'a> {
+impl Drop for Client {
     fn drop(&mut self) {
         // Either thread might have panicked at this point, so we can not rely on the sends to go
         // through. We just tell both (again) to Quit and hope they actually join.
         let _ = self.rpc_loop_commands.send(rpc_loop::Command::Quit);
         let _ = self.event_loop_commands.send(event_loop::Command::Quit);
+
+        if let Some(thread) = self.rpc_loop_thread.take() {
+            thread.join().expect("Joining rpc_loop_thread failed.");
+        }
+        if let Some(thread) = self.event_loop_thread.take() {
+            thread.join().expect("Joining event_loop_thread failed.");
+        }
     }
 }
 
