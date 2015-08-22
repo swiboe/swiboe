@@ -34,22 +34,24 @@ fn write_all<T: Write>(writer: &mut T, buffer: &[u8]) -> io::Result<()> {
     Ok(())
 }
 
-pub struct Stream<T> {
+pub struct Reader<T: Read> {
     pub socket: T,
     read_buffer: Vec<u8>,
 }
 
-impl<T: Read + Write> Stream<T> {
+impl<T: Read> Reader<T> {
     pub fn new(socket: T) -> Self {
-        Stream {
+        Reader {
             socket: socket,
             read_buffer: Vec::with_capacity(1024),
         }
     }
 
     pub fn read_message(&mut self) -> Result<Option<Message>> {
+        // This might reallocate 'read_buffer' if it is too small.
         try!(self.socket.try_read_buf(&mut self.read_buffer));
 
+        // We have read less than 4 bytes. We have to wait for more data to arrive.
         if self.read_buffer.len() < 4 {
             return Ok(None);
         }
@@ -68,6 +70,19 @@ impl<T: Read + Write> Stream<T> {
         let msg = String::from_utf8(self.read_buffer.drain(..4+msg_len).skip(4).collect()).unwrap();
         let message: Message = try!(serde_json::from_str(&msg));
         return Ok(Some(message))
+    }
+}
+
+pub struct Writer<T: Write> {
+    pub socket: T,
+}
+
+
+impl<T: Write> Writer<T> {
+    pub fn new(socket: T) -> Self {
+        Writer {
+            socket: socket,
+        }
     }
 
     pub fn write_message(&mut self, message: &Message) -> Result<()> {

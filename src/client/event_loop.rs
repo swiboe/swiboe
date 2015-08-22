@@ -15,7 +15,8 @@ pub enum Command {
 
 // NOCOM(#sirver): bad name
 struct Handler<'a> {
-    stream: ipc::Stream<UnixStream>,
+    reader: ipc::Reader<UnixStream>,
+    writer: ipc::Writer<UnixStream>,
     running_function_calls: HashMap<String, mpsc::Sender<::rpc::Response>>,
     function_thread_sender: mpsc::Sender<rpc_loop::Command<'a>>,
 }
@@ -23,7 +24,7 @@ struct Handler<'a> {
 impl<'a> Handler<'a> {
     fn send(&mut self, event_loop: &mut mio::EventLoop<Self>, message: &ipc::Message) {
         // println!("{:?}: Client -> Server {:?}", time::precise_time_ns(), message);
-        if let Err(err) = self.stream.write_message(&message) {
+        if let Err(err) = self.writer.write_message(&message) {
             println!("Shutting down, since sending failed: {:?}", err);
             event_loop.channel().send(Command::Quit).expect("Quit");
         }
@@ -57,7 +58,7 @@ impl<'a> mio::Handler for Handler<'a> {
                 if events.is_readable() {
                     loop {
                         let message;
-                        match self.stream.read_message() {
+                        match self.reader.read_message() {
                             Err(err) => {
                                 println!("Shutting down, since receiving failed: {:?}", err);
                                 event_loop.channel().send(Command::Quit).expect("Command::Quit");
@@ -92,7 +93,7 @@ impl<'a> mio::Handler for Handler<'a> {
                         }
                     }
                     event_loop.reregister(
-                        &self.stream.socket,
+                        &self.reader.socket,
                         CLIENT,
                         mio::EventSet::readable(),
                         mio::PollOpt::edge() | mio::PollOpt::oneshot()).unwrap();
@@ -110,12 +111,13 @@ pub fn spawn<'a>(stream: UnixStream, commands_tx: mpsc::Sender<rpc_loop::Command
     let event_loop_sender = event_loop.channel();
 
     let mut handler = Handler {
-        stream: ipc::Stream::new(stream),
+        reader: ipc::Reader::new(stream.try_clone().unwrap()),
+        writer: ipc::Writer::new(stream),
         running_function_calls: HashMap::new(),
         function_thread_sender: commands_tx,
     };
     event_loop.register_opt(
-        &handler.stream.socket, CLIENT, mio::EventSet::readable(), mio::PollOpt::edge() |
+        &handler.reader.socket, CLIENT, mio::EventSet::readable(), mio::PollOpt::edge() |
         mio::PollOpt::oneshot()).unwrap();
     let event_loop_thread = unsafe {
         ::thread_scoped::scoped(move || {
