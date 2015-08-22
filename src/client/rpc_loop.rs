@@ -4,6 +4,7 @@ use ::ipc;
 use mio;
 use std::collections::HashMap;
 use std::sync::mpsc;
+use std::thread;
 
 
 pub struct NewRpc<'a> {
@@ -46,7 +47,9 @@ struct RpcLoop<'a> {
     remote_procedures: HashMap<String, Box<rpc::server::Rpc + 'a>>,
     event_loop_sender: mio::Sender<event_loop::Command>,
     running_rpc_calls: HashMap<String, RunningRpc>,
-    commands_sender: CommandSender,
+    command_sender: CommandSender,
+    // NOCOM(#sirver): maybe not use a channel to send data to rpcs?
+    running_function_calls: HashMap<String, mpsc::Sender<::rpc::Response>>,
 }
 
 impl<'a> RpcLoop<'a> {
@@ -79,10 +82,14 @@ impl<'a> RpcLoop<'a> {
                 match message {
                     ::ipc::Message::RpcCall(rpc_call) => {
                         if let Some(function) = self.remote_procedures.get_mut(&rpc_call.function) {
+                            let function = *function;
                             let (tx, rx) = mpsc::channel();
-                            function.call(rpc::server::Context::new(
-                                    rpc_call.context.clone(), rx, self.commands_sender.clone()), rpc_call.args);
                             self.running_rpc_calls.insert(rpc_call.context.clone(), RunningRpc::new(tx));
+                            let command_sender = self.command_sender.clone();
+                            // NOCOM(#sirver): this runs all commands synchronisly on the same
+                            // thread that does all work. not great.
+                            function.call(rpc::server::Context::new(
+                                    rpc_call.context, rx, self.command_sender), rpc_call.args);
                         }
                         // NOCOM(#sirver): return an error - though if that has happened the
                         // server messed up too.
@@ -94,18 +101,30 @@ impl<'a> RpcLoop<'a> {
                             let _ = function.commands.send(rpc::server::Command::Cancel);
                         }
                     },
-                    // NOCOM(#sirver): todo
-                    _ => unimplemented!(),
+                    ipc::Message::RpcResponse(rpc_data) => {
+                        // NOCOM(#sirver): if this is a streaming RPC, we should cancel the
+                        // RPC.
+                        // This will quietly drop any updates on functions that we no longer
+                        // know/care about.
+                        self.running_function_calls
+                            .get(&rpc_data.context)
+                            .map(|channel| {
+                                // The other side of this channel might not exist anymore - we
+                                // might have dropped the RPC already. Just ignore it.
+                                let _ = channel.send(rpc_data);
+                            });
+                    },
                 }
             },
-            Command::OutgoingCall(context, tx, message) => {
-                // NOCOM(#sirver): this direct forwarding is stuuuupid.
-                self.event_loop_sender.send(event_loop::Command::Call(context, tx, message)).expect("Command::Call");
-            }
             Command::Send(message) => {
                 // NOCOM(#sirver): is this used?
                 self.event_loop_sender.send(event_loop::Command::Send(message)).expect("Command::Send");
             },
+            Command::OutgoingCall(context, tx, message) => {
+                self.running_function_calls.insert(context, tx);
+                // NOCOM(#sirver): can the message be constructed here?
+                self.event_loop_sender.send(event_loop::Command::Send(message)).expect("Command::Call");
+            }
             Command::CancelOutgoingRpc(context) => {
                 let msg = ::ipc::Message::RpcCancel(::rpc::Cancel {
                     context: context,
@@ -118,7 +137,7 @@ impl<'a> RpcLoop<'a> {
 }
 
 pub fn spawn<'a>(commands: mpsc::Receiver<Command>,
-                 commands_sender: CommandSender,
+                 command_sender: CommandSender,
                  new_rpcs: mpsc::Receiver<NewRpc<'a>>,
                  event_loop_sender: mio::Sender<event_loop::Command>) -> ::thread_scoped::JoinGuard<'a, ()>
 {
@@ -126,9 +145,10 @@ pub fn spawn<'a>(commands: mpsc::Receiver<Command>,
         ::thread_scoped::scoped(move || {
             let mut thread = RpcLoop {
                 remote_procedures: HashMap::new(),
+                running_function_calls: HashMap::new(),
                 running_rpc_calls: HashMap::new(),
                 event_loop_sender: event_loop_sender,
-                commands_sender: commands_sender,
+                command_sender: command_sender,
             };
             thread.spin_forever(commands, new_rpcs);
         })

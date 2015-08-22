@@ -1,34 +1,20 @@
+use ::client::rpc_loop;
 use ::ipc;
 use mio::unix::UnixStream;
 use mio;
-use std::collections::HashMap;
-use std::sync::mpsc;
-use ::client::rpc_loop;
 
 const CLIENT: mio::Token = mio::Token(1);
 
 pub enum Command {
     Quit,
     Send(ipc::Message),
-    Call(String, mpsc::Sender<::rpc::Response>, ipc::Message),
 }
 
 // NOCOM(#sirver): bad name
 struct Handler {
     reader: ipc::Reader<UnixStream>,
     writer: ipc::Writer<UnixStream>,
-    running_function_calls: HashMap<String, mpsc::Sender<::rpc::Response>>,
     function_thread_sender: rpc_loop::CommandSender,
-}
-
-impl Handler {
-    fn send(&mut self, event_loop: &mut mio::EventLoop<Self>, message: &ipc::Message) {
-        // println!("{:?}: Client -> Server {:?}", time::precise_time_ns(), message);
-        if let Err(err) = self.writer.write_message(&message) {
-            println!("Shutting down, since sending failed: {:?}", err);
-            event_loop.channel().send(Command::Quit).expect("Quit");
-        }
-    }
 }
 
 impl mio::Handler for Handler {
@@ -38,11 +24,13 @@ impl mio::Handler for Handler {
     fn notify(&mut self, event_loop: &mut mio::EventLoop<Self>, command: Command) {
         match command {
             Command::Quit => event_loop.shutdown(),
-            Command::Send(message) => self.send(event_loop, &message),
-            Command::Call(context, tx, message) => {
-                self.running_function_calls.insert(context, tx);
-                self.send(event_loop, &message)
-            },
+            Command::Send(message) => {
+                // println!("{:?}: Client -> Server {:?}", time::precise_time_ns(), message);
+                if let Err(err) = self.writer.write_message(&message) {
+                    println!("Shutting down, since sending failed: {:?}", err);
+                    event_loop.channel().send(Command::Quit).expect("Quit");
+                }
+            }
         }
     }
 
@@ -68,25 +56,8 @@ impl mio::Handler for Handler {
                             Ok(Some(msg)) => message = msg,
                         };
 
-                        match message {
-                            ipc::Message::RpcResponse(rpc_data) => {
-                                // NOCOM(#sirver): if this is a streaming RPC, we should cancel the
-                                // RPC.
-                                // This will quietly drop any updates on functions that we no longer
-                                // know/care about.
-                                self.running_function_calls
-                                    .get(&rpc_data.context)
-                                    .map(|channel| {
-                                        // The other side of this channel might not exist anymore - we
-                                        // might have dropped the RPC already. Just ignore it.
-                                        let _ = channel.send(rpc_data);
-                                    });
-                            },
-                            _ => {
-                                let command = rpc_loop::Command::Received(message);
-                                self.function_thread_sender.send(command).expect("rpc_loop::Command::Received");
-                            },
-                        }
+                        let command = rpc_loop::Command::Received(message);
+                        self.function_thread_sender.send(command).expect("rpc_loop::Command::Received");
                     }
                     event_loop.reregister(
                         &self.reader.socket,
@@ -109,7 +80,6 @@ pub fn spawn<'a>(stream: UnixStream, commands_tx: rpc_loop::CommandSender)
     let mut handler = Handler {
         reader: ipc::Reader::new(stream.try_clone().unwrap()),
         writer: ipc::Writer::new(stream),
-        running_function_calls: HashMap::new(),
         function_thread_sender: commands_tx,
     };
     event_loop.register_opt(
