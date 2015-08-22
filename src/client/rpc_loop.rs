@@ -3,6 +3,7 @@ use ::client::rpc;
 use ::ipc;
 use mio;
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::sync::mpsc;
 use std::thread;
 
@@ -43,8 +44,9 @@ impl RunningRpc {
     }
 }
 
+// NOCOM(#sirver): name is no longer fitting
 struct RpcLoop<'a> {
-    remote_procedures: HashMap<String, Box<rpc::server::Rpc + 'a>>,
+    remote_procedures: HashMap<String, Arc<Box<rpc::server::Rpc + 'a>>>,
     event_loop_sender: mio::Sender<event_loop::Command>,
     running_rpc_calls: HashMap<String, RunningRpc>,
     command_sender: CommandSender,
@@ -60,7 +62,7 @@ impl<'a> RpcLoop<'a> {
                 new_rpc = new_rpcs.recv() => match new_rpc {
                     Err(_) => break 'outer,
                     Ok(new_rpc) => {
-                        self.remote_procedures.insert(new_rpc.name, new_rpc.rpc);
+                        self.remote_procedures.insert(new_rpc.name, Arc::new(new_rpc.rpc));
                     },
                 },
                 command = commands.recv() => match command {
