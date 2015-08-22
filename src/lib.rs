@@ -1,6 +1,5 @@
 #![feature(custom_derive, plugin)]
 #![feature(drain)]
-#![feature(mpsc_select)]
 #![feature(result_expect)]
 #![plugin(serde_macros)]
 

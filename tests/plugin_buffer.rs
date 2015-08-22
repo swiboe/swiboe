@@ -5,7 +5,6 @@ use swiboe::client;
 use swiboe::plugin_buffer;
 use swiboe::rpc;
 
-
 fn create_buffer(client: &client::Client, expected_index: usize, content: Option<&str>) {
     let request = plugin_buffer::NewRequest {
         content: content.map(|s| s.to_string()),

@@ -8,24 +8,10 @@ use std::sync::mpsc;
 use threadpool::ThreadPool;
 
 
-pub struct NewRpc {
-    name: String,
-    rpc: Box<rpc::server::Rpc>,
-}
-
-impl NewRpc {
-    pub fn new(name: String,
-           rpc: Box<rpc::server::Rpc>) -> Self {
-        NewRpc {
-            name: name,
-            rpc: rpc,
-        }
-    }
-}
-
 pub type CommandSender = mpsc::Sender<Command>;
 pub enum Command {
     Quit,
+    NewRpc(String, Box<rpc::server::Rpc>),
     Received(::ipc::Message),
     OutgoingCall(String, mpsc::Sender<::rpc::Response>, ipc::Message),
     CancelOutgoingRpc(String),
@@ -56,93 +42,74 @@ struct RpcLoop {
 }
 
 impl RpcLoop {
-    fn spin_forever(&mut self, commands: mpsc::Receiver<Command>, new_rpcs:
-                    mpsc::Receiver<NewRpc>) {
-        'outer: loop {
-            select! {
-                new_rpc = new_rpcs.recv() => match new_rpc {
-                    Err(_) => break 'outer,
-                    Ok(new_rpc) => {
-                        self.remote_procedures.insert(new_rpc.name, Arc::new(new_rpc.rpc));
-                    },
+    fn spin_forever(&mut self, commands: mpsc::Receiver<Command>) {
+        while let Ok(command) = commands.recv() {
+            match command {
+                Command::Quit => break,
+                Command::NewRpc(name, rpc) => {
+                    self.remote_procedures.insert(name, Arc::new(rpc));
                 },
-                command = commands.recv() => match command {
-                    Err(_) => break 'outer,
-                    Ok(command) => {
-                        if self.handle_command(command) == true {
-                            break 'outer;
-                        }
-                    },
+                Command::Received(message) => {
+                    match message {
+                        ::ipc::Message::RpcCall(rpc_call) => {
+
+                            if let Some(function) = self.remote_procedures.get(&rpc_call.function) {
+                                let (tx, rx) = mpsc::channel();
+                                self.running_rpc_calls.insert(rpc_call.context.clone(), RunningRpc::new(tx));
+                                let command_sender = self.command_sender.clone();
+                                let function = function.clone();
+                                self.thread_pool.execute(move || {
+                                    function.call(rpc::server::Context::new(
+                                            rpc_call.context, rx, command_sender), rpc_call.args);
+                                })
+                            }
+                            // NOCOM(#sirver): return an error - though if that has happened the
+                            // server messed up too.
+                        },
+                        ::ipc::Message::RpcCancel(rpc_cancel) => {
+                            // NOCOM(#sirver): on drop, the rpcservercontext must delete the entry.
+                            if let Some(function) = self.running_rpc_calls.remove(&rpc_cancel.context) {
+                                // The function might be dead already, so we ignore errors.
+                                let _ = function.commands.send(rpc::server::Command::Cancel);
+                            }
+                        },
+                        ipc::Message::RpcResponse(rpc_data) => {
+                            // NOCOM(#sirver): if this is a streaming RPC, we should cancel the
+                            // RPC.
+                            // This will quietly drop any updates on functions that we no longer
+                            // know/care about.
+                            self.running_function_calls
+                                .get(&rpc_data.context)
+                                .map(|channel| {
+                                    // The other side of this channel might not exist anymore - we
+                                    // might have dropped the RPC already. Just ignore it.
+                                    let _ = channel.send(rpc_data);
+                                });
+                        },
+                    }
+                },
+                Command::Send(message) => {
+                    // NOCOM(#sirver): is this used?
+                    self.event_loop_sender.send(event_loop::Command::Send(message)).expect("Command::Send");
+                },
+                Command::OutgoingCall(context, tx, message) => {
+                    self.running_function_calls.insert(context, tx);
+                    // NOCOM(#sirver): can the message be constructed here?
+                    self.event_loop_sender.send(event_loop::Command::Send(message)).expect("Command::Call");
+                }
+                Command::CancelOutgoingRpc(context) => {
+                    let msg = ::ipc::Message::RpcCancel(::rpc::Cancel {
+                        context: context,
+                    });
+                    self.event_loop_sender.send(event_loop::Command::Send(msg)).expect("Command::CancelOutgoingRpc");
                 }
             }
         }
-    }
-
-    fn handle_command(&mut self, command: Command) -> bool {
-        match command {
-            Command::Quit => return true,
-            Command::Received(message) => {
-                match message {
-                    ::ipc::Message::RpcCall(rpc_call) => {
-
-                        if let Some(function) = self.remote_procedures.get(&rpc_call.function) {
-                            let (tx, rx) = mpsc::channel();
-                            self.running_rpc_calls.insert(rpc_call.context.clone(), RunningRpc::new(tx));
-                            let command_sender = self.command_sender.clone();
-                            let function = function.clone();
-                            self.thread_pool.execute(move || {
-                                function.call(rpc::server::Context::new(
-                                        rpc_call.context, rx, command_sender), rpc_call.args);
-                            })
-                        }
-                        // NOCOM(#sirver): return an error - though if that has happened the
-                        // server messed up too.
-                    },
-                    ::ipc::Message::RpcCancel(rpc_cancel) => {
-                        // NOCOM(#sirver): on drop, the rpcservercontext must delete the entry.
-                        if let Some(function) = self.running_rpc_calls.remove(&rpc_cancel.context) {
-                            // The function might be dead already, so we ignore errors.
-                            let _ = function.commands.send(rpc::server::Command::Cancel);
-                        }
-                    },
-                    ipc::Message::RpcResponse(rpc_data) => {
-                        // NOCOM(#sirver): if this is a streaming RPC, we should cancel the
-                        // RPC.
-                        // This will quietly drop any updates on functions that we no longer
-                        // know/care about.
-                        self.running_function_calls
-                            .get(&rpc_data.context)
-                            .map(|channel| {
-                                // The other side of this channel might not exist anymore - we
-                                // might have dropped the RPC already. Just ignore it.
-                                let _ = channel.send(rpc_data);
-                            });
-                    },
-                }
-            },
-            Command::Send(message) => {
-                // NOCOM(#sirver): is this used?
-                self.event_loop_sender.send(event_loop::Command::Send(message)).expect("Command::Send");
-            },
-            Command::OutgoingCall(context, tx, message) => {
-                self.running_function_calls.insert(context, tx);
-                // NOCOM(#sirver): can the message be constructed here?
-                self.event_loop_sender.send(event_loop::Command::Send(message)).expect("Command::Call");
-            }
-            Command::CancelOutgoingRpc(context) => {
-                let msg = ::ipc::Message::RpcCancel(::rpc::Cancel {
-                    context: context,
-                });
-                self.event_loop_sender.send(event_loop::Command::Send(msg)).expect("Command::CancelOutgoingRpc");
-            }
-        };
-        return false;
     }
 }
 
 pub fn spawn<'a>(commands: mpsc::Receiver<Command>,
                  command_sender: CommandSender,
-                 new_rpcs: mpsc::Receiver<NewRpc>,
                  event_loop_sender: mio::Sender<event_loop::Command>) -> ::thread_scoped::JoinGuard<'a, ()>
 {
     unsafe {
@@ -156,7 +123,7 @@ pub fn spawn<'a>(commands: mpsc::Receiver<Command>,
                 // NOCOM(#sirver): that seems silly.
                 thread_pool: ThreadPool::new(1),
             };
-            thread.spin_forever(commands, new_rpcs);
+            thread.spin_forever(commands);
         })
     }
 }
