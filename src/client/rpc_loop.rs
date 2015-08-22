@@ -6,16 +6,17 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::mpsc;
 use std::thread;
+use threadpool::ThreadPool;
 
 
-pub struct NewRpc<'a> {
+pub struct NewRpc {
     name: String,
-    rpc: Box<rpc::server::Rpc + 'a>,
+    rpc: Box<rpc::server::Rpc>,
 }
 
-impl<'a> NewRpc<'a> {
+impl NewRpc {
     pub fn new(name: String,
-           rpc: Box<rpc::server::Rpc + 'a>) -> Self {
+           rpc: Box<rpc::server::Rpc>) -> Self {
         NewRpc {
             name: name,
             rpc: rpc,
@@ -45,18 +46,19 @@ impl RunningRpc {
 }
 
 // NOCOM(#sirver): name is no longer fitting
-struct RpcLoop<'a> {
-    remote_procedures: HashMap<String, Arc<Box<rpc::server::Rpc + 'a>>>,
+struct RpcLoop {
+    remote_procedures: HashMap<String, Arc<Box<rpc::server::Rpc>>>,
     event_loop_sender: mio::Sender<event_loop::Command>,
     running_rpc_calls: HashMap<String, RunningRpc>,
     command_sender: CommandSender,
     // NOCOM(#sirver): maybe not use a channel to send data to rpcs?
     running_function_calls: HashMap<String, mpsc::Sender<::rpc::Response>>,
+    thread_pool: ThreadPool,
 }
 
-impl<'a> RpcLoop<'a> {
+impl RpcLoop {
     fn spin_forever(&mut self, commands: mpsc::Receiver<Command>, new_rpcs:
-                    mpsc::Receiver<NewRpc<'a>>) {
+                    mpsc::Receiver<NewRpc>) {
         'outer: loop {
             select! {
                 new_rpc = new_rpcs.recv() => match new_rpc {
@@ -83,15 +85,16 @@ impl<'a> RpcLoop<'a> {
             Command::Received(message) => {
                 match message {
                     ::ipc::Message::RpcCall(rpc_call) => {
-                        if let Some(function) = self.remote_procedures.get_mut(&rpc_call.function) {
-                            let function = *function;
+
+                        if let Some(function) = self.remote_procedures.get(&rpc_call.function) {
                             let (tx, rx) = mpsc::channel();
                             self.running_rpc_calls.insert(rpc_call.context.clone(), RunningRpc::new(tx));
                             let command_sender = self.command_sender.clone();
-                            // NOCOM(#sirver): this runs all commands synchronisly on the same
-                            // thread that does all work. not great.
-                            function.call(rpc::server::Context::new(
-                                    rpc_call.context, rx, self.command_sender), rpc_call.args);
+                            let function = function.clone();
+                            self.thread_pool.execute(move || {
+                                function.call(rpc::server::Context::new(
+                                        rpc_call.context, rx, command_sender), rpc_call.args);
+                            })
                         }
                         // NOCOM(#sirver): return an error - though if that has happened the
                         // server messed up too.
@@ -140,7 +143,7 @@ impl<'a> RpcLoop<'a> {
 
 pub fn spawn<'a>(commands: mpsc::Receiver<Command>,
                  command_sender: CommandSender,
-                 new_rpcs: mpsc::Receiver<NewRpc<'a>>,
+                 new_rpcs: mpsc::Receiver<NewRpc>,
                  event_loop_sender: mio::Sender<event_loop::Command>) -> ::thread_scoped::JoinGuard<'a, ()>
 {
     unsafe {
@@ -151,6 +154,8 @@ pub fn spawn<'a>(commands: mpsc::Receiver<Command>,
                 running_rpc_calls: HashMap::new(),
                 event_loop_sender: event_loop_sender,
                 command_sender: command_sender,
+                // NOCOM(#sirver): that seems silly.
+                thread_pool: ThreadPool::new(1),
             };
             thread.spin_forever(commands, new_rpcs);
         })

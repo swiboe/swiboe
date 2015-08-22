@@ -12,7 +12,7 @@ use std::sync::Mutex;
 pub struct Client<'a> {
     event_loop_commands: mio::Sender<event_loop::Command>,
     rpc_loop_commands: rpc_loop::CommandSender,
-    rpc_loop_new_rpcs: mpsc::Sender<rpc_loop::NewRpc<'a>>,
+    rpc_loop_new_rpcs: mpsc::Sender<rpc_loop::NewRpc>,
 
     _rpc_loop_thread_join_guard: ::thread_scoped::JoinGuard<'a, ()>,
     _event_loop_thread_join_guard: ::thread_scoped::JoinGuard<'a, ()>,
@@ -35,7 +35,7 @@ impl<'a> Client<'a> {
         })
     }
 
-    pub fn new_rpc(&self, name: &str, rpc: Box<rpc::server::Rpc + 'a>) {
+    pub fn new_rpc(&self, name: &str, rpc: Box<rpc::server::Rpc>) {
         // NOCOM(#sirver): what happens when this is already inserted? crash probably
         let mut new_rpc = self.call("core.new_rpc", &NewRpcRequest {
             priority: rpc.priority(),

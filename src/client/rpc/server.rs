@@ -36,9 +36,9 @@ pub enum Command {
     Cancel,
 }
 
-pub trait Rpc: Send {
+pub trait Rpc: Send + Sync {
     fn priority(&self) -> u16 { u16::max_value() }
-    fn call(&mut self, context: Context, args: serde_json::Value);
+    fn call(&self, context: Context, args: serde_json::Value);
 }
 
 pub type Result<T> = result::Result<T, Error>;

@@ -54,7 +54,7 @@ pub struct ListFilesResponse;
 struct ListFiles;
 
 impl client::rpc::server::Rpc for ListFiles {
-    fn call(&mut self, mut context: client::rpc::server::Context, args: serde_json::Value) {
+    fn call(&self, mut context: client::rpc::server::Context, args: serde_json::Value) {
         let request: ListFilesRequest = try_rpc!(context, serde_json::from_value(args));
 
         thread::spawn(move || {

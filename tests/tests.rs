@@ -22,7 +22,7 @@ pub struct CallbackRpc<F> {
 }
 
 impl<F> client::rpc::server::Rpc for CallbackRpc<F> where F: Fn(client::rpc::server::Context, serde_json::Value) + Send {
-    fn call(&mut self, context: client::rpc::server::Context, args: serde_json::Value) {
+    fn call(&self, context: client::rpc::server::Context, args: serde_json::Value) {
         (self.callback)(context, args);
     }
     fn priority(&self) -> u16 { self.priority }

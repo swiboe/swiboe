@@ -48,7 +48,7 @@ struct Scroll {
 }
 
 impl client::rpc::server::Rpc for Scroll {
-    fn call(&mut self, mut context: client::rpc::server::Context, args: serde_json::Value) {
+    fn call(&self, mut context: client::rpc::server::Context, args: serde_json::Value) {
         let request: ScrollRequest = try_rpc!(context, serde_json::from_value(args));
 
         let mut buffer_views = self.buffer_views.write().unwrap();
@@ -115,7 +115,7 @@ struct MoveCursor {
 }
 
 impl client::rpc::server::Rpc for MoveCursor {
-    fn call(&mut self,  mut context: client::rpc::server::Context, args: serde_json::Value) {
+    fn call(&self,  mut context: client::rpc::server::Context, args: serde_json::Value) {
         let request: MoveCursorRequest = try_rpc!(context, serde_json::from_value(args));
 
         let mut buffer_views = self.buffer_views.write().unwrap();

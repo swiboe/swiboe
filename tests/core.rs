@@ -43,7 +43,7 @@ struct TestCall {
 
 impl client::rpc::server::Rpc for TestCall {
     fn priority(&self) -> u16 { self.priority }
-    fn call(&mut self, mut context: client::rpc::server::Context, _: serde_json::Value) {
+    fn call(&self, mut context: client::rpc::server::Context, _: serde_json::Value) {
         context.finish(self.result.clone()).unwrap();
     }
 }
