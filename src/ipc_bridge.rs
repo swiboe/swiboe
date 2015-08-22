@@ -166,7 +166,7 @@ impl mio::Handler for IpcBridge {
                                 }
                             }
                         }
-                        event_loop_sender.send(Command::ReRegisterForReading(token, reader)).unwrap();
+                        event_loop_sender.send(Command::ReRegisterForReading(token, reader)).expect("Command::ReRegisterForReading");
                     });
                 }
             }

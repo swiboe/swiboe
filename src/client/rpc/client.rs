@@ -54,7 +54,7 @@ impl Context {
         let (tx, rx) = mpsc::channel();
         // NOCOM(#sirver): this tx is only for cancelling. Maybe this can be avoided.
         // NOCOM(#sirver): the next one should be done with try!
-        commands.send(Command::OutgoingCall(context.clone(), tx, message)).unwrap();
+        commands.send(Command::OutgoingCall(context.clone(), tx, message)).expect("Command::OutgoingCall");
         // NOCOM(#sirver): implement drop so that we can cancel an RPC.
         Ok(Context {
             values: rx,
