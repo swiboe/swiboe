@@ -7,8 +7,7 @@ use std::sync::mpsc;
 pub enum Command<'a> {
     Quit,
     NewRpc(String, Box<rpc::server::Rpc + 'a>),
-    Call(::rpc::Call),
-    Cancel(::rpc::Cancel),
+    Received(::ipc::Message),
 }
 
 struct RunningRpc {
@@ -38,23 +37,29 @@ impl<'a> RpcLoop<'a> {
                 Command::NewRpc(name, remote_procedures) => {
                     self.remote_procedures.insert(name, remote_procedures);
                 },
-                Command::Call(rpc_call) => {
-                    if let Some(function) = self.remote_procedures.get_mut(&rpc_call.function) {
-                        let (tx, rx) = mpsc::channel();
-                        function.call(rpc::server::Context::new(
-                            rpc_call.context.clone(), rx, self.event_loop_sender.clone()), rpc_call.args);
-                        self.running_rpc_calls.insert(rpc_call.context.clone(), RunningRpc::new(tx));
+                Command::Received(message) => {
+                    match message {
+                        ::ipc::Message::RpcCall(rpc_call) => {
+                            if let Some(function) = self.remote_procedures.get_mut(&rpc_call.function) {
+                                let (tx, rx) = mpsc::channel();
+                                function.call(rpc::server::Context::new(
+                                        rpc_call.context.clone(), rx, self.event_loop_sender.clone()), rpc_call.args);
+                                self.running_rpc_calls.insert(rpc_call.context.clone(), RunningRpc::new(tx));
+                            }
+                            // NOCOM(#sirver): return an error - though if that has happened the
+                            // server messed up too.
+                        },
+                        ::ipc::Message::RpcCancel(rpc_cancel) => {
+                            // NOCOM(#sirver): on drop, the rpcservercontext must delete the entry.
+                            if let Some(function) = self.running_rpc_calls.remove(&rpc_cancel.context) {
+                                // The function might be dead already, so we ignore errors.
+                                let _ = function.commands.send(rpc::server::Command::Cancel);
+                            }
+                        },
+                        // NOCOM(#sirver): todo
+                        _ => unimplemented!(),
                     }
-                    // NOCOM(#sirver): return an error - though if that has happened the
-                    // server messed up too.
-                }
-                Command::Cancel(rpc_cancel) => {
-                    // NOCOM(#sirver): on drop, the rpcservercontext must delete the entry.
-                    if let Some(function) = self.running_rpc_calls.remove(&rpc_cancel.context) {
-                        // The function might be dead already, so we ignore errors.
-                        let _ = function.commands.send(rpc::server::Command::Cancel);
-                    }
-                }
+                },
             }
         }
     }

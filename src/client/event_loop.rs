@@ -82,14 +82,10 @@ impl<'a> mio::Handler for Handler<'a> {
                                         let _ = channel.send(rpc_data);
                                     });
                             },
-                            ipc::Message::RpcCall(rpc_call) => {
-                                let command = rpc_loop::Command::Call(rpc_call);
-                                self.function_thread_sender.send(command).expect("rpc_loop::Command::Call");
+                            _ => {
+                                let command = rpc_loop::Command::Received(message);
+                                self.function_thread_sender.send(command).expect("rpc_loop::Command::Received");
                             },
-                            ipc::Message::RpcCancel(rpc_cancel) => {
-                                let command = rpc_loop::Command::Cancel(rpc_cancel);
-                                self.function_thread_sender.send(command).expect("rpc_loop::Command::Cancel");
-                            }
                         }
                     }
                     event_loop.reregister(
