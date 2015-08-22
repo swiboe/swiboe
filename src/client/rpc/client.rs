@@ -1,5 +1,4 @@
-use ::client::event_loop::Command;
-use mio;
+use ::client::rpc_loop::{Command, CommandSender};
 use serde;
 use serde_json;
 use std::sync::mpsc;
@@ -9,7 +8,7 @@ pub struct Context {
     context: String,
     values: mpsc::Receiver<::rpc::Response>,
     result: Option<::rpc::Result>,
-    event_loop_sender: mio::Sender<Command>,
+    commands: CommandSender,
 }
 
 #[derive(Debug)]
@@ -19,12 +18,6 @@ pub enum Error {
 }
 
 // NOCOM(#sirver): impl error::Error for Error?
-
-impl From<mio::NotifyError<Command>> for Error {
-    fn from(_: mio::NotifyError<Command>) -> Self {
-        Error::Disconnected
-    }
-}
 
 impl From<mpsc::RecvError> for Error {
     fn from(_: mpsc::RecvError) -> Self {
@@ -41,9 +34,9 @@ impl From<serde_json::error::Error> for Error {
 pub type Result<T> = ::std::result::Result<T, Error>;
 
 impl Context {
-    pub fn new<T: serde::Serialize>(event_loop_sender: &mio::Sender<Command>,
+    pub fn new<T: serde::Serialize>(commands: &CommandSender,
                          function: &str,
-                         args: &T) -> ::std::result::Result<Self, mio::NotifyError<Command>> {
+                         args: &T) -> Result<Self> {
         let args = serde_json::to_value(&args);
         let context = Uuid::new_v4().to_hyphenated_string();
         let message = ::ipc::Message::RpcCall(::rpc::Call {
@@ -53,11 +46,11 @@ impl Context {
         });
 
         let (tx, rx) = mpsc::channel();
-        try!(event_loop_sender.send(Command::Call(context.clone(), tx, message)));
+        try!(commands.send(Command::OutoingCall(context.clone(), tx, message)));
         // NOCOM(#sirver): implement drop so that we can cancel an RPC.
         Ok(Context {
             values: rx,
-            event_loop_sender: event_loop_sender.clone(),
+            commands: commands.clone(),
             context: context,
             result: None,
         })
@@ -121,10 +114,7 @@ impl Context {
     }
 
     pub fn cancel(self) -> Result<()> {
-        let msg = ::ipc::Message::RpcCancel(::rpc::Cancel {
-            context: self.context.clone(),
-        });
-        try!(self.event_loop_sender.send(Command::Send(msg)));
+        try!(self.commands.send(Command::CancelOutgoingRpc(self.context)));
         Ok(())
     }
 }

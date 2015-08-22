@@ -24,6 +24,8 @@ pub type CommandSender = mpsc::Sender<Command>;
 pub enum Command {
     Quit,
     Received(::ipc::Message),
+    OutgoingCall(String, ),
+    CancelOutgoingRpc(String),
 }
 
 struct RunningRpc {
@@ -92,6 +94,9 @@ impl<'a> RpcLoop<'a> {
                     // NOCOM(#sirver): todo
                     _ => unimplemented!(),
                 }
+            },
+            Command::Send(message) => {
+                self.event_loop_sender.send(message).expect("Command::Send");
             },
         };
         return false;

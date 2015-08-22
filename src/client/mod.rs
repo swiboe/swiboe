@@ -47,12 +47,12 @@ impl<'a> Client<'a> {
     }
 
     pub fn call<T: serde::Serialize>(&self, function: &str, args: &T) -> rpc::client::Context {
-        rpc::client::Context::new(&self.event_loop_commands, function, args).unwrap()
+        rpc::client::Context::new(&self.commands_tx.clone(), function, args).unwrap()
     }
 
     pub fn clone(&self) -> ThinClient {
         ThinClient {
-            event_loop_commands: self.event_loop_commands.clone(),
+            commands: self.commands_tx.clone(),
         }
     }
 }
@@ -68,14 +68,14 @@ impl<'a> Drop for Client<'a> {
 
 #[derive(Clone)]
 pub struct ThinClient {
-    event_loop_commands: mio::Sender<event_loop::Command>,
+    commands: mpsc::Sender<rpc_loop::Command>,
 }
 
 // NOCOM(#sirver): figure out the difference between a Sender, an Context and come up with better
 // names.
 impl ThinClient {
     pub fn call<T: serde::Serialize>(&self, function: &str, args: &T) -> rpc::client::Context {
-        rpc::client::Context::new(&self.event_loop_commands, function, args).unwrap()
+        rpc::client::Context::new(&self.commands, function, args).unwrap()
     }
 }
 
