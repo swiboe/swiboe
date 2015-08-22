@@ -112,26 +112,6 @@ fn new_rpc_with_priority_first_does_not_handle() {
 }
 
 #[test]
-#[should_panic]
-fn rpc_not_calling_finish() {
-    let t = TestHarness::new();
-
-    let client1 = client::Client::connect(&t.socket_name).unwrap();
-    client1.new_rpc("test.test", Box::new(CallbackRpc {
-        priority: 100,
-        callback: |_, _| {},
-    }));
-
-    let client2 = client::Client::connect(&t.socket_name).unwrap();
-    // TODO(sirver): This should timeout, but that is not implemented yet.
-    client2.call("test.test", &as_json(r#"{}"#));
-
-    // Should be plenty to have test.test being handled.
-    thread::sleep_ms(500);
-}
-
-
-#[test]
 fn client_disconnects_should_not_stop_handling_of_rpcs() {
     let t = TestHarness::new();
 
@@ -228,10 +208,11 @@ fn call_streaming_rpc_cancelled() {
 
     let t = TestHarness::new();
     let streaming_client = client::Client::connect(&t.socket_name).unwrap();
+    let cancelled_clone = cancelled.clone();
     streaming_client.new_rpc("test.test", Box::new(CallbackRpc {
         priority: 50,
-        callback: |mut context: client::rpc::server::Context, _| {
-            let cancelled = cancelled.clone();
+        callback: move |mut context: client::rpc::server::Context, _| {
+            let cancelled = cancelled_clone.clone();
             thread::spawn(move || {
                 let mut count = 0;
                 // NOCOM(#sirver): cancelled? grep for that.
