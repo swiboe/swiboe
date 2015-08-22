@@ -14,14 +14,14 @@ pub enum Command {
 }
 
 // NOCOM(#sirver): bad name
-struct Handler<'a> {
+struct Handler {
     reader: ipc::Reader<UnixStream>,
     writer: ipc::Writer<UnixStream>,
     running_function_calls: HashMap<String, mpsc::Sender<::rpc::Response>>,
-    function_thread_sender: mpsc::Sender<rpc_loop::Command<'a>>,
+    function_thread_sender: mpsc::Sender<rpc_loop::Command>,
 }
 
-impl<'a> Handler<'a> {
+impl Handler {
     fn send(&mut self, event_loop: &mut mio::EventLoop<Self>, message: &ipc::Message) {
         // println!("{:?}: Client -> Server {:?}", time::precise_time_ns(), message);
         if let Err(err) = self.writer.write_message(&message) {
@@ -31,7 +31,7 @@ impl<'a> Handler<'a> {
     }
 }
 
-impl<'a> mio::Handler for Handler<'a> {
+impl mio::Handler for Handler {
     type Timeout = ();
     type Message = Command;
 
@@ -100,7 +100,7 @@ impl<'a> mio::Handler for Handler<'a> {
     }
 }
 
-pub fn spawn<'a>(stream: UnixStream, commands_tx: mpsc::Sender<rpc_loop::Command<'a>>)
+pub fn spawn<'a>(stream: UnixStream, commands_tx: mpsc::Sender<rpc_loop::Command>)
     -> (::thread_scoped::JoinGuard<'a, ()>, mio::Sender<Command>)
 {
     let mut event_loop = mio::EventLoop::<Handler>::new().unwrap();

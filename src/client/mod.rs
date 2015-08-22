@@ -10,7 +10,8 @@ use std::sync::mpsc;
 
 pub struct Client<'a> {
     event_loop_commands: mio::Sender<event_loop::Command>,
-    rpc_loop_commands: mpsc::Sender<rpc_loop::Command<'a>>,
+    rpc_loop_commands: mpsc::Sender<rpc_loop::Command>,
+    rpc_loop_new_rpcs: mpsc::Sender<rpc_loop::NewRpc<'a>>,
 
     _rpc_loop_thread_join_guard: ::thread_scoped::JoinGuard<'a, ()>,
     _event_loop_thread_join_guard: ::thread_scoped::JoinGuard<'a, ()>,
@@ -21,12 +22,14 @@ impl<'a> Client<'a> {
         let stream = try!(UnixStream::connect(&socket_name));
 
         let (commands_tx, commands_rx) = mpsc::channel();
+        let (new_rpcs_tx, new_rpcs_rx) = mpsc::channel();
         let (event_loop_thread, event_loop_commands) = event_loop::spawn(stream, commands_tx.clone());
 
         Ok(Client {
             event_loop_commands: event_loop_commands.clone(),
             rpc_loop_commands: commands_tx,
-            _rpc_loop_thread_join_guard: rpc_loop::spawn(commands_rx, event_loop_commands),
+            rpc_loop_new_rpcs: new_rpcs_tx,
+            _rpc_loop_thread_join_guard: rpc_loop::spawn(commands_rx, new_rpcs_rx, event_loop_commands),
             _event_loop_thread_join_guard: event_loop_thread,
         })
     }
@@ -40,7 +43,7 @@ impl<'a> Client<'a> {
         let success = new_rpc.wait().unwrap();
         // NOCOM(#sirver): report failure.
 
-        self.rpc_loop_commands.send(rpc_loop::Command::NewRpc(name.into(), rpc)).expect("NewRpc");
+        self.rpc_loop_new_rpcs.send(rpc_loop::NewRpc::new(name.into(), rpc)).expect("NewRpc");
     }
 
     pub fn call<T: serde::Serialize>(&self, function: &str, args: &T) -> rpc::client::Context {
