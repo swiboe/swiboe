@@ -1,11 +1,14 @@
 #[macro_use]
 extern crate clap;
+extern crate keymap_plugin;
 extern crate libc;
 extern crate lua;
 extern crate swiboe;
 
+use keymap_plugin::KeymapHandler;
 use std::collections::{HashMap, HashSet};
 use std::path;
+use std::sync::{Arc, RwLock};
 use std::thread;
 use swiboe::client;
 
@@ -28,16 +31,9 @@ const MATHX_LIB: [(&'static str, Function); 1] = [
 ];
 
 type Key = String;
-enum KeyMap {
-    Coord(HashSet<Key>),
-    Arpeggio(Vec<Key>),
-}
 
 
-struct KeymapHandler {
-    keymaps: HashMap<String, String>,
-}
-
+// NOCOM(#sirver): rename file to plugin_keymap.rs?
 struct KeymapPlugin {
     buffers: Arc<RwLock<KeymapHandler>>,
 }
@@ -67,25 +63,25 @@ fn main() {
     state.do_file("test.lua");
 
 
-    let plugin = BufferPlugin {
-        buffers: Arc::new(RwLock::new(BuffersManager::new(client.clone()))),
-        client: client,
-    };
+    // let plugin = BufferPlugin {
+        // buffers: Arc::new(RwLock::new(BuffersManager::new(client.clone()))),
+        // client: client,
+    // };
 
-    let new = Box::new(New { buffers: plugin.buffers.clone() });
-    plugin.client.new_rpc("buffer.new", new);
+    // let new = Box::new(New { buffers: plugin.buffers.clone() });
+    // plugin.client.new_rpc("buffer.new", new);
 
-    let delete = Box::new(Delete { buffers: plugin.buffers.clone() });
-    plugin.client.new_rpc("buffer.delete", delete);
+    // let delete = Box::new(Delete { buffers: plugin.buffers.clone() });
+    // plugin.client.new_rpc("buffer.delete", delete);
 
-    let get_content = Box::new(GetContent { buffers: plugin.buffers.clone() });
-    plugin.client.new_rpc("buffer.get_content", get_content);
+    // let get_content = Box::new(GetContent { buffers: plugin.buffers.clone() });
+    // plugin.client.new_rpc("buffer.get_content", get_content);
 
-    let open = Box::new(Open { buffers: plugin.buffers.clone() });
-    plugin.client.new_rpc("buffer.open", open);
+    // let open = Box::new(Open { buffers: plugin.buffers.clone() });
+    // plugin.client.new_rpc("buffer.open", open);
 
-    let list = Box::new(List { buffers: plugin.buffers.clone() });
-    plugin.client.new_rpc("buffer.list", list);
+    // let list = Box::new(List { buffers: plugin.buffers.clone() });
+    // plugin.client.new_rpc("buffer.list", list);
 
 
     // NOCOM(#sirver): a client.spin_forever would be cool.
