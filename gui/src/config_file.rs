@@ -1,16 +1,12 @@
-#[macro_use]
-extern crate clap;
-extern crate keymap_plugin;
 extern crate libc;
 extern crate lua;
 extern crate swiboe;
 
-use keymap_plugin::KeymapHandler;
+use ::keymap_handler::KeymapHandler;
 use std::collections::{HashMap, HashSet};
 use std::path;
 use std::sync::{Arc, RwLock};
 use std::thread;
-use swiboe::client;
 
 use libc::c_int;
 use lua::ffi::lua_State;
@@ -32,28 +28,7 @@ const MATHX_LIB: [(&'static str, Function); 1] = [
 
 type Key = String;
 
-
-// NOCOM(#sirver): rename file to plugin_keymap.rs?
-struct KeymapPlugin {
-    buffers: Arc<RwLock<KeymapHandler>>,
-}
-
-fn main() {
-    let matches = clap::App::new("term_gui")
-        .about("Key bindings plugin for Swiboe")
-        .version(&crate_version!()[..])
-        .arg(clap::Arg::with_name("SOCKET")
-             .short("s")
-             .long("socket")
-             .help("Socket at which the master listens.")
-             .required(true)
-             .takes_value(true))
-        .get_matches();
-
-
-    let path = path::Path::new(matches.value_of("SOCKET").unwrap());
-    let client = client::Client::connect(path).unwrap();
-
+pub fn test_it() {
     let mut state = lua::State::new();
     state.open_libs();
 
@@ -85,7 +60,4 @@ fn main() {
 
 
     // NOCOM(#sirver): a client.spin_forever would be cool.
-    loop {
-        thread::sleep_ms(100);
-    }
 }

@@ -4,11 +4,16 @@ version = "0.1.0"
 authors = ["Holger Rapp <HolgerRapp@gmx.net>"]
 
 [dependencies]
+libc = "0.1.10"
 serde = "0.5.2"
 serde_json = "0.5.1"
 serde_macros = "0.5.1"
 time = "0.1.32"
 uuid = "0.1"
+
+[dependencies.lua]
+git = "https://github.com/jcmoyer/rust-lua53"
+rev = "2f3b6177f474db303db42340d4c4704724609437"
 
 [dependencies.swiboe]
 path = ".."
