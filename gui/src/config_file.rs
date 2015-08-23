@@ -4,6 +4,7 @@ extern crate swiboe;
 
 use ::keymap_handler::KeymapHandler;
 use std::collections::{HashMap, HashSet};
+use std::mem;
 use std::path;
 use std::sync::{Arc, RwLock};
 use std::thread;
@@ -13,29 +14,59 @@ use lua::ffi::lua_State;
 use lua::{State, Function};
 
 // simple binding to Rust's tan function
-#[allow(non_snake_case)]
-unsafe extern "C" fn tan(L: *mut lua_State) -> c_int {
-  let mut state = lua::State::from_ptr(L);
-  let num = state.to_number(-1);
-  state.push_number(num.tan());
-  1
+unsafe extern "C" fn lua_call(lua_state: *mut lua_State) -> c_int {
+  let mut state = lua::State::from_ptr(lua_state);
+  let s = state.to_str(-1);
+  println!("#sirver string: {:#?}", s);
+  0
 }
 
 // mapping of function name to function pointer
-const MATHX_LIB: [(&'static str, Function); 1] = [
-  ("tan", Some(tan)),
+const SWIBOE_LIB: [(&'static str, Function); 1] = [
+  ("call", Some(lua_call)),
 ];
 
 type Key = String;
 
+struct ConfigFileRunner {
+    lua_state: lua::State,
+}
+
+impl ConfigFileRunner {
+    fn new() -> Self {
+        let mut state = lua::State::new();
+        state.open_libs();
+
+        state.new_lib(&SWIBOE_LIB);
+        state.set_global("swiboe");
+
+        let mut this = ConfigFileRunner {
+            lua_state: state,
+        };
+
+        // Save a reference to the object saver
+        unsafe {
+            let this_pointer: *mut ConfigFileRunner = mem::transmute(&mut this);
+            this.lua_state.push_light_userdata(this_pointer);
+        }
+        this.lua_state.set_field(lua::ffi::LUA_REGISTRYINDEX, "this");
+
+        this
+    }
+
+    fn run(&mut self, path: &path::Path) {
+        let path = path.to_string_lossy();
+        match self.lua_state.do_file(&path) {
+            lua::ThreadStatus::Ok => (),
+            err => println!("#sirver err.description(): {:#?}", err),
+        }
+    }
+}
+
 pub fn test_it() {
-    let mut state = lua::State::new();
-    state.open_libs();
+    let mut config_file_runner = ConfigFileRunner::new();
 
-    state.new_lib(&MATHX_LIB);
-    state.set_global("swiboe");
-
-    state.do_file("test.lua");
+    config_file_runner.run(path::Path::new("test.lua"));
 
 
     // let plugin = BufferPlugin {
