@@ -9,14 +9,19 @@ before_script:
 
 # TODO(sirver): build & publish docs somewhere.
 script:
+  - travis-cargo build && travis-cargo test && travis-cargo bench 
   - pushd subsequence_match
-  - travis-cargo build 
-  - travis-cargo test 
-  - travis-cargo bench 
+  - travis-cargo build && travis-cargo test && travis-cargo bench 
   - popd
-  - travis-cargo build 
-  - travis-cargo test 
-  - travis-cargo bench 
+  - pushd gui
+  - travis-cargo build && travis-cargo test && travis-cargo bench 
+  - popd
+  - pushd term_gui
+  - travis-cargo build && travis-cargo test && travis-cargo bench 
+  - popd
+
+
+./term_gui/Cargo.toml
 
 env:
   global:

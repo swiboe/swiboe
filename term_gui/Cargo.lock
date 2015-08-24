@@ -110,6 +110,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "lua"
+version = "0.0.8"
+source = "git+https://github.com/jcmoyer/rust-lua53?rev=2f3b6177f474db303db42340d4c4704724609437#2f3b6177f474db303db42340d4c4704724609437"
+dependencies = [
+ "bitflags 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
 name = "mio"
 version = "0.5.0-pre"
 source = "git+https://github.com/carllerche/mio.git?rev=fcec179737411ac105f8b27d38cb7ceee8c5c5d7#fcec179737411ac105f8b27d38cb7ceee8c5c5d7"
@@ -262,6 +270,8 @@ dependencies = [
 name = "swiboe_gui"
 version = "0.1.0"
 dependencies = [
+ "libc 0.1.10 (registry+https://github.com/rust-lang/crates.io-index)",
+ "lua 0.0.8 (git+https://github.com/jcmoyer/rust-lua53?rev=2f3b6177f474db303db42340d4c4704724609437)",
  "serde 0.5.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_json 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_macros 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
