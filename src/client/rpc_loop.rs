@@ -1,5 +1,6 @@
 use ::client::event_loop;
 use ::client::rpc;
+use ::error::Result;
 use ::ipc;
 use mio;
 use std::collections::HashMap;
@@ -43,7 +44,7 @@ struct RpcLoop {
 }
 
 impl RpcLoop {
-    fn spin_forever(&mut self, commands: mpsc::Receiver<Command>) {
+    fn spin_forever(&mut self, commands: mpsc::Receiver<Command>) -> Result<()> {
         while let Ok(command) = commands.recv() {
             match command {
                 Command::Quit => break,
@@ -90,22 +91,22 @@ impl RpcLoop {
                     }
                 },
                 Command::Send(message) => {
-                    // NOCOM(#sirver): is this used?
-                    self.event_loop_sender.send(event_loop::Command::Send(message)).expect("Command::Send");
+                    try!(self.event_loop_sender.send(event_loop::Command::Send(message)));
                 },
                 Command::OutgoingCall(context, tx, message) => {
                     self.running_function_calls.insert(context, tx);
                     // NOCOM(#sirver): can the message be constructed here?
-                    self.event_loop_sender.send(event_loop::Command::Send(message)).expect("Command::Call");
+                    try!(self.event_loop_sender.send(event_loop::Command::Send(message)));
                 }
                 Command::CancelOutgoingRpc(context) => {
                     let msg = ::ipc::Message::RpcCancel(::rpc::Cancel {
                         context: context,
                     });
-                    self.event_loop_sender.send(event_loop::Command::Send(msg)).expect("Command::CancelOutgoingRpc");
+                    try!(self.event_loop_sender.send(event_loop::Command::Send(msg)));
                 }
             }
-        }
+        };
+        Ok(())
     }
 }
 
@@ -123,6 +124,9 @@ pub fn spawn<'a>(commands: mpsc::Receiver<Command>,
             // NOCOM(#sirver): that seems silly.
             thread_pool: ThreadPool::new(1),
         };
-        thread.spin_forever(commands);
+        match thread.spin_forever(commands) {
+            Ok(_) => (),
+            Err(err) => println!("RpcLoop::spin_forever returned an error: {}", err),
+        }
     })
 }

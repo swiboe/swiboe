@@ -59,16 +59,18 @@ impl Client {
 impl Drop for Client {
     fn drop(&mut self) {
         // Either thread might have panicked at this point, so we can not rely on the sends to go
-        // through. We just tell both (again) to Quit and hope they actually join.
-        let _ = self.rpc_loop_commands.send(rpc_loop::Command::Quit);
+        // through. We just tell both (again) to Quit and hope they actually join. Order matters -
+        // the event loop keeps everything going, so we should it down first.
         let _ = self.event_loop_commands.send(event_loop::Command::Quit);
-
-        if let Some(thread) = self.rpc_loop_thread.take() {
-            thread.join().expect("Joining rpc_loop_thread failed.");
-        }
         if let Some(thread) = self.event_loop_thread.take() {
             thread.join().expect("Joining event_loop_thread failed.");
         }
+
+        let _ = self.rpc_loop_commands.send(rpc_loop::Command::Quit);
+        if let Some(thread) = self.rpc_loop_thread.take() {
+            thread.join().expect("Joining rpc_loop_thread failed.");
+        }
+
     }
 }
 
