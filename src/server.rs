@@ -338,17 +338,28 @@ impl Server {
     pub fn shutdown(&mut self) {
         // Any of the threads might have already panicked. So we ignore send errors.
         let _ = self.ipc_bridge_commands.send(ipc_bridge::Command::Quit);
+        self.wait_for_event_loop_thread_to_shut_down();
         let _ = self.commands.send(Command::Quit);
+        self.wait_for_swiboe_thread_to_shut_down();
+
         self.wait_for_shutdown();
     }
 
-    pub fn wait_for_shutdown(&mut self) {
-        if let Some(thread) = self.swiboe_thread.take() {
-            thread.join().expect("Could not join swiboe_thread.");
-        }
+    fn wait_for_event_loop_thread_to_shut_down(&mut self) {
         if let Some(thread) = self.event_loop_thread.take() {
             thread.join().expect("Could not join event_loop_thread.");
         }
+    }
+
+    fn wait_for_swiboe_thread_to_shut_down(&mut self) {
+        if let Some(thread) = self.swiboe_thread.take() {
+            thread.join().expect("Could not join swiboe_thread.");
+        }
+    }
+
+    pub fn wait_for_shutdown(&mut self) {
+        self.wait_for_event_loop_thread_to_shut_down();
+        self.wait_for_swiboe_thread_to_shut_down();
 
         fs::remove_file(&self.socket_name).expect(
             &format!("Could not remove socket {:?}", self.socket_name));
