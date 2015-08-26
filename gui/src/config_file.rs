@@ -10,10 +10,6 @@ use std::string;
 
 const REGISTRY_NAME_FOR_CONFIG_FILE_RUNNER: &'static str = "config_file_runner";
 
-/// The lua53 crate defines lua::Function as Option<...>, but here we are sure that we have valid
-/// pointers, so we add our own type.
-pub type LuaFunction = unsafe extern "C" fn(L: *mut lua::ffi::lua_State) -> libc::c_int;
-
 /// Returns a reference to the ConfigFileRunner that must have been pushed into the registry on
 /// creation. The 'static is a lie, but the ConfigFileRunner always outlives the lua_state, so that
 /// is safe.
