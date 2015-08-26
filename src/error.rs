@@ -1,5 +1,6 @@
 /// Errors for use with Swiboe.
 
+use mio;
 use serde_json;
 use std::error;
 use std::fmt;
@@ -12,7 +13,7 @@ pub type Result<T> = result::Result<T, Error>;
 #[derive(Debug)]
 pub enum ErrorKind {
     ClientDisconnected,
-    Disconnected(mpsc::RecvError),
+    Disconnected,
     Io(io::Error),
     JsonParsing(serde_json::error::Error),
 }
@@ -41,7 +42,7 @@ impl error::Error for Error {
   fn description(&self) -> &str {
       match self.kind {
           ErrorKind::ClientDisconnected => "Client disconnected.",
-          ErrorKind::Disconnected(_) => "Channel is disconnected.",
+          ErrorKind::Disconnected => "Channel is disconnected.",
           ErrorKind::Io(ref e) => e.description(),
           ErrorKind::JsonParsing(ref e) => e.description(),
       }
@@ -50,7 +51,7 @@ impl error::Error for Error {
   fn cause(&self) -> Option<&error::Error> {
       match self.kind {
           ErrorKind::ClientDisconnected => None,
-          ErrorKind::Disconnected(ref e) => Some(e),
+          ErrorKind::Disconnected => None,
           ErrorKind::Io(ref e) => Some(e),
           ErrorKind::JsonParsing(ref e) => Some(e),
       }
@@ -65,7 +66,7 @@ impl From<io::Error> for Error {
 
 impl From<mpsc::RecvError> for Error {
      fn from(error: mpsc::RecvError) -> Self {
-         Error::new(ErrorKind::Disconnected(error))
+         Error::new(ErrorKind::Disconnected)
      }
 }
 
@@ -73,4 +74,10 @@ impl From<serde_json::error::Error> for Error {
      fn from(error: serde_json::error::Error) -> Self {
          Error::new(ErrorKind::JsonParsing(error))
      }
+}
+
+impl<T> From<mio::NotifyError<T>> for Error {
+    fn from(error: mio::NotifyError<T>) -> Self {
+        Error::new(ErrorKind::Disconnected)
+    }
 }
