@@ -148,6 +148,32 @@ impl Key for lua::Number {
     }
 }
 
+pub struct LuaFunction {
+    lua_state: lua::State,
+    reference: lua::Reference,
+}
+
+impl LuaFunction {
+    fn prepare_call(&mut self) -> PrepareCall {
+        let index = self.reference.value();
+        self.lua_state.raw_geti(lua::ffi::LUA_REGISTRYINDEX, index as lua::Integer); // S: function
+        PrepareCall { lua_function: self }
+    }
+}
+
+struct PrepareCall<'a> {
+    lua_function: &'a mut LuaFunction
+}
+
+// NOCOM(#sirver): add push_ functions here.
+// NOCOM(#sirver): deal with return values.. right now we just discard them.
+impl<'a> PrepareCall<'a> {
+    fn call(self) -> lua::ThreadStatus {
+        // S: <function> <args...>
+        self.lua_function.lua_state.pcall(0, 0, 0)
+    }
+}
+
 // NOCOM(#sirver): should remove table on drop.
 impl<'a> LuaTable<'a> {
     pub fn new(lua_state: &'a mut lua::State) -> Self {
@@ -195,10 +221,24 @@ impl<'a> LuaTable<'a> {
         lua::Integer::pop(self.lua_state)
     }
 
+    pub fn get_function<T: Key>(&mut self, key: T) -> Result<LuaFunction, LuaTableError> {
+        try!(self.push_value_for_existing_key(key));
+        // S: ... <function>
+        if !self.lua_state.is_fn(-1) {
+            self.lua_state.pop(1);
+            return Err(LuaTableError::InvalidType);
+        }
+        let reference = self.lua_state.reference(lua::ffi::LUA_REGISTRYINDEX); // S: ...
+
+        Ok(LuaFunction {
+            // NOCOM(#sirver): ouch
+            lua_state: lua::State::from_ptr(self.lua_state.as_ptr()),
+            reference: reference,
+        })
+    }
+
     pub fn get_table<'b, T: Key>(&'b mut self, key: T) -> Result<LuaTable<'b>, LuaTableError> {
         try!(self.push_value_for_existing_key(key));
-        let l = self.lua_state.type_of(-1);
-        println!("#sirver l: {:#?}", l);
         if !self.lua_state.is_table(-1) {
             self.lua_state.pop(1);
             return Err(LuaTableError::InvalidType);
@@ -350,5 +390,32 @@ mod tests {
 
         let mut t = LuaTable::new(&mut state);
         assert_eq!(Ok(golden), t.get_keys());
+    }
+
+    #[test]
+    fn get_function() {
+        let mut state = lua::State::new();
+        state.do_string(r#"
+
+        b = {
+            a = function()
+                b.blub = "Hi"
+            end,
+        }
+
+        return b
+        "#);
+
+        let mut func;
+        {
+            let mut t = LuaTable::new(&mut state);
+            func = t.get_function("a").unwrap();
+        }
+
+        // Function outlives the table, but not the state.
+        func.prepare_call().call();
+
+        let mut t = LuaTable::new(&mut state);
+        assert_eq!(Ok("Hi".into()), t.get_string("blub"));
     }
 }
