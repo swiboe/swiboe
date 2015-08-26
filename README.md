@@ -62,3 +62,13 @@ $ cargo run --release -- -s /tmp/swiboe.socket
 
 This drops you in an empty terminal window - welcome to swiboe. Try CTRL + t to
 fuzzy search through all the files in the current directory and to open one.
+
+# Contributing
+
+If you are unsure where to start either reach out to me or grep for NOCOM in the
+source base - there are many NOCOM (which stand for do-not-commit) while the
+project is in outline mode. If you pick one of the NOCOM you will flesh out
+details of stuff that I only outlined so far.
+
+If you prefer on something bigger picture, you will need to provide some design
+first. Best open a issue for discussing.
