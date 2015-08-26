@@ -5,23 +5,71 @@ extern crate swiboe;
 use std::collections::HashSet;
 use std::mem;
 use std::path;
+use ::keymap_handler;
 use std::string;
 
-// simple binding to Rust's tan function
-unsafe extern "C" fn lua_call(lua_state: *mut lua::ffi::lua_State) -> libc::c_int {
+const REGISTRY_NAME_FOR_CONFIG_FILE_RUNNER: &'static str = "config_file_runner";
+
+/// The lua53 crate defines lua::Function as Option<...>, but here we are sure that we have valid
+/// pointers, so we add our own type.
+pub type LuaFunction = unsafe extern "C" fn(L: *mut lua::ffi::lua_State) -> libc::c_int;
+
+/// Returns a reference to the ConfigFileRunner that must have been pushed into the registry on
+/// creation. The 'static is a lie, but the ConfigFileRunner always outlives the lua_state, so that
+/// is safe.
+fn get_config_file_runner(lua_state: &mut lua::State) -> Option<&'static mut ConfigFileRunner> {
+    lua_state.get_field(lua::ffi::LUA_REGISTRYINDEX, REGISTRY_NAME_FOR_CONFIG_FILE_RUNNER);
+    let pointer = lua_state.to_userdata(-1);
+    lua_state.pop(1);
+    if pointer.is_null() {
+        return None;
+    }
+    unsafe {
+        Some(mem::transmute(pointer))
+    }
+}
+
+// Map a key to a Lua function.
+unsafe extern "C" fn lua_map(lua_state: *mut lua::ffi::lua_State) -> libc::c_int {
   let mut state = lua::State::from_ptr(lua_state);
-  let s = state.to_str(-1);
-  println!("#sirver string: {:#?}", s);
+  println!("#sirver ALIVE {}:{}", file!(), line!());
+  let mut config_file_runner = get_config_file_runner(&mut state).unwrap();
+  println!("#sirver ALIVE {}:{}", file!(), line!());
+
+  let is_table = state.is_table(-1);
+  state.arg_check(is_table, -1, "Expected a table.");
+  println!("#sirver ALIVE {}:{}", file!(), line!());
+
+  let mut table = LuaTable::new(&mut state);
+  println!("#sirver ALIVE {}:{}", file!(), line!());
+
+  println!("#sirver ALIVE {}:{}", file!(), line!());
+  let kmh = &mut config_file_runner.keymap_handler;
+  println!("#sirver ALIVE {}:{}", file!(), line!());
+  let mut arpeggio = Vec::new();
+  println!("#sirver ALIVE {}:{}", file!(), line!());
+  arpeggio.push(keymap_handler::Chord::with(keymap_handler::Key::Char('i')));
+
+  println!("#sirver ALIVE {}:{}", file!(), line!());
+  // NOCOM(#sirver): error handling
+  let func = table.get_fn("when").unwrap();
+  println!("#sirver ALIVE {}:{}", file!(), line!());
+  kmh.insert(keymap_handler::Mapping::new(
+          arpeggio, Box::new(move || {
+              func(lua_state);
+          })));
+
   0
 }
 
 // mapping of function name to function pointer
 const SWIBOE_LIB: [(&'static str, lua::Function); 1] = [
-  ("call", Some(lua_call)),
+  ("map", Some(lua_map)),
 ];
 
 struct ConfigFileRunner {
     lua_state: lua::State,
+    keymap_handler: keymap_handler::KeymapHandler,
 }
 
 impl ConfigFileRunner {
@@ -34,14 +82,15 @@ impl ConfigFileRunner {
 
         let mut this = ConfigFileRunner {
             lua_state: state,
+            keymap_handler: keymap_handler::KeymapHandler::new(),
         };
 
-        // Save a reference to the object saver
+        // Save a reference to the ConfigFileRunner.
         unsafe {
             let this_pointer: *mut ConfigFileRunner = mem::transmute(&mut this);
             this.lua_state.push_light_userdata(this_pointer);
         }
-        this.lua_state.set_field(lua::ffi::LUA_REGISTRYINDEX, "this");
+        this.lua_state.set_field(lua::ffi::LUA_REGISTRYINDEX, REGISTRY_NAME_FOR_CONFIG_FILE_RUNNER);
 
         this
     }
@@ -50,7 +99,7 @@ impl ConfigFileRunner {
         let path = path.to_string_lossy();
         match self.lua_state.do_file(&path) {
             lua::ThreadStatus::Ok => (),
-            err => println!("#sirver err.description(): {:#?}", err),
+            err => println!("#sirver {:#?}: {}", err, self.lua_state.to_str(-1).unwrap()),
         }
     }
 }
@@ -203,10 +252,7 @@ impl<'a> LuaTable<'a> {
 
     pub fn get_string<T: Key>(&mut self, key: T) -> Result<String, LuaTableError> {
         try!(self.push_value_for_existing_key(key));
-        let rv = match self.lua_state.to_str(-1) {
-            Some(rv) => Ok(rv),
-            None => Err(LuaTableError::InvalidType),
-        };
+        let rv = self.lua_state.to_str(-1).ok_or(LuaTableError::InvalidType);
         self.lua_state.pop(1);
         rv
     }
