@@ -48,11 +48,11 @@ unsafe extern "C" fn lua_map(lua_state: *mut lua::ffi::lua_State) -> libc::c_int
 
   println!("#sirver ALIVE {}:{}", file!(), line!());
   // NOCOM(#sirver): error handling
-  let func = table.get_fn("when").unwrap();
+  let mut func = table.get_function("execute").unwrap();
   println!("#sirver ALIVE {}:{}", file!(), line!());
   kmh.insert(keymap_handler::Mapping::new(
           arpeggio, Box::new(move || {
-              func(lua_state);
+              func.prepare_call().call();
           })));
 
   0
@@ -64,26 +64,30 @@ const SWIBOE_LIB: [(&'static str, lua::Function); 1] = [
 ];
 
 struct ConfigFileRunner {
+    // NOCOM(#sirver): remove
+    blub: String,
     lua_state: lua::State,
     keymap_handler: keymap_handler::KeymapHandler,
 }
 
 impl ConfigFileRunner {
-    fn new() -> Self {
+    fn new() -> Box<Self> {
+    // This is boxed so that we can save a pointer to it in the Lua registry.
         let mut state = lua::State::new();
         state.open_libs();
 
         state.new_lib(&SWIBOE_LIB);
         state.set_global("swiboe");
 
-        let mut this = ConfigFileRunner {
+        let mut this = Box::new(ConfigFileRunner {
+            blub: "Hi".into(),
             lua_state: state,
             keymap_handler: keymap_handler::KeymapHandler::new(),
-        };
+        });
 
         // Save a reference to the ConfigFileRunner.
         unsafe {
-            let this_pointer: *mut ConfigFileRunner = mem::transmute(&mut this);
+            let this_pointer: *mut ConfigFileRunner = mem::transmute(&mut *this);
             this.lua_state.push_light_userdata(this_pointer);
         }
         this.lua_state.set_field(lua::ffi::LUA_REGISTRYINDEX, REGISTRY_NAME_FOR_CONFIG_FILE_RUNNER);
@@ -97,6 +101,8 @@ impl ConfigFileRunner {
             lua::ThreadStatus::Ok => (),
             err => println!("#sirver {:#?}: {}", err, self.lua_state.to_str(-1).unwrap()),
         }
+
+        self.keymap_handler.key_down(1000., keymap_handler::Key::Char('i'));
     }
 }
 

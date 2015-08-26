@@ -24,11 +24,11 @@ pub type Arpeggio = Vec<Chord>;
 
 pub struct Mapping {
     mapping: Arpeggio,
-    function: Box<Fn()>,
+    function: Box<FnMut()>,
 }
 
 impl Mapping {
-    pub fn new(lhs: Arpeggio, function: Box<Fn()>) -> Self {
+    pub fn new(lhs: Arpeggio, function: Box<FnMut()>) -> Self {
         Mapping {
             mapping: lhs,
             function: function,
@@ -86,13 +86,13 @@ impl KeymapHandler {
         }
 
         // NOCOM(#sirver): this should actually check the prefix only.
-        let possible_keys: Vec<_> = self.keymaps
-            .iter()
+        let mut possible_keys: Vec<_> = self.keymaps
+            .iter_mut()
             .filter(|keymap| { keymap.mapping == arpeggio })
             .collect();
 
         if possible_keys.len() == 1 {
-            let mapping = possible_keys.last().unwrap();
+            let mut mapping = possible_keys.last_mut().unwrap();
             (mapping.function)();
         }
     }
