@@ -5,43 +5,80 @@ extern crate swiboe;
 use std::collections::HashSet;
 use std::mem;
 use std::path;
+use ::keymap_handler;
 use std::string;
 
-// simple binding to Rust's tan function
-unsafe extern "C" fn lua_call(lua_state: *mut lua::ffi::lua_State) -> libc::c_int {
+const REGISTRY_NAME_FOR_CONFIG_FILE_RUNNER: &'static str = "config_file_runner";
+
+/// Returns a reference to the ConfigFileRunner that must have been pushed into the registry on
+/// creation. The 'static is a lie, but the ConfigFileRunner always outlives the lua_state, so that
+/// is safe.
+fn get_config_file_runner(lua_state: &mut lua::State) -> Option<&'static mut ConfigFileRunner> {
+    lua_state.get_field(lua::ffi::LUA_REGISTRYINDEX, REGISTRY_NAME_FOR_CONFIG_FILE_RUNNER);
+    let pointer = lua_state.to_userdata(-1);
+    lua_state.pop(1);
+    if pointer.is_null() {
+        return None;
+    }
+    unsafe {
+        Some(mem::transmute(pointer))
+    }
+}
+
+// Map a key to a Lua function.
+unsafe extern "C" fn lua_map(lua_state: *mut lua::ffi::lua_State) -> libc::c_int {
   let mut state = lua::State::from_ptr(lua_state);
-  let s = state.to_str(-1);
-  println!("#sirver string: {:#?}", s);
+  let mut config_file_runner = get_config_file_runner(&mut state).unwrap();
+
+  let is_table = state.is_table(-1);
+  state.arg_check(is_table, -1, "Expected a table.");
+
+  let mut table = LuaTable::new(&mut state);
+
+  let kmh = &mut config_file_runner.keymap_handler;
+  let mut arpeggio = keymap_handler::Arpeggio::new()
+      .append(keymap_handler::Chord::with(keymap_handler::Key::Char('i')));
+
+  // NOCOM(#sirver): error handling
+  let mut func = table.get_function("execute").unwrap();
+  kmh.insert(keymap_handler::Mapping::new(
+          arpeggio, Box::new(move || {
+              func.prepare_call().call();
+          })));
+
   0
 }
 
 // mapping of function name to function pointer
 const SWIBOE_LIB: [(&'static str, lua::Function); 1] = [
-  ("call", Some(lua_call)),
+  ("map", Some(lua_map)),
 ];
 
 struct ConfigFileRunner {
     lua_state: lua::State,
+    keymap_handler: keymap_handler::KeymapHandler,
 }
 
 impl ConfigFileRunner {
-    fn new() -> Self {
+    fn new() -> Box<Self> {
+    // This is boxed so that we can save a pointer to it in the Lua registry.
         let mut state = lua::State::new();
         state.open_libs();
 
         state.new_lib(&SWIBOE_LIB);
         state.set_global("swiboe");
 
-        let mut this = ConfigFileRunner {
+        let mut this = Box::new(ConfigFileRunner {
             lua_state: state,
-        };
+            keymap_handler: keymap_handler::KeymapHandler::new(),
+        });
 
-        // Save a reference to the object saver
+        // Save a reference to the ConfigFileRunner.
         unsafe {
-            let this_pointer: *mut ConfigFileRunner = mem::transmute(&mut this);
+            let this_pointer: *mut ConfigFileRunner = mem::transmute(&mut *this);
             this.lua_state.push_light_userdata(this_pointer);
         }
-        this.lua_state.set_field(lua::ffi::LUA_REGISTRYINDEX, "this");
+        this.lua_state.set_field(lua::ffi::LUA_REGISTRYINDEX, REGISTRY_NAME_FOR_CONFIG_FILE_RUNNER);
 
         this
     }
@@ -50,7 +87,7 @@ impl ConfigFileRunner {
         let path = path.to_string_lossy();
         match self.lua_state.do_file(&path) {
             lua::ThreadStatus::Ok => (),
-            err => println!("#sirver err.description(): {:#?}", err),
+            err => println!("#sirver {:#?}: {}", err, self.lua_state.to_str(-1).unwrap()),
         }
     }
 }
@@ -203,10 +240,7 @@ impl<'a> LuaTable<'a> {
 
     pub fn get_string<T: Key>(&mut self, key: T) -> Result<String, LuaTableError> {
         try!(self.push_value_for_existing_key(key));
-        let rv = match self.lua_state.to_str(-1) {
-            Some(rv) => Ok(rv),
-            None => Err(LuaTableError::InvalidType),
-        };
+        let rv = self.lua_state.to_str(-1).ok_or(LuaTableError::InvalidType);
         self.lua_state.pop(1);
         rv
     }

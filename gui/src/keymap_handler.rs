@@ -19,16 +19,46 @@ impl Chord {
     }
 }
 
-pub type Arpeggio = Vec<Chord>;
+#[derive(Debug,PartialEq,Eq)]
+pub struct Arpeggio {
+    pub chords: Vec<Chord>,
+}
+
+impl Arpeggio {
+    pub fn new() -> Self {
+        Arpeggio {
+            chords: Vec::new(),
+        }
+    }
+
+    pub fn append(mut self, c: Chord) -> Self {
+        self.chords.push(c);
+        self
+    }
+
+    // NOCOM(#sirver): this should probably return an error if parsing failed.
+    pub fn from_vec(vec: &Vec<&str>) -> Option<Self> {
+        let mut chords = Vec::new();
+        for entry in vec {
+            match Key::from_str(entry) {
+                None => return None,
+                Some(key) => chords.push(Chord::with(key)),
+            }
+        }
+        Some(Arpeggio {
+            chords: chords,
+        })
+    }
+}
 
 
 pub struct Mapping {
     mapping: Arpeggio,
-    function: Box<Fn()>,
+    function: Box<FnMut()>,
 }
 
 impl Mapping {
-    pub fn new(lhs: Arpeggio, function: Box<Fn()>) -> Self {
+    pub fn new(lhs: Arpeggio, function: Box<FnMut()>) -> Self {
         Mapping {
             mapping: lhs,
             function: function,
@@ -74,25 +104,25 @@ impl KeymapHandler {
     }
 
     pub fn check_if_current_key_match(&mut self) {
-        let mut arpeggio: Arpeggio = Vec::new();
+        let mut arpeggio: Arpeggio = Arpeggio::new();
         for key_event in &self.current_key_events {
             // NOCOM(#sirver): make configurable
-            if key_event.delta_t < 50e-3 && !arpeggio.is_empty() {
-                let last = arpeggio.last_mut().unwrap();
+            if key_event.delta_t < 50e-3 && !arpeggio.chords.is_empty() {
+                let last = arpeggio.chords.last_mut().unwrap();
                 last.keys.insert(key_event.key);
             } else {
-                arpeggio.push(Chord::with(key_event.key));
+                arpeggio.chords.push(Chord::with(key_event.key));
             }
         }
 
         // NOCOM(#sirver): this should actually check the prefix only.
-        let possible_keys: Vec<_> = self.keymaps
-            .iter()
+        let mut possible_keys: Vec<_> = self.keymaps
+            .iter_mut()
             .filter(|keymap| { keymap.mapping == arpeggio })
             .collect();
 
         if possible_keys.len() == 1 {
-            let mapping = possible_keys.last().unwrap();
+            let mut mapping = possible_keys.last_mut().unwrap();
             (mapping.function)();
         }
     }
@@ -108,6 +138,28 @@ pub enum Key {
     Char(char),
 }
 
+// NOCOM(#sirver): This needs to support Chords too, like "<Ctrl>ta" for pressing Ctrl, t and a
+// too. That requires a simple parser.
+impl Key {
+    fn from_str(s: &str) -> Option<Self> {
+        let lower = s.to_lowercase();
+        match &lower as &str {
+            "<up>" => return Some(Key::Up),
+            "<down>" => return Some(Key::Down),
+            "<left>" => return Some(Key::Left),
+            "<right>" => return Some(Key::Right),
+            "<ctrl>" => return Some(Key::Ctrl),
+            _ => (),
+        };
+
+        let chars: Vec<_> = lower.chars().collect();
+        if chars.len() == 1 {
+            return Some(Key::Char(*chars.first().unwrap()));
+        }
+        None
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -118,8 +170,8 @@ mod tests {
     fn test_simple_coord() {
         let mut keymap_handler = KeymapHandler::new();
 
-        let mut arpeggio = Vec::new();
-        arpeggio.push(Chord::with(Key::Up).and(Key::Down));
+        let mut arpeggio = Arpeggio::new()
+            .append(Chord::with(Key::Up).and(Key::Down));
 
         let v = rc::Rc::new(cell::Cell::new(false));
         let v_clone = v.clone();
@@ -138,10 +190,10 @@ mod tests {
     fn test_simple_arpeggio() {
         let mut keymap_handler = KeymapHandler::new();
 
-        let mut arpeggio = Vec::new();
-        arpeggio.push(Chord::with(Key::Char(',')));
-        arpeggio.push(Chord::with(Key::Char('g')));
-        arpeggio.push(Chord::with(Key::Char('f')));
+        let mut arpeggio = Arpeggio::new()
+            .append(Chord::with(Key::Char(',')))
+            .append(Chord::with(Key::Char('g')))
+            .append(Chord::with(Key::Char('f')));
 
         let v = rc::Rc::new(cell::Cell::new(false));
         let v_clone = v.clone();
@@ -161,10 +213,10 @@ mod tests {
     fn test_arpeggio_with_chords() {
         let mut keymap_handler = KeymapHandler::new();
 
-        let mut arpeggio = Vec::new();
-        arpeggio.push(Chord::with(Key::Char('g')).and(Key::Ctrl));
-        arpeggio.push(Chord::with(Key::Char(',')));
-        arpeggio.push(Chord::with(Key::Char('f')));
+        let mut arpeggio = Arpeggio::new()
+            .append(Chord::with(Key::Char('g')).and(Key::Ctrl))
+            .append(Chord::with(Key::Char(',')))
+            .append(Chord::with(Key::Char('f')));
 
         let v = rc::Rc::new(cell::Cell::new(false));
         let v_clone = v.clone();
@@ -186,6 +238,31 @@ mod tests {
         keymap_handler.key_down(80e-3, Key::Char(','));
         keymap_handler.key_down(80e-3, Key::Char('f'));
         assert_eq!(v.get(), true);
+    }
+
+    #[test]
+    fn test_valid_char_from_string() {
+        assert_eq!(Some(Key::Up), Key::from_str("<UP>"));
+        assert_eq!(Some(Key::Ctrl), Key::from_str("<CTrl>"));
+        assert_eq!(Some(Key::Char('ö')), Key::from_str("ö"));
+    }
+
+    #[test]
+    fn test_invalid_char_from_string() {
+        assert_eq!(None, Key::from_str("öö"));
+        assert_eq!(None, Key::from_str("<Spa"));
+    }
+
+    #[test]
+    fn test_valid_arpeggio_from_vec() {
+        let vec = vec!["<Up>", "<Down>", "ö"];
+        let arpeggio = Arpeggio::from_vec(&vec);
+        let golden = Arpeggio::new()
+            .append(Chord::with(Key::Up))
+            .append(Chord::with(Key::Down))
+            .append(Chord::with(Key::Char('ö')));
+
+        assert_eq!(Some(golden), arpeggio);
     }
 
 }
