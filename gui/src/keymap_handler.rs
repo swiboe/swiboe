@@ -19,7 +19,37 @@ impl Chord {
     }
 }
 
-pub type Arpeggio = Vec<Chord>;
+#[derive(Debug,PartialEq,Eq)]
+pub struct Arpeggio {
+    pub chords: Vec<Chord>,
+}
+
+impl Arpeggio {
+    pub fn new() -> Self {
+        Arpeggio {
+            chords: Vec::new(),
+        }
+    }
+
+    pub fn append(mut self, c: Chord) -> Self {
+        self.chords.push(c);
+        self
+    }
+
+    // NOCOM(#sirver): this should probably return an error if parsing failed.
+    pub fn from_vec(vec: &Vec<&str>) -> Option<Self> {
+        let mut chords = Vec::new();
+        for entry in vec {
+            match Key::from_str(entry) {
+                None => return None,
+                Some(key) => chords.push(Chord::with(key)),
+            }
+        }
+        Some(Arpeggio {
+            chords: chords,
+        })
+    }
+}
 
 
 pub struct Mapping {
@@ -74,14 +104,14 @@ impl KeymapHandler {
     }
 
     pub fn check_if_current_key_match(&mut self) {
-        let mut arpeggio: Arpeggio = Vec::new();
+        let mut arpeggio: Arpeggio = Arpeggio::new();
         for key_event in &self.current_key_events {
             // NOCOM(#sirver): make configurable
-            if key_event.delta_t < 50e-3 && !arpeggio.is_empty() {
-                let last = arpeggio.last_mut().unwrap();
+            if key_event.delta_t < 50e-3 && !arpeggio.chords.is_empty() {
+                let last = arpeggio.chords.last_mut().unwrap();
                 last.keys.insert(key_event.key);
             } else {
-                arpeggio.push(Chord::with(key_event.key));
+                arpeggio.chords.push(Chord::with(key_event.key));
             }
         }
 
@@ -140,8 +170,8 @@ mod tests {
     fn test_simple_coord() {
         let mut keymap_handler = KeymapHandler::new();
 
-        let mut arpeggio = Vec::new();
-        arpeggio.push(Chord::with(Key::Up).and(Key::Down));
+        let mut arpeggio = Arpeggio::new()
+            .append(Chord::with(Key::Up).and(Key::Down));
 
         let v = rc::Rc::new(cell::Cell::new(false));
         let v_clone = v.clone();
@@ -160,10 +190,10 @@ mod tests {
     fn test_simple_arpeggio() {
         let mut keymap_handler = KeymapHandler::new();
 
-        let mut arpeggio = Vec::new();
-        arpeggio.push(Chord::with(Key::Char(',')));
-        arpeggio.push(Chord::with(Key::Char('g')));
-        arpeggio.push(Chord::with(Key::Char('f')));
+        let mut arpeggio = Arpeggio::new()
+            .append(Chord::with(Key::Char(',')))
+            .append(Chord::with(Key::Char('g')))
+            .append(Chord::with(Key::Char('f')));
 
         let v = rc::Rc::new(cell::Cell::new(false));
         let v_clone = v.clone();
@@ -183,10 +213,10 @@ mod tests {
     fn test_arpeggio_with_chords() {
         let mut keymap_handler = KeymapHandler::new();
 
-        let mut arpeggio = Vec::new();
-        arpeggio.push(Chord::with(Key::Char('g')).and(Key::Ctrl));
-        arpeggio.push(Chord::with(Key::Char(',')));
-        arpeggio.push(Chord::with(Key::Char('f')));
+        let mut arpeggio = Arpeggio::new()
+            .append(Chord::with(Key::Char('g')).and(Key::Ctrl))
+            .append(Chord::with(Key::Char(',')))
+            .append(Chord::with(Key::Char('f')));
 
         let v = rc::Rc::new(cell::Cell::new(false));
         let v_clone = v.clone();
@@ -211,10 +241,28 @@ mod tests {
     }
 
     #[test]
-    fn test_char_from_string() {
+    fn test_valid_char_from_string() {
         assert_eq!(Some(Key::Up), Key::from_str("<UP>"));
         assert_eq!(Some(Key::Ctrl), Key::from_str("<CTrl>"));
         assert_eq!(Some(Key::Char('ö')), Key::from_str("ö"));
+    }
+
+    #[test]
+    fn test_invalid_char_from_string() {
+        assert_eq!(None, Key::from_str("öö"));
+        assert_eq!(None, Key::from_str("<Spa"));
+    }
+
+    #[test]
+    fn test_valid_arpeggio_from_vec() {
+        let vec = vec!["<Up>", "<Down>", "ö"];
+        let arpeggio = Arpeggio::from_vec(&vec);
+        let golden = Arpeggio::new()
+            .append(Chord::with(Key::Up))
+            .append(Chord::with(Key::Down))
+            .append(Chord::with(Key::Char('ö')));
+
+        assert_eq!(Some(golden), arpeggio);
     }
 
 }

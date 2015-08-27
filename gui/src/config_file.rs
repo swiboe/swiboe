@@ -28,28 +28,19 @@ fn get_config_file_runner(lua_state: &mut lua::State) -> Option<&'static mut Con
 // Map a key to a Lua function.
 unsafe extern "C" fn lua_map(lua_state: *mut lua::ffi::lua_State) -> libc::c_int {
   let mut state = lua::State::from_ptr(lua_state);
-  println!("#sirver ALIVE {}:{}", file!(), line!());
   let mut config_file_runner = get_config_file_runner(&mut state).unwrap();
-  println!("#sirver ALIVE {}:{}", file!(), line!());
 
   let is_table = state.is_table(-1);
   state.arg_check(is_table, -1, "Expected a table.");
-  println!("#sirver ALIVE {}:{}", file!(), line!());
 
   let mut table = LuaTable::new(&mut state);
-  println!("#sirver ALIVE {}:{}", file!(), line!());
 
-  println!("#sirver ALIVE {}:{}", file!(), line!());
   let kmh = &mut config_file_runner.keymap_handler;
-  println!("#sirver ALIVE {}:{}", file!(), line!());
-  let mut arpeggio = Vec::new();
-  println!("#sirver ALIVE {}:{}", file!(), line!());
-  arpeggio.push(keymap_handler::Chord::with(keymap_handler::Key::Char('i')));
+  let mut arpeggio = keymap_handler::Arpeggio::new()
+      .append(keymap_handler::Chord::with(keymap_handler::Key::Char('i')));
 
-  println!("#sirver ALIVE {}:{}", file!(), line!());
   // NOCOM(#sirver): error handling
   let mut func = table.get_function("execute").unwrap();
-  println!("#sirver ALIVE {}:{}", file!(), line!());
   kmh.insert(keymap_handler::Mapping::new(
           arpeggio, Box::new(move || {
               func.prepare_call().call();
