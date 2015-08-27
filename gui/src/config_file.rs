@@ -64,8 +64,6 @@ const SWIBOE_LIB: [(&'static str, lua::Function); 1] = [
 ];
 
 struct ConfigFileRunner {
-    // NOCOM(#sirver): remove
-    blub: String,
     lua_state: lua::State,
     keymap_handler: keymap_handler::KeymapHandler,
 }
@@ -80,7 +78,6 @@ impl ConfigFileRunner {
         state.set_global("swiboe");
 
         let mut this = Box::new(ConfigFileRunner {
-            blub: "Hi".into(),
             lua_state: state,
             keymap_handler: keymap_handler::KeymapHandler::new(),
         });
@@ -101,8 +98,6 @@ impl ConfigFileRunner {
             lua::ThreadStatus::Ok => (),
             err => println!("#sirver {:#?}: {}", err, self.lua_state.to_str(-1).unwrap()),
         }
-
-        self.keymap_handler.key_down(1000., keymap_handler::Key::Char('i'));
     }
 }
 

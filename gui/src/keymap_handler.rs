@@ -108,6 +108,28 @@ pub enum Key {
     Char(char),
 }
 
+// NOCOM(#sirver): This needs to support Chords too, like "<Ctrl>ta" for pressing Ctrl, t and a
+// too. That requires a simple parser.
+impl Key {
+    fn from_str(s: &str) -> Option<Self> {
+        let lower = s.to_lowercase();
+        match &lower as &str {
+            "<up>" => return Some(Key::Up),
+            "<down>" => return Some(Key::Down),
+            "<left>" => return Some(Key::Left),
+            "<right>" => return Some(Key::Right),
+            "<ctrl>" => return Some(Key::Ctrl),
+            _ => (),
+        };
+
+        let chars: Vec<_> = lower.chars().collect();
+        if chars.len() == 1 {
+            return Some(Key::Char(*chars.first().unwrap()));
+        }
+        None
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -186,6 +208,13 @@ mod tests {
         keymap_handler.key_down(80e-3, Key::Char(','));
         keymap_handler.key_down(80e-3, Key::Char('f'));
         assert_eq!(v.get(), true);
+    }
+
+    #[test]
+    fn test_char_from_string() {
+        assert_eq!(Some(Key::Up), Key::from_str("<UP>"));
+        assert_eq!(Some(Key::Ctrl), Key::from_str("<CTrl>"));
+        assert_eq!(Some(Key::Char('ö')), Key::from_str("ö"));
     }
 
 }
