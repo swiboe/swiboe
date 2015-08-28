@@ -34,9 +34,10 @@ unsafe extern "C" fn lua_map(lua_state: *mut lua::ffi::lua_State) -> libc::c_int
   state.arg_check(is_table, -1, "Expected a table.");
 
   let mut table = LuaTable::new(&mut state);
+  // "keys"
 
   let kmh = &mut config_file_runner.keymap_handler;
-  let mut arpeggio = keymap_handler::Arpeggio::new()
+  let arpeggio = keymap_handler::Arpeggio::new()
       .append(keymap_handler::Chord::with(keymap_handler::Key::Char('i')));
 
   // NOCOM(#sirver): error handling
@@ -148,10 +149,7 @@ impl<'a> Key for &'a str {
     }
 
     fn pop(lua_state: &mut lua::State) -> Result<Self::IntoType, LuaTableError> {
-        let rv = match lua_state.to_str(-1) {
-            Some(rv) => Ok(rv),
-            None => Err(LuaTableError::InvalidType),
-        };
+        let rv = lua_state.to_str(-1).ok_or(LuaTableError::InvalidType);
         lua_state.pop(1);
         rv
     }
@@ -297,6 +295,21 @@ impl<'a> LuaTable<'a> {
 		}
         Ok(table_keys)
     }
+
+    pub fn get_array_values<Value: Key>(&mut self) -> Result<Vec<Value::IntoType>, LuaTableError> {
+        let mut values = Vec::new();
+        let mut key = 1;
+        loop {
+            self.lua_state.push_integer(key);  // S: table ... <first key>
+            self.lua_state.raw_get(self.table_index);  // S: table ... <value>
+            if self.lua_state.is_nil(-1) {
+                self.lua_state.pop(1);
+                return Ok(values);
+            }
+            values.push(try!(Value::pop(&mut self.lua_state)));
+            key += 1;
+        }
+    }
 }
 
 // NOCOM(#sirver): should warn about unused keys.
@@ -424,6 +437,19 @@ mod tests {
 
         let mut t = LuaTable::new(&mut state);
         assert_eq!(Ok(golden), t.get_keys());
+    }
+
+    #[test]
+    fn get_array_values() {
+        let mut state = lua::State::new();
+        state.do_string(r#"return { "1", "2", "3", "4" }"#);
+
+        let mut t = LuaTable::new(&mut state);
+        let as_strings = t.get_array_values::<&str>();
+        assert_eq!(Ok(vec!["1".into(), "2".into(), "3".into(), "4".into()]), as_strings);
+
+        let as_ints = t.get_array_values::<lua::Integer>();
+        assert_eq!(Ok(vec![1, 2, 3, 4]), as_ints);
     }
 
     #[test]

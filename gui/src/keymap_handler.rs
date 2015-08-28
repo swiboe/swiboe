@@ -170,7 +170,7 @@ mod tests {
     fn test_simple_coord() {
         let mut keymap_handler = KeymapHandler::new();
 
-        let mut arpeggio = Arpeggio::new()
+        let arpeggio = Arpeggio::new()
             .append(Chord::with(Key::Up).and(Key::Down));
 
         let v = rc::Rc::new(cell::Cell::new(false));
@@ -190,7 +190,7 @@ mod tests {
     fn test_simple_arpeggio() {
         let mut keymap_handler = KeymapHandler::new();
 
-        let mut arpeggio = Arpeggio::new()
+        let arpeggio = Arpeggio::new()
             .append(Chord::with(Key::Char(',')))
             .append(Chord::with(Key::Char('g')))
             .append(Chord::with(Key::Char('f')));
@@ -213,7 +213,7 @@ mod tests {
     fn test_arpeggio_with_chords() {
         let mut keymap_handler = KeymapHandler::new();
 
-        let mut arpeggio = Arpeggio::new()
+        let arpeggio = Arpeggio::new()
             .append(Chord::with(Key::Char('g')).and(Key::Ctrl))
             .append(Chord::with(Key::Char(',')))
             .append(Chord::with(Key::Char('f')));
