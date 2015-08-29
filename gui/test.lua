@@ -1,7 +1,3 @@
-print "Hello"
-
-
-
 CURRENT_MODE = "normal"
 
 always = function() return true end
@@ -33,8 +29,8 @@ in_insert_mode = function() return CURRENT_MODE == "insert" end
 
 swiboe.map {
    keys = { "i" },
-   when = in_normal_mode,
-   priority = 1000,
+   -- when = in_normal_mode,
+   -- priority = 1000,
    execute = function()
       print("--> ", CURRENT_MODE)
       CURRENT_MODE = "insert"

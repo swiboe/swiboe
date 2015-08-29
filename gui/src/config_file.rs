@@ -34,19 +34,25 @@ unsafe extern "C" fn lua_map(lua_state: *mut lua::ffi::lua_State) -> libc::c_int
   state.arg_check(is_table, -1, "Expected a table.");
 
   let mut table = LuaTable::new(&mut state);
-  // "keys"
-
-  let kmh = &mut config_file_runner.keymap_handler;
-  let arpeggio = keymap_handler::Arpeggio::new()
-      .append(keymap_handler::Chord::with(keymap_handler::Key::Char('i')));
+  // NOCOM(#sirver): this should not crash if the key is not there.
+  let mapping = {
+      let mut keys_table = table.get_table("keys").unwrap();
+      let keys = keys_table.get_array_values::<&str>().unwrap();
+      // NOCOM(#sirver): this feels really weird, is this conversion really needed.
+      let ref_keys: Vec<&str> = keys.iter().map(|ref_str| ref_str as &str).collect();
+      // NOCOM(#sirver): should not crash.
+      keymap_handler::Arpeggio::from_vec(&ref_keys).unwrap()
+  };
 
   // NOCOM(#sirver): error handling
   let mut func = table.get_function("execute").unwrap();
+
+  let kmh = &mut config_file_runner.keymap_handler;
+
   kmh.insert(keymap_handler::Mapping::new(
-          arpeggio, Box::new(move || {
+          mapping, Box::new(move || {
               func.prepare_call().call();
           })));
-
   0
 }
 
@@ -97,7 +103,6 @@ pub fn test_it() {
     let mut config_file_runner = ConfigFileRunner::new();
 
     config_file_runner.run(path::Path::new("test.lua"));
-
 
     // let plugin = BufferPlugin {
         // buffers: Arc::new(RwLock::new(BuffersManager::new(client.clone()))),

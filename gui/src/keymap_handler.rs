@@ -40,7 +40,7 @@ impl Arpeggio {
     pub fn from_vec(vec: &Vec<&str>) -> Option<Self> {
         let mut chords = Vec::new();
         for entry in vec {
-            match Key::from_str(entry) {
+            match Key::from_str(&entry) {
                 None => return None,
                 Some(key) => chords.push(Chord::with(key)),
             }
