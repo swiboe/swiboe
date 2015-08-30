@@ -61,13 +61,13 @@ const SWIBOE_LIB: [(&'static str, lua::Function); 1] = [
   ("map", Some(lua_map)),
 ];
 
-struct ConfigFileRunner {
+pub struct ConfigFileRunner {
     lua_state: lua::State,
-    keymap_handler: keymap_handler::KeymapHandler,
+    pub keymap_handler: keymap_handler::KeymapHandler,
 }
 
 impl ConfigFileRunner {
-    fn new() -> Box<Self> {
+    pub fn new() -> Box<Self> {
     // This is boxed so that we can save a pointer to it in the Lua registry.
         let mut state = lua::State::new();
         state.open_libs();
@@ -90,11 +90,11 @@ impl ConfigFileRunner {
         this
     }
 
-    fn run(&mut self, path: &path::Path) {
+    pub fn run(&mut self, path: &path::Path) {
         let path = path.to_string_lossy();
         match self.lua_state.do_file(&path) {
             lua::ThreadStatus::Ok => (),
-            err => println!("#sirver {:#?}: {}", err, self.lua_state.to_str(-1).unwrap()),
+            err => panic!("#sirver {:#?}: {}", err, self.lua_state.to_str(-1).unwrap()),
         }
     }
 }

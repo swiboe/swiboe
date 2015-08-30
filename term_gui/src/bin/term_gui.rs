@@ -9,12 +9,13 @@ extern crate time;
 extern crate uuid;
 
 use gui::buffer_views;
-use rustbox::Key;
+use gui::keymap_handler;
 use rustbox::{Color, RustBox};
 use std::cmp;
 use std::env;
 use std::path;
 use std::sync::mpsc;
+use std::sync::{RwLock, Arc, Mutex};
 use swiboe::client;
 use uuid::Uuid;
 
@@ -233,7 +234,167 @@ impl BufferViewWidget {
     }
 }
 
-fn main() {
+struct Options {
+    socket: path::PathBuf,
+    config_file: path::PathBuf,
+}
+
+struct TerminalGui {
+    config_file_runner: Box<gui::config_file::ConfigFileRunner>,
+    client: client::Client,
+    rustbox: rustbox::RustBox,
+    buffer_views: Arc<RwLock<gui::buffer_views::BufferViews>>,
+
+    last_key_down_event: time::PreciseTime,
+
+    completer: Option<CompleterWidget>,
+    buffer_view_widget: Option<BufferViewWidget>,
+    // NOCOM(#sirver): GuiCommand in namespace gui is very duplicated
+    gui_commands: mpsc::Receiver<gui::command::GuiCommand>,
+}
+
+impl TerminalGui {
+    fn new(options: &Options) -> Self {
+        let mut config_file_runner = gui::config_file::ConfigFileRunner::new();
+        config_file_runner.run(&options.config_file);
+
+        let rustbox = match RustBox::init(rustbox::InitOptions {
+            input_mode: rustbox::InputMode::Current,
+            buffer_stderr: true,
+        }) {
+            Result::Ok(v) => v,
+            Result::Err(e) => panic!("{}", e),
+        };
+
+
+        let client = client::Client::connect(&options.socket).unwrap();
+
+        let gui_id: String = Uuid::new_v4().to_hyphenated_string();
+        let (gui_commands_tx, gui_commands_rx) = mpsc::channel();
+        let buffer_views = gui::buffer_views::BufferViews::new(&gui_id, gui_commands_tx, &client);
+
+
+        TerminalGui {
+            config_file_runner: config_file_runner,
+            client: client,
+            rustbox: rustbox,
+            buffer_views: buffer_views,
+            last_key_down_event: time::PreciseTime::now(),
+            completer: None,
+            buffer_view_widget: None,
+            gui_commands: gui_commands_rx,
+        }
+    }
+
+    fn handle_events(&mut self) {
+        match self.rustbox.peek_event(time::Duration::milliseconds(5), false) {
+            Ok(rustbox::Event::KeyEvent(key)) => {
+                if self.completer.is_some() {
+                    let rv = self.completer.as_mut().unwrap().on_key(key.unwrap());
+                    match rv {
+                        CompleterState::Running => (),
+                        CompleterState::Canceled => {
+                            self.completer = None;
+                        },
+                        CompleterState::Selected(result) => {
+                            self.completer = None;
+
+                            let mut rpc = self.client.call("buffer.open", &swiboe::plugin_buffer::OpenRequest {
+                                uri: format!("file://{}", result),
+                            });
+                            let response: swiboe::plugin_buffer::OpenResponse = rpc.wait_for().unwrap();
+
+                            let mut buffer_views = self.buffer_views.write().unwrap();
+                            let view_id = buffer_views.new_view(response.buffer_index, self.rustbox.width(), self.rustbox.height());
+                            self.buffer_view_widget = Some(BufferViewWidget::new(view_id, self.client.clone()));
+                        },
+                    }
+                } else if let Some(key) = key {
+                    self.handle_key(key);
+                }
+            },
+            Err(e) => panic!("{}", e),
+            _ => { }
+        }
+
+        while let Ok(command) = self.gui_commands.try_recv() {
+            match command {
+                gui::command::GuiCommand::Quit => break,
+                gui::command::GuiCommand::Redraw => (),
+            }
+        }
+    }
+
+    fn handle_key(&mut self, key: rustbox::Key) {
+        let delta_t = {
+            let now = time::PreciseTime::now();
+            let delta_t = self.last_key_down_event.to(now);
+            self.last_key_down_event = now;
+            delta_t
+        };
+        let delta_t_in_seconds = delta_t.num_nanoseconds().unwrap() as f64 / 1e9;
+
+        match key {
+            rustbox::Key::Esc => {
+                self.config_file_runner.keymap_handler.timeout();
+            },
+            rustbox::Key::Char(a) => {
+                self.config_file_runner.keymap_handler.key_down(
+                    delta_t_in_seconds, keymap_handler::Key::Char(a));
+            },
+            rustbox::Key::Up => {
+                self.config_file_runner.keymap_handler.key_down(
+                    delta_t_in_seconds, keymap_handler::Key::Up);
+            },
+            rustbox::Key::Down => {
+                self.config_file_runner.keymap_handler.key_down(
+                    delta_t_in_seconds, keymap_handler::Key::Down);
+            },
+            rustbox::Key::Left => {
+                self.config_file_runner.keymap_handler.key_down(
+                    delta_t_in_seconds, keymap_handler::Key::Left);
+            },
+            rustbox::Key::Right => {
+                self.config_file_runner.keymap_handler.key_down(
+                    delta_t_in_seconds, keymap_handler::Key::Right);
+            },
+            rustbox::Key::Tab => {
+                self.config_file_runner.keymap_handler.key_down(
+                    delta_t_in_seconds, keymap_handler::Key::Tab);
+            },
+            rustbox::Key::Ctrl(some_other_key) => {
+                self.config_file_runner.keymap_handler.key_down(
+                    delta_t_in_seconds, keymap_handler::Key::Ctrl);
+                self.handle_key(rustbox::Key::Char(some_other_key));
+            }
+            _ => (),
+            // Some(Key::Char('q')) => break,
+            // Some(Key::Ctrl('t')) => {
+            // self.completer = Some(CompleterWidget::new(&client))
+            // },
+            // _ => {
+            // if let Some(ref mut widget) = self.buffer_view_widget {
+            // widget.on_key(key.unwrap());
+            // }
+            // }
+        }
+    }
+
+    fn draw(&mut self) {
+        self.rustbox.clear();
+        if let Some(ref mut widget) = self.buffer_view_widget {
+            let buffer_views = self.buffer_views.read().unwrap();
+            let buffer_view = buffer_views.get(&widget.view_id).unwrap();
+            widget.draw(&buffer_view, &self.rustbox);
+        }
+        if let Some(ref mut completer) = self.completer {
+            completer.draw(&self.rustbox);
+        }
+        self.rustbox.present();
+    }
+}
+
+fn parse_options() -> Options {
     let matches = clap::App::new("term_gui")
         .about("Terminal client for Swiboe")
         .version(&crate_version!()[..])
@@ -243,85 +404,27 @@ fn main() {
              .help("Socket at which the master listens.")
              .required(true)
              .takes_value(true))
+        .arg(clap::Arg::with_name("CONFIG_FILE")
+             .short("c")
+             .long("config_file")
+             .help("The config file to run when the GUI starts up.")
+             .takes_value(true))
         .get_matches();
 
-    let rustbox = match RustBox::init(rustbox::InitOptions {
-        input_mode: rustbox::InputMode::Current,
-        buffer_stderr: true,
-    }) {
-        Result::Ok(v) => v,
-        Result::Err(e) => panic!("{}", e),
-    };
 
+    Options {
+        config_file: path::PathBuf::from(matches.value_of("CONFIG_FILE").unwrap_or("config.lua")),
+        socket: path::PathBuf::from(matches.value_of("SOCKET").unwrap()),
+    }
+}
 
-    let path = path::Path::new(matches.value_of("SOCKET").unwrap());
-    let client = client::Client::connect(path).unwrap();
+fn main() {
+    let options = parse_options();
 
-    let gui_id: String = Uuid::new_v4().to_hyphenated_string();
-    let (gui_commands_tx, gui_commands_rx) = mpsc::channel();
-    let buffer_views = gui::buffer_views::BufferViews::new(&gui_id, gui_commands_tx, &client);
+    let mut gui = TerminalGui::new(&options);
 
-
-    let mut completer: Option<CompleterWidget> = None;
-    let mut buffer_view_widget: Option<BufferViewWidget> = None;
     loop {
-        match rustbox.peek_event(time::Duration::milliseconds(5), false) {
-            Ok(rustbox::Event::KeyEvent(key)) => {
-                if completer.is_some() {
-                    let rv = completer.as_mut().unwrap().on_key(key.unwrap());
-                    match rv {
-                        CompleterState::Running => (),
-                        CompleterState::Canceled => {
-                            completer = None;
-                        },
-                        CompleterState::Selected(result) => {
-                            completer = None;
-
-                            let mut rpc = client.call("buffer.open", &swiboe::plugin_buffer::OpenRequest {
-                                uri: format!("file://{}", result),
-                            });
-                            let response: swiboe::plugin_buffer::OpenResponse = rpc.wait_for().unwrap();
-
-                            let mut buffer_views = buffer_views.write().unwrap();
-                            let view_id = buffer_views.new_view(response.buffer_index, rustbox.width(), rustbox.height());
-                            buffer_view_widget = Some(BufferViewWidget::new(view_id, client.clone()));
-                        },
-                    }
-                } else {
-                    match key {
-                        Some(Key::Char('q')) => break,
-                        Some(Key::Ctrl('t')) => {
-                            completer = Some(CompleterWidget::new(&client))
-                        },
-                        _ => {
-                            if let Some(ref mut widget) = buffer_view_widget {
-                                widget.on_key(key.unwrap());
-                            }
-                        }
-                    }
-                }
-            },
-            Err(e) => panic!("{}", e),
-            _ => { }
-        }
-
-        while let Ok(command) = gui_commands_rx.try_recv() {
-            match command {
-                gui::command::GuiCommand::Quit => break,
-                gui::command::GuiCommand::Redraw => {
-                },
-            }
-        }
-
-        rustbox.clear();
-        if let Some(ref mut widget) = buffer_view_widget {
-            let buffer_views = buffer_views.read().unwrap();
-            let buffer_view = buffer_views.get(&widget.view_id).unwrap();
-            widget.draw(&buffer_view, &rustbox);
-        }
-        if let Some(ref mut completer) = completer {
-            completer.draw(&rustbox);
-        }
-        rustbox.present();
+        gui.handle_events();
+        gui.draw();
     }
 }
