@@ -38,6 +38,15 @@ swiboe.map {
    end,
 }
 
+swiboe.map {
+   keys = { "<Ctrl>t" },
+   -- when = in_normal_mode,
+   -- priority = 1000,
+   execute = function()
+      print("Pressed a,b!")
+   end,
+}
+
 -- swiboe.map {
    -- keys = { "i" },
    -- when = in_insert_mode,

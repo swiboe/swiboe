@@ -1,8 +1,40 @@
 use std::collections::{HashSet};
 
+// NOCOM(#sirver): this should use time::Duration instead of seconds.
 #[derive(Debug,Eq,PartialEq)]
 pub struct Chord {
    keys: HashSet<Key>
+}
+
+fn split_by_keys(chord: &str) -> Option<Vec<String>> {
+    let mut rv = Vec::new();
+    let mut current_key = String::new();
+    let mut seen_less_then = false;
+    for c in chord.chars() {
+        current_key.push(c);
+        if c == '<' {
+            if seen_less_then {
+                return None;
+            }
+            seen_less_then = true;
+        }
+
+        if seen_less_then {
+            if c == '>' {
+                if !seen_less_then {
+                    return None;
+                }
+                seen_less_then = false;
+                rv.push(current_key);
+                current_key = String::new();
+                continue;
+            }
+        } else {
+            rv.push(current_key);
+            current_key = String::new();
+        }
+    }
+    Some(rv)
 }
 
 impl Chord {
@@ -17,6 +49,29 @@ impl Chord {
         self.keys.insert(c);
         self
     }
+
+    fn from_str(s: &str) -> Option<Self> {
+        let keys_str = match split_by_keys(s) {
+            None => return None,
+            Some(keys_str) => keys_str,
+        };
+
+        let mut chord = Chord {
+            keys: HashSet::new(),
+        };
+        println!("#sirver keys_str: {:#?}", keys_str);
+
+        for key_str in &keys_str {
+            match Key::from_str(key_str) {
+                None => return None,
+                Some(key) => {
+                    chord.keys.insert(key);
+                }
+            }
+        }
+        Some(chord)
+    }
+
 }
 
 #[derive(Debug,PartialEq,Eq)]
@@ -39,10 +94,12 @@ impl Arpeggio {
     // NOCOM(#sirver): this should probably return an error if parsing failed.
     pub fn from_vec(vec: &Vec<&str>) -> Option<Self> {
         let mut chords = Vec::new();
+
         for entry in vec {
-            match Key::from_str(&entry) {
+            let current_key = String::new();
+            match Chord::from_str(&entry) {
                 None => return None,
-                Some(key) => chords.push(Chord::with(key)),
+                Some(chord) => chords.push(chord),
             }
         }
         Some(Arpeggio {
@@ -124,6 +181,7 @@ impl KeymapHandler {
         if possible_keys.len() == 1 {
             let mut mapping = possible_keys.last_mut().unwrap();
             (mapping.function)();
+            self.current_key_events.clear();
         }
     }
 }
@@ -134,7 +192,9 @@ pub enum Key {
     Down,
     Left,
     Right,
+    Escape,
     Ctrl,
+    Tab,
     Char(char),
 }
 
@@ -264,5 +324,27 @@ mod tests {
 
         assert_eq!(Some(golden), arpeggio);
     }
+
+    #[test]
+    fn test_valid_chord_from_str() {
+        let chord_str = "öa";
+        let chord = Chord::from_str(chord_str);
+        let golden = Chord::with(Key::Char('ö'))
+            .and(Key::Char('a'));
+        assert_eq!(Some(golden), chord);
+    }
+
+    #[test]
+    fn test_valid_chord_from_vec() {
+        let vec = vec!["<Up>t", "a<Ctrl>", "ö"];
+        let arpeggio = Arpeggio::from_vec(&vec);
+        let golden = Arpeggio::new()
+            .append(Chord::with(Key::Up).and(Key::Char('t')))
+            .append(Chord::with(Key::Ctrl).and(Key::Char('a')))
+            .append(Chord::with(Key::Char('ö')));
+
+        assert_eq!(Some(golden), arpeggio);
+    }
+
 
 }
