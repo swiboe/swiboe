@@ -286,7 +286,7 @@ impl TerminalGui {
         }
     }
 
-    fn handle_events(&mut self) {
+    fn handle_events(&mut self) -> bool {
         match self.rustbox.peek_event(time::Duration::milliseconds(5), false) {
             Ok(rustbox::Event::KeyEvent(key)) => {
                 if self.completer.is_some() {
@@ -310,7 +310,9 @@ impl TerminalGui {
                         },
                     }
                 } else if let Some(key) = key {
-                    self.handle_key(key);
+                    if !self.handle_key(key) {
+                        return false;
+                    }
                 }
             },
             Err(e) => panic!("{}", e),
@@ -319,13 +321,14 @@ impl TerminalGui {
 
         while let Ok(command) = self.gui_commands.try_recv() {
             match command {
-                gui::command::GuiCommand::Quit => break,
+                gui::command::GuiCommand::Quit => return false,
                 gui::command::GuiCommand::Redraw => (),
             }
         }
+        return true;
     }
 
-    fn handle_key(&mut self, key: rustbox::Key) {
+    fn handle_key(&mut self, key: rustbox::Key) -> bool {
         let delta_t = {
             let now = time::PreciseTime::now();
             let delta_t = self.last_key_down_event.to(now);
@@ -335,6 +338,18 @@ impl TerminalGui {
         let delta_t_in_seconds = delta_t.num_nanoseconds().unwrap() as f64 / 1e9;
 
         match key {
+            // NOCOM(#sirver): should be handled through plugins.
+            rustbox::Key::Char('q') => return false,
+            rustbox::Key::Ctrl('t') => {
+                self.completer = Some(CompleterWidget::new(&self.client))
+            },
+
+            // _ => {
+                // if let Some(ref mut widget) = self.buffer_view_widget {
+                    // widget.on_key(key.unwrap());
+                // }
+            // },
+
             rustbox::Key::Esc => {
                 self.config_file_runner.keymap_handler.timeout();
             },
@@ -368,16 +383,8 @@ impl TerminalGui {
                 self.handle_key(rustbox::Key::Char(some_other_key));
             }
             _ => (),
-            // Some(Key::Char('q')) => break,
-            // Some(Key::Ctrl('t')) => {
-            // self.completer = Some(CompleterWidget::new(&client))
-            // },
-            // _ => {
-            // if let Some(ref mut widget) = self.buffer_view_widget {
-            // widget.on_key(key.unwrap());
-            // }
-            // }
         }
+        true
     }
 
     fn draw(&mut self) {
@@ -423,8 +430,7 @@ fn main() {
 
     let mut gui = TerminalGui::new(&options);
 
-    loop {
-        gui.handle_events();
+    while (gui.handle_events()) {
         gui.draw();
     }
 }
