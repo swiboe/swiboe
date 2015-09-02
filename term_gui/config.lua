@@ -1,3 +1,6 @@
+JSON = (loadfile "json.lua")()
+
+
 CURRENT_MODE = "normal"
 
 always = function() return true end
@@ -39,11 +42,31 @@ swiboe.map {
 }
 
 swiboe.map {
-   keys = { "<Ctrl>t" },
+   keys = { "a" },
+   -- when = in_normal_mode,
+   -- priority = 1000,
+   execute = function(client)
+      -- NOCOM(#sirver): need to implement our own lua table to JSON converter eventually.
+      local args = JSON:encode_pretty {
+          -- NOCOM(#sirver): for now, we move any cursor, but we need to expose
+          -- which cursor should be moved somehow for this method.
+          -- cursor_id = swiboe.current_cursor_id(),
+          delta = {
+             line_index = -1,
+             column_index = 0,
+          },
+       }
+       -- NOCOM(#sirver): this should return an RPC object, but for now, we just implicitly wait.
+       client:call("gui.buffer_view.move_cursor", args);
+   end,
+}
+
+swiboe.map {
+   keys = { "<Ctrl>i" },
    -- when = in_normal_mode,
    -- priority = 1000,
    execute = function()
-      print("Pressed a,b!")
+      print("Second command!")
    end,
 }
 

@@ -1,12 +1,15 @@
 extern crate libc;
 extern crate lua;
+extern crate serde_json;
 extern crate swiboe;
 
+use ::keymap_handler;
 use std::collections::HashSet;
 use std::mem;
 use std::path;
-use ::keymap_handler;
+use std::ptr;
 use std::string;
+use swiboe::client;
 
 const REGISTRY_NAME_FOR_CONFIG_FILE_RUNNER: &'static str = "config_file_runner";
 
@@ -49,12 +52,52 @@ unsafe extern "C" fn lua_map(lua_state: *mut lua::ffi::lua_State) -> libc::c_int
 
   let kmh = &mut config_file_runner.keymap_handler;
 
+  let thin_client_clone = config_file_runner.thin_client.clone();
   kmh.insert(keymap_handler::Mapping::new(
           mapping, Box::new(move || {
-              func.prepare_call().call();
+              let rv = func.prepare_call()
+                  .push_thin_client(thin_client_clone.clone())
+                  .call();
+              if rv != lua::ThreadStatus::Ok {
+                  println!("#sirver {}", func.lua_state.to_str(-1).unwrap())
+              };
           })));
   0
 }
+
+unsafe extern "C" fn lua_call(lua_state: *mut lua::ffi::lua_State) -> libc::c_int {
+    let mut state = lua::State::from_ptr(lua_state);
+    let function_name = state.check_string(2);
+    let json_arguments_as_string = state.check_string(3);
+
+    let thin_client: &mut client::ThinClient = unsafe {
+        state.check_userdata_typed(1, "swiboe.ThinClient")
+    };
+
+
+    // NOCOM(#sirver): should not crash if json_arguments_as_string is malformed.
+    let args: serde_json::Value = serde_json::from_str(&json_arguments_as_string).unwrap();
+
+    let mut rpc = thin_client.call(&function_name, &args);
+    // NOCOM(#sirver): return failure information to Lua.
+    rpc.wait();
+    0
+}
+
+unsafe extern "C" fn lua_thin_client___gc(lua_state: *mut lua::ffi::lua_State) -> libc::c_int {
+    let mut state = lua::State::from_ptr(lua_state);
+    let thin_client: &mut client::ThinClient = unsafe {
+        state.check_userdata_typed(1, "swiboe.ThinClient")
+    };
+    drop(thin_client);
+    0
+}
+
+// mapping of function name to function pointer
+const THIN_CLIENT_FNS: [(&'static str, lua::Function); 2] = [
+  ("call", Some(lua_call)),
+  ("__gc", Some(lua_thin_client___gc)),
+];
 
 // mapping of function name to function pointer
 const SWIBOE_LIB: [(&'static str, lua::Function); 1] = [
@@ -64,10 +107,11 @@ const SWIBOE_LIB: [(&'static str, lua::Function); 1] = [
 pub struct ConfigFileRunner {
     lua_state: lua::State,
     pub keymap_handler: keymap_handler::KeymapHandler,
+    thin_client: client::ThinClient,
 }
 
 impl ConfigFileRunner {
-    pub fn new() -> Box<Self> {
+    pub fn new(thin_client: client::ThinClient) -> Box<Self> {
     // This is boxed so that we can save a pointer to it in the Lua registry.
         let mut state = lua::State::new();
         state.open_libs();
@@ -75,9 +119,17 @@ impl ConfigFileRunner {
         state.new_lib(&SWIBOE_LIB);
         state.set_global("swiboe");
 
+        // Create the metatable for all of our wrapped classes.
+        state.new_metatable("swiboe.ThinClient");
+        state.push_string("__index");
+        state.push_value(-2);  // pushes the metatable
+        state.set_table(-3);  // metatable.__index = metatable
+        state.set_fns(&THIN_CLIENT_FNS, 0);
+
         let mut this = Box::new(ConfigFileRunner {
             lua_state: state,
             keymap_handler: keymap_handler::KeymapHandler::new(),
+            thin_client: thin_client,
         });
 
         // Save a reference to the ConfigFileRunner.
@@ -97,35 +149,6 @@ impl ConfigFileRunner {
             err => panic!("#sirver {:#?}: {}", err, self.lua_state.to_str(-1).unwrap()),
         }
     }
-}
-
-pub fn test_it() {
-    let mut config_file_runner = ConfigFileRunner::new();
-
-    config_file_runner.run(path::Path::new("test.lua"));
-
-    // let plugin = BufferPlugin {
-        // buffers: Arc::new(RwLock::new(BuffersManager::new(client.clone()))),
-        // client: client,
-    // };
-
-    // let new = Box::new(New { buffers: plugin.buffers.clone() });
-    // plugin.client.new_rpc("buffer.new", new);
-
-    // let delete = Box::new(Delete { buffers: plugin.buffers.clone() });
-    // plugin.client.new_rpc("buffer.delete", delete);
-
-    // let get_content = Box::new(GetContent { buffers: plugin.buffers.clone() });
-    // plugin.client.new_rpc("buffer.get_content", get_content);
-
-    // let open = Box::new(Open { buffers: plugin.buffers.clone() });
-    // plugin.client.new_rpc("buffer.open", open);
-
-    // let list = Box::new(List { buffers: plugin.buffers.clone() });
-    // plugin.client.new_rpc("buffer.list", list);
-
-
-    // NOCOM(#sirver): a client.spin_forever would be cool.
 }
 
 pub struct LuaTable<'a> {
@@ -197,12 +220,16 @@ impl LuaFunction {
     fn prepare_call(&mut self) -> PrepareCall {
         let index = self.reference.value();
         self.lua_state.raw_geti(lua::ffi::LUA_REGISTRYINDEX, index as lua::Integer); // S: function
-        PrepareCall { lua_function: self }
+        PrepareCall {
+            lua_function: self,
+            num_arguments: 0,
+        }
     }
 }
 
 struct PrepareCall<'a> {
-    lua_function: &'a mut LuaFunction
+    lua_function: &'a mut LuaFunction,
+    num_arguments: i32,
 }
 
 // NOCOM(#sirver): add push_ functions here.
@@ -210,7 +237,22 @@ struct PrepareCall<'a> {
 impl<'a> PrepareCall<'a> {
     fn call(self) -> lua::ThreadStatus {
         // S: <function> <args...>
-        self.lua_function.lua_state.pcall(0, 0, 0)
+        let rv = self.lua_function.lua_state.pcall(self.num_arguments, 0, 0);
+        rv
+    }
+
+    // NOCOM(#sirver): should we instead just pass a reference to Lua?
+    fn push_thin_client(mut self, thin_client: client::ThinClient) -> Self {
+        {
+            let mut lua_state = &mut self.lua_function.lua_state;
+            unsafe {
+                let new_thin_client = lua_state.new_userdata(mem::size_of::<client::ThinClient>() as libc::size_t) as *mut client::ThinClient;
+                ptr::write(&mut *new_thin_client, thin_client);
+            }
+            lua_state.set_metatable_from_registry("swiboe.ThinClient");
+            self.num_arguments += 1;
+        }
+        self
     }
 }
 

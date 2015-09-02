@@ -255,7 +255,10 @@ struct TerminalGui {
 
 impl TerminalGui {
     fn new(options: &Options) -> Self {
-        let mut config_file_runner = gui::config_file::ConfigFileRunner::new();
+        let client = client::Client::connect(&options.socket).unwrap();
+
+        let mut config_file_runner = gui::config_file::ConfigFileRunner::new(
+            client.clone());
         config_file_runner.run(&options.config_file);
 
         let rustbox = match RustBox::init(rustbox::InitOptions {
@@ -265,9 +268,6 @@ impl TerminalGui {
             Result::Ok(v) => v,
             Result::Err(e) => panic!("{}", e),
         };
-
-
-        let client = client::Client::connect(&options.socket).unwrap();
 
         let gui_id: String = Uuid::new_v4().to_hyphenated_string();
         let (gui_commands_tx, gui_commands_rx) = mpsc::channel();
