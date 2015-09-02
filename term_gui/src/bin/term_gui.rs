@@ -197,41 +197,6 @@ impl BufferViewWidget {
                                Color::Default, Color::Red, ' ');
         }
     }
-
-
-    fn on_key(&mut self, key: rustbox::Key) {
-        if self.cursor_id.is_empty() {
-            return;
-        }
-
-        match key {
-            rustbox::Key::Up => {
-                self.client.call("gui.buffer_view.move_cursor", &buffer_views::MoveCursorRequest {
-                    cursor_id: self.cursor_id.clone(),
-                    delta: buffer_views::Position { line_index: -1, column_index: 0, },
-                });
-            },
-            rustbox::Key::Down => {
-                self.client.call("gui.buffer_view.move_cursor", &buffer_views::MoveCursorRequest {
-                    cursor_id: self.cursor_id.clone(),
-                    delta: buffer_views::Position { line_index: 1, column_index: 0, },
-                });
-            }
-            rustbox::Key::Left => {
-                self.client.call("gui.buffer_view.move_cursor", &buffer_views::MoveCursorRequest {
-                    cursor_id: self.cursor_id.clone(),
-                    delta: buffer_views::Position { line_index: 0, column_index: -1, },
-                });
-            },
-            rustbox::Key::Right => {
-                self.client.call("gui.buffer_view.move_cursor", &buffer_views::MoveCursorRequest {
-                    cursor_id: self.cursor_id.clone(),
-                    delta: buffer_views::Position { line_index: 0, column_index: 1, },
-                });
-            },
-            _ => (),
-        }
-    }
 }
 
 struct Options {
@@ -255,7 +220,10 @@ struct TerminalGui {
 
 impl TerminalGui {
     fn new(options: &Options) -> Self {
-        let mut config_file_runner = gui::config_file::ConfigFileRunner::new();
+        let client = client::Client::connect(&options.socket).unwrap();
+
+        let mut config_file_runner = gui::config_file::ConfigFileRunner::new(
+            client.clone());
         config_file_runner.run(&options.config_file);
 
         let rustbox = match RustBox::init(rustbox::InitOptions {
@@ -265,9 +233,6 @@ impl TerminalGui {
             Result::Ok(v) => v,
             Result::Err(e) => panic!("{}", e),
         };
-
-
-        let client = client::Client::connect(&options.socket).unwrap();
 
         let gui_id: String = Uuid::new_v4().to_hyphenated_string();
         let (gui_commands_tx, gui_commands_rx) = mpsc::channel();
@@ -343,13 +308,6 @@ impl TerminalGui {
             rustbox::Key::Ctrl('t') => {
                 self.completer = Some(CompleterWidget::new(&self.client))
             },
-
-            // _ => {
-                // if let Some(ref mut widget) = self.buffer_view_widget {
-                    // widget.on_key(key.unwrap());
-                // }
-            // },
-
             rustbox::Key::Esc => {
                 self.config_file_runner.keymap_handler.timeout();
             },
