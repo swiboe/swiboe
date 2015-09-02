@@ -80,7 +80,7 @@ unsafe extern "C" fn lua_call(lua_state: *mut lua::ffi::lua_State) -> libc::c_in
 
     let mut rpc = thin_client.call(&function_name, &args);
     // NOCOM(#sirver): return failure information to Lua.
-    rpc.wait();
+    let rv = rpc.wait();
     0
 }
 

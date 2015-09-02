@@ -42,7 +42,7 @@ swiboe.map {
 }
 
 swiboe.map {
-   keys = { "a" },
+   keys = { "<Up>" },
    -- when = in_normal_mode,
    -- priority = 1000,
    execute = function(client)
@@ -50,11 +50,8 @@ swiboe.map {
       local args = JSON:encode_pretty {
           -- NOCOM(#sirver): for now, we move any cursor, but we need to expose
           -- which cursor should be moved somehow for this method.
-          -- cursor_id = swiboe.current_cursor_id(),
-          delta = {
-             line_index = -1,
-             column_index = 0,
-          },
+          cursor_id = "every_cursor_currently_has_this_id",
+          delta = { line_index = -1, column_index = 0, },
        }
        -- NOCOM(#sirver): this should return an RPC object, but for now, we just implicitly wait.
        client:call("gui.buffer_view.move_cursor", args);
@@ -62,11 +59,73 @@ swiboe.map {
 }
 
 swiboe.map {
-   keys = { "<Ctrl>i" },
+   keys = { "<Down>" },
    -- when = in_normal_mode,
    -- priority = 1000,
-   execute = function()
-      print("Second command!")
+   execute = function(client)
+      -- NOCOM(#sirver): need to implement our own lua table to JSON converter eventually.
+      local args = JSON:encode_pretty {
+          -- NOCOM(#sirver): for now, we move any cursor, but we need to expose
+          -- which cursor should be moved somehow for this method.
+          cursor_id = "every_cursor_currently_has_this_id",
+          delta = { line_index = 1, column_index = 0, },
+       }
+       -- NOCOM(#sirver): this should return an RPC object, but for now, we just implicitly wait.
+       client:call("gui.buffer_view.move_cursor", args);
+   end,
+}
+
+swiboe.map {
+   keys = { "<Left>" },
+   -- when = in_normal_mode,
+   -- priority = 1000,
+   execute = function(client)
+      -- NOCOM(#sirver): need to implement our own lua table to JSON converter eventually.
+      local args = JSON:encode_pretty {
+          -- NOCOM(#sirver): for now, we move any cursor, but we need to expose
+          -- which cursor should be moved somehow for this method.
+          cursor_id = "every_cursor_currently_has_this_id",
+          delta = { line_index = 0, column_index = -1, },
+       }
+       -- NOCOM(#sirver): this should return an RPC object, but for now, we just implicitly wait.
+       client:call("gui.buffer_view.move_cursor", args);
+   end,
+}
+
+swiboe.map {
+   keys = { "<Right>" },
+   -- when = in_normal_mode,
+   -- priority = 1000,
+   execute = function(client)
+      -- NOCOM(#sirver): need to implement our own lua table to JSON converter eventually.
+      local args = JSON:encode_pretty {
+          -- NOCOM(#sirver): for now, we move any cursor, but we need to expose
+          -- which cursor should be moved somehow for this method.
+          cursor_id = "every_cursor_currently_has_this_id",
+          delta = { line_index = 0, column_index = 1, },
+       }
+       -- NOCOM(#sirver): this should return an RPC object, but for now, we just implicitly wait.
+       client:call("gui.buffer_view.move_cursor", args);
+   end,
+}
+
+MIN = -2147483648
+MAX = 2147483647
+
+swiboe.map {
+   keys = { "g", "g" },
+   -- when = in_normal_mode,
+   -- priority = 1000,
+   execute = function(client)
+      -- NOCOM(#sirver): need to implement our own lua table to JSON converter eventually.
+      local args = JSON:encode_pretty {
+          -- NOCOM(#sirver): for now, we move any cursor, but we need to expose
+          -- which cursor should be moved somehow for this method.
+          cursor_id = "every_cursor_currently_has_this_id",
+          delta = { line_index = MIN, column_index = MIN, },
+       }
+       -- NOCOM(#sirver): this should return an RPC object, but for now, we just implicitly wait.
+       client:call("gui.buffer_view.move_cursor", args);
    end,
 }
 

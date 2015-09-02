@@ -88,7 +88,9 @@ pub struct Cursor {
 impl Cursor {
     pub fn new() -> Self {
         Cursor {
-            id: Uuid::new_v4().to_hyphenated_string(),
+            id: "every_cursor_currently_has_this_id".into(),
+            // NOCOM(#sirver): bring back
+            // id: Uuid::new_v4().to_hyphenated_string(),
             wanted_position: Position { line_index: 0, column_index: 0 },
             position: Position { line_index: 0, column_index: 0 },
         }
