@@ -1,10 +1,14 @@
 use ::ipc;
 use ::server;
 use ::{ErrorKind, Error};
+use mio::tcp::{TcpListener, TcpStream};
 use mio::unix::{UnixListener, UnixStream};
 use mio;
+use std::net;
 use std::path::Path;
+use std::str::FromStr;
 use threadpool::ThreadPool;
+use std::io;
 
 // Number of threads to use for handling IO.
 const NUM_THREADS: usize = 4;
@@ -15,46 +19,119 @@ pub struct ClientId {
     pub token: mio::Token,
 }
 
-struct Connection {
+trait MioStream: io::Read + io::Write + Send + mio::Evented {
+    fn try_clone(&self) -> io::Result<Box<MioStream>>;
+}
+
+impl MioStream for UnixStream {
+    fn try_clone(&self) -> io::Result<Box<MioStream>> {
+        UnixStream::try_clone(&self).map(|v| Box::new(v) as Box<MioStream>)
+    }
+}
+
+impl MioStream for TcpStream {
+    fn try_clone(&self) -> io::Result<Box<MioStream>> {
+        TcpStream::try_clone(&self).map(|v| Box::new(v) as Box<MioStream>)
+    }
+}
+
+
+struct Connection<T: io::Read + io::Write> {
     // NOCOM(#sirver): messy design
-    reader: Option<ipc::Reader<UnixStream>>,
-    writer: ipc::Writer<UnixStream>,
+    reader: Option<ipc::Reader<T>>,
+    writer: ipc::Writer<T>,
     client_id: ClientId,
 }
 
 pub struct IpcBridge {
     unix_listener: UnixListener,
-    connections: mio::util::Slab<Connection>,
+    tcp_listeners: Vec<TcpListener>,
+    connections: mio::util::Slab<Connection<Box<MioStream>>>,
     commands: server::CommandSender,
+    first_client_token: usize,
     next_serial: u64,
     thread_pool: ThreadPool,
 }
 
-const SERVER_TOKEN: mio::Token = mio::Token(0);
+const UNIX_LISTENER: mio::Token = mio::Token(0);
 
 impl IpcBridge {
-    pub fn new(event_loop: &mut mio::EventLoop<Self>, socket_name: &Path,
+    pub fn new(event_loop: &mut mio::EventLoop<Self>,
+               socket_name: &Path,
+               tcp_addresses: &Vec<String>,
                server_commands: server::CommandSender) -> Self {
-        let server = UnixListener::bind(socket_name).unwrap();
+        let unix_listener = UnixListener::bind(socket_name).unwrap();
         event_loop.register_opt(
-            &server,
-            SERVER_TOKEN,
+            &unix_listener,
+            UNIX_LISTENER,
             mio::EventSet::readable(),
             mio::PollOpt::edge()).unwrap();
+
+        let mut first_client_token = 1;
+        let tcp_listeners: Vec<_> =
+            tcp_addresses.iter()
+            .map(|addr| {
+                let addr = net::SocketAddr::from_str(addr).unwrap();
+                let server = TcpListener::bind(&addr).unwrap();
+                event_loop.register_opt(
+                    &server,
+                    mio::Token(first_client_token),
+                    mio::EventSet::readable(),
+                    mio::PollOpt::edge()).unwrap();
+                first_client_token += 1;
+                server
+            }).collect();
+
         IpcBridge {
-            unix_listener: server,
-            connections: mio::util::Slab::new_starting_at(mio::Token(1), 1024),
+            unix_listener: unix_listener,
+            tcp_listeners: tcp_listeners,
+            first_client_token: first_client_token,
+            connections: mio::util::Slab::new_starting_at(mio::Token(first_client_token), 1024),
             commands: server_commands,
             next_serial: 1,
             thread_pool: ThreadPool::new(NUM_THREADS),
         }
+    }
+
+    fn new_client<T: MioStream + 'static>(&mut self, event_loop: &mut mio::EventLoop<Self>, stream: Box<T>) {
+        // NOCOM(#sirver): can this be done in Some(token)?
+        let serial = self.next_serial;
+        let commands = self.commands.clone();
+        self.next_serial += 1;
+        match self.connections.insert_with(|token| {
+            let client_id = ClientId {
+                serial: serial,
+                token: token,
+            };
+            let connection = Connection {
+                writer: ipc::Writer::new(stream.try_clone().unwrap()),
+                reader: Some(ipc::Reader::new(stream)),
+                client_id: client_id,
+            };
+            commands.send(server::Command::ClientConnected(client_id)).expect("ClientConnected");
+            connection
+        }) {
+            Some(token) => {
+                // If we successfully insert, then register our connection.
+                let conn = &mut self.connections[token];
+                event_loop.register_opt(
+                    &*conn.reader.as_ref().unwrap().socket,
+                    conn.client_id.token,
+                    mio::EventSet::readable(),
+                    mio::PollOpt::edge() | mio::PollOpt::oneshot()).unwrap();
+            },
+            None => {
+                // If we fail to insert, `conn` will go out of scope and be dropped.
+                panic!("Failed to insert connection into slab");
+            }
+        };
     }
 }
 
 pub enum Command {
     Quit,
     SendData(ClientId, ipc::Message),
-    ReRegisterForReading(mio::Token, ipc::Reader<UnixStream>),
+    ReRegisterForReading(mio::Token, ipc::Reader<Box<MioStream>>),
 }
 
 impl mio::Handler for IpcBridge {
@@ -86,7 +163,7 @@ impl mio::Handler for IpcBridge {
                 let conn = &mut self.connections[token];
                 conn.reader = Some(reader);
                 event_loop.reregister(
-                    &conn.reader.as_ref().unwrap().socket,
+                    &*conn.reader.as_ref().unwrap().socket,
                     token,
                     mio::EventSet::readable(),
                     mio::PollOpt::edge() | mio::PollOpt::oneshot()).unwrap();
@@ -96,39 +173,16 @@ impl mio::Handler for IpcBridge {
 
     fn ready(&mut self, event_loop: &mut mio::EventLoop<Self>, token: mio::Token, events: mio::EventSet) {
         match token {
-            SERVER_TOKEN => {
+            UNIX_LISTENER => {
+                // Unix domain socket connection.
                 let stream = self.unix_listener.accept().unwrap().unwrap();
-                // NOCOM(#sirver): can this be done in Some(token)?
-                let serial = self.next_serial;
-                let commands = self.commands.clone();
-                self.next_serial += 1;
-                match self.connections.insert_with(|token| {
-                    let client_id = ClientId {
-                        serial: serial,
-                        token: token,
-                    };
-                    let connection = Connection {
-                        writer: ipc::Writer::new(stream.try_clone().unwrap()),
-                        reader: Some(ipc::Reader::new(stream)),
-                        client_id: client_id,
-                    };
-                    commands.send(server::Command::ClientConnected(client_id)).expect("ClientConnected");
-                    connection
-                }) {
-                    Some(token) => {
-                        // If we successfully insert, then register our connection.
-                        let conn = &mut self.connections[token];
-                        event_loop.register_opt(
-                            &conn.reader.as_ref().unwrap().socket,
-                            conn.client_id.token,
-                            mio::EventSet::readable(),
-                            mio::PollOpt::edge() | mio::PollOpt::oneshot()).unwrap();
-                    },
-                    None => {
-                        // If we fail to insert, `conn` will go out of scope and be dropped.
-                        panic!("Failed to insert connection into slab");
-                    }
-                };
+                self.new_client(event_loop, Box::new(stream));
+
+            },
+            mio::Token(some_token) if some_token < self.first_client_token => {
+                // TCP connection
+                let stream = self.tcp_listeners[some_token - 1].accept().unwrap().unwrap();
+                self.new_client(event_loop, Box::new(stream));
             },
             client_token => {
                 if events.is_hup() {

@@ -19,6 +19,7 @@ fn main() {
         .get_matches();
 
     let path = Path::new(matches.value_of("SOCKET").unwrap());
-    let mut server = swiboe::server::Server::launch(path);
+    // NOCOM(#sirver): just for testing
+    let mut server = swiboe::server::Server::launch(path, &vec!["0.0.0.0:55555"]);
     server.wait_for_shutdown();
 }

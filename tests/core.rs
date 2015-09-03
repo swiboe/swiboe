@@ -23,7 +23,7 @@ fn as_json(s: &str) -> serde_json::Value {
 #[test]
 fn shutdown_server_with_clients_connected() {
     let socket_name = temporary_socket_name();
-    let mut server = Server::launch(&socket_name);
+    let mut server = Server::launch(&socket_name, &[]);
 
     let _client = client::Client::connect(&socket_name).unwrap();
 

@@ -282,7 +282,8 @@ impl Swiboe {
 }
 
 pub struct Server {
-    socket_name: PathBuf,
+    unix_domain_socket_name: PathBuf,
+    tcp_addresses: Vec<String>,
     commands: CommandSender,
     ipc_bridge_commands: mio::Sender<ipc_bridge::Command>,
     swiboe_thread: Option<thread::JoinHandle<()>>,
@@ -292,14 +293,15 @@ pub struct Server {
 }
 
 impl Server {
-    pub fn launch(socket_name: &Path) -> Self {
+    pub fn launch(unix_domain_socket_name: &Path, tcp_addresses: &[&str]) -> Self {
         let (tx, rx) = channel();
 
         // TODO(sirver): grep for unwrap and remove
         let mut event_loop = mio::EventLoop::new().unwrap();
 
         let mut server = Server {
-            socket_name: socket_name.to_path_buf(),
+            unix_domain_socket_name: unix_domain_socket_name.to_path_buf(),
+            tcp_addresses: tcp_addresses.iter().map(|slice| slice.to_string()).collect(),
             commands: tx,
             ipc_bridge_commands: event_loop.channel(),
             buffer_plugin: None,
@@ -318,7 +320,8 @@ impl Server {
         };
 
         let mut ipc_bridge = ipc_bridge::IpcBridge::new(
-            &mut event_loop, &server.socket_name, server.commands.clone());
+            &mut event_loop, &server.unix_domain_socket_name, &server.tcp_addresses,
+            server.commands.clone());
 
         server.event_loop_thread = Some(thread::spawn(move || {
             event_loop.run(&mut ipc_bridge).unwrap();
@@ -329,9 +332,9 @@ impl Server {
         }));
 
         server.buffer_plugin = Some(
-            plugin_buffer::BufferPlugin::new(&server.socket_name));
+            plugin_buffer::BufferPlugin::new(&server.unix_domain_socket_name));
         server.list_files_plugin = Some(
-            plugin_list_files::ListFilesPlugin::new(&server.socket_name));
+            plugin_list_files::ListFilesPlugin::new(&server.unix_domain_socket_name));
         server
     }
 
@@ -361,7 +364,7 @@ impl Server {
         self.wait_for_event_loop_thread_to_shut_down();
         self.wait_for_swiboe_thread_to_shut_down();
 
-        fs::remove_file(&self.socket_name).expect(
-            &format!("Could not remove socket {:?}", self.socket_name));
+        fs::remove_file(&self.unix_domain_socket_name).expect(
+            &format!("Could not remove socket {:?}", self.unix_domain_socket_name));
     }
 }
