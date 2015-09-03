@@ -1,0 +1,14 @@
+[package]
+name = "swiboe_c_client"
+version = "0.1.0"
+authors = ["Holger Rapp <HolgerRapp@gmx.net>"]
+
+[dependencies.swiboe]
+path = ".."
+
+[dependencies]
+libc = "0.1.10"
+
+[lib]
+name = "swiboe"
+crate-type = ["dylib"]
