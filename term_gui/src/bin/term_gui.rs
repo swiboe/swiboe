@@ -46,7 +46,8 @@ impl CompleterWidget {
         // TODO(sirver): This should use the current work directory of the server, since the server
         // might run on a different machine than the client - and certainly in a different
         // directory.
-        let current_dir = env::current_dir().unwrap();
+        // let current_dir = env::current_dir().unwrap();
+        let current_dir = path::PathBuf::from("/home/sirver/code");
 
         let rpc = client.call("list_files", &swiboe::plugin_list_files::ListFilesRequest {
             directory: current_dir.to_string_lossy().into_owned(),
