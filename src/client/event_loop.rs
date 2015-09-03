@@ -1,10 +1,29 @@
 use ::client::rpc_loop;
 use ::ipc;
+use mio::tcp::TcpStream;
 use mio::unix::UnixStream;
 use mio;
+use std::io;
 use std::thread;
 
 const CLIENT: mio::Token = mio::Token(1);
+
+// NOCOM(#sirver): nearly identical to server
+pub trait SizedMioStream: io::Read + io::Write + mio::Evented + Sized + Send {
+    fn try_clone(&self) -> io::Result<Self>;
+}
+
+impl SizedMioStream for UnixStream {
+    fn try_clone(&self) -> io::Result<Self> {
+        UnixStream::try_clone(&self)
+    }
+}
+
+impl SizedMioStream for TcpStream {
+    fn try_clone(&self) -> io::Result<Self> {
+        TcpStream::try_clone(&self)
+    }
+}
 
 pub enum Command {
     Quit,
@@ -12,13 +31,13 @@ pub enum Command {
 }
 
 // NOCOM(#sirver): bad name
-struct Handler {
-    reader: ipc::Reader<UnixStream>,
-    writer: ipc::Writer<UnixStream>,
+struct Handler<T: SizedMioStream> {
+    reader: ipc::Reader<T>,
+    writer: ipc::Writer<T>,
     function_thread_sender: rpc_loop::CommandSender,
 }
 
-impl mio::Handler for Handler {
+impl<T: SizedMioStream> mio::Handler for Handler<T> {
     type Timeout = ();
     type Message = Command;
 
@@ -72,10 +91,10 @@ impl mio::Handler for Handler {
     }
 }
 
-pub fn spawn<'a>(stream: UnixStream, commands_tx: rpc_loop::CommandSender)
+pub fn spawn<'a, T: SizedMioStream + 'static>(stream: T, commands_tx: rpc_loop::CommandSender)
     -> (thread::JoinHandle<()>, mio::Sender<Command>)
 {
-    let mut event_loop = mio::EventLoop::<Handler>::new().unwrap();
+    let mut event_loop = mio::EventLoop::<Handler<T>>::new().unwrap();
     let event_loop_sender = event_loop.channel();
 
     let mut handler = Handler {

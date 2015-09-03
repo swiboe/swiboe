@@ -19,7 +19,7 @@ use test::Bencher;
 #[bench]
 fn bench_create_and_delete_buffers(b: &mut Bencher) {
     let t = TestHarness::new();
-    let active_client = Client::connect(&t.socket_name).unwrap();
+    let active_client = Client::connect_unix(&t.socket_name).unwrap();
 
     b.iter(|| {
         let new_response: plugin_buffer::NewResponse = match active_client.call(
