@@ -6,9 +6,9 @@ authors = ["Holger Rapp <HolgerRapp@gmx.net>"]
 [dependencies]
 clap = "1.2.0"
 libc = "0.1.8"
-serde = "0.5.2"
-serde_json = "0.5.1"
-serde_macros = "0.5.1"
+serde = "0.6.0"
+serde_json = "0.6.0"
+serde_macros = "0.5.3"
 tempdir = "0.3.4"
 threadpool = "0.1.4"
 time = "0.1.32"
@@ -16,7 +16,7 @@ uuid = "0.1"
 
 [dependencies.mio]
 git = "https://github.com/carllerche/mio.git"
-rev = "3537a6980ae718d40f53e422f7a88ec7bc50299e"
+rev = "29ee9841c6dc051d4ead4f9cb9618c0fac732155"
 
 [[test]]
 name = "tests"
