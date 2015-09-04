@@ -17,7 +17,7 @@ pub enum Message {
 // TODO(hrapp): This kinda defeats the purpose of MIO a bit, but it makes it very convenient to
 // read always a full message. No buffering of our own is needed then. This might impact
 // performance really negatively and might also lead to deadlooks, so we should get rid of it AFAP.
-// mio provides some buffers that look usefull.
+// mio provides some buffers that look useful.
 fn write_all<T: Write>(writer: &mut T, buffer: &[u8]) -> io::Result<()> {
     let mut num_written = 0;
     while num_written < buffer.len() {

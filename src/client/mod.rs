@@ -32,7 +32,7 @@ impl Client {
         Ok(Client::common_connect(stream))
     }
 
-    fn common_connect<T: event_loop::SizedMioStream + 'static>(stream: T) -> Self {
+    fn common_connect<T: event_loop::TryClone + 'static>(stream: T) -> Self {
         let (commands_tx, commands_rx) = mpsc::channel();
         let (event_loop_thread, event_loop_commands) = event_loop::spawn(stream, commands_tx.clone());
         Client {

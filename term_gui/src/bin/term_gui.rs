@@ -46,8 +46,7 @@ impl CompleterWidget {
         // TODO(sirver): This should use the current work directory of the server, since the server
         // might run on a different machine than the client - and certainly in a different
         // directory.
-        // let current_dir = env::current_dir().unwrap();
-        let current_dir = path::PathBuf::from("/home/sirver/code");
+        let current_dir = env::current_dir().unwrap();
 
         let rpc = client.call("list_files", &swiboe::plugin_list_files::ListFilesRequest {
             directory: current_dir.to_string_lossy().into_owned(),
@@ -224,14 +223,11 @@ struct TerminalGui {
 
 impl TerminalGui {
     fn new(options: &Options) -> Self {
-        println!("#sirver options: {:#?}", options);
         let client = match net::SocketAddr::from_str(&options.socket) {
             Ok(value) => {
-                println!("#sirver value: {:#?}", value);
                 client::Client::connect_tcp(&value).unwrap()
             }
             Err(e) => {
-                println!("#sirver e: {:#?}", e);
                 let socket_path = path::PathBuf::from(&options.socket);
                 client::Client::connect_unix(&socket_path).unwrap()
             }
