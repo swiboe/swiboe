@@ -6,18 +6,12 @@
 Welcome to Swiboe's documentation!
 ==================================
 
-Valid subsection
-----------------
-
-
-
+TODO(sirver): Nothing here yet. Still figuring out the logistics.
 
 Contents:
 
 .. toctree::
    :maxdepth: 2
-
-
 
 Indices and tables
 ==================

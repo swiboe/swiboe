@@ -1,6 +1,6 @@
 language: rust
 
-# TODO(sirver): support beta, stable, 1.0.0 also.
+# TODO(sirver): support beta, stable
 rust:
   - nightly
 
