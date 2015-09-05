@@ -6,8 +6,10 @@
 Welcome to Swiboe's documentation!
 ==================================
 
-Invalid subsection
--------------
+Valid subsection
+----------------
+
+
 
 
 Contents:
