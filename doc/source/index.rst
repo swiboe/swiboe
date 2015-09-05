@@ -7,7 +7,7 @@ Welcome to Swiboe's documentation!
 ==================================
 
 Invalid subsection
---------------
+-------------
 
 
 Contents:
