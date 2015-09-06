@@ -1,14 +1,18 @@
 language: rust
 
-# TODO(sirver): support beta, stable, 1.0.0 also.
+# TODO(sirver): support beta, stable
 rust:
   - nightly
 
 before_script:
+  - pip install 'Sphinx' --user
   - pip install 'travis-cargo<0.2' --user && export PATH=$HOME/.local/bin:$PATH
 
 # TODO(sirver): build & publish docs somewhere.
 script:
+  - pushd doc
+  - sphinx-build -b html -W source build/html
+  - popd
   - travis-cargo build && travis-cargo test && travis-cargo bench 
   - pushd subsequence_match
   - travis-cargo build && travis-cargo test && travis-cargo bench 
