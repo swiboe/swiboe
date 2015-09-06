@@ -2,6 +2,8 @@
 
 # Swiboe
 
+[![Join the chat at https://gitter.im/swiboe/swiboe](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/swiboe/swiboe?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+
 This is the groundwork the [ideal text
 editor](http://www.sirver.net/blog/2015/08/04/the-ideal-text-editor/). So far it
 is a design and performance study and an outline of the implementation. It will
