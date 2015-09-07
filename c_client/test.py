@@ -10,9 +10,10 @@ sw = ctypes.cdll.LoadLibrary("target/debug/libswiboe.dylib")
 sw.hello(u"Löwe 老虎 Léopard".encode('utf-8'))
 sw.hello(u"ASCII żółć 🇨🇭 한".encode('utf-8'))
 
-def callback(arg, str_pointer):
-    str_pointer = "Hello again: %i" % arg
+def callback(arg):
+    return sw.create("Hello again: %i" % arg)
 
+sw.create.restype = ctypes.c_void_p
 
-CALLBACK = ctypes.CFUNCTYPE(None, ctypes.c_int32, ctypes.POINTER(ctypes.c_char_p))
+CALLBACK = ctypes.CFUNCTYPE(ctypes.c_void_p, ctypes.c_int32)
 sw.hello1(CALLBACK(callback))
