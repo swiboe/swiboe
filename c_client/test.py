@@ -4,16 +4,20 @@
 # Licensed under the Apache License, Version 2.0. See LICENSE.txt
 # in the project root for license information.
 
+from ctypes import c_void_p, c_char_p
 import ctypes
-sw = ctypes.cdll.LoadLibrary("target/debug/libswiboe.dylib")
+import time
 
-sw.hello(u"Löwe 老虎 Léopard".encode('utf-8'))
-sw.hello(u"ASCII żółć 🇨🇭 한".encode('utf-8'))
+swiboe = ctypes.cdll.LoadLibrary("target/debug/libswiboe.dylib")
 
-def callback(arg):
-    return sw.create("Hello again: %i" % arg)
+swiboe.create_client.restype = c_void_p
+swiboe.create_client.argtypes = [c_char_p]
 
-sw.create.restype = ctypes.c_void_p
+swiboe.disconnect.restype = None
+swiboe.disconnect.argtypes = [c_void_p]
 
-CALLBACK = ctypes.CFUNCTYPE(ctypes.c_void_p, ctypes.c_int32)
-sw.hello1(CALLBACK(callback))
+client = swiboe.create_client("/tmp/blub.socket")
+
+time.sleep(5)
+
+swiboe.disconnect(client)

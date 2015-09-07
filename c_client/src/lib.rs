@@ -5,54 +5,40 @@
 #![feature(cstr_memory)]
 
 extern crate libc;
+extern crate swiboe;
 
 use libc::c_char;
 use std::ffi::{CStr, CString};
 use std::mem;
+use std::path;
 use std::str;
+use swiboe::client;
 
-#[no_mangle]
-pub extern "C" fn hello(c_buf: *const libc::c_char) {
-    let c_str: &CStr = unsafe { CStr::from_ptr(c_buf) };
-    let buf: &[u8] = c_str.to_bytes();
-    let str_slice: &str = str::from_utf8(buf).unwrap();
-    // let str_buf: String = str_slice.to_owned();  // if necessary
-    println!("#sirver str_slice(): {:#?}", str_slice);
-}
-
-pub struct Test {
-    a: String,
-}
-
-impl Drop for Test {
-    fn drop(&mut self) {
-        println!("Test got dropped.")
-    }
-}
-
-#[no_mangle]
-pub extern "C" fn create(c_buf: *const c_char) -> *mut Test {
+// TODO(sirver): this always makes a copy, even though it might not be needed.
+fn c_str_to_string(c_buf: *const c_char) -> String {
     let c_str = unsafe { CStr::from_ptr(c_buf) };
     let buf: &[u8] = c_str.to_bytes();
-    let str_slice: &str = str::from_utf8(buf).unwrap();
+    // NOCOM(#sirver): do not unwrap, do error handling.
+    str::from_utf8(buf).unwrap().into()
+}
 
-    unsafe {
-        mem::transmute(Box::new(Test {
-            a: str_slice.into(),
-        }))
-    }
+// TODO(sirver): This crashes if the function is called connect.
+#[no_mangle]
+pub extern "C" fn create_client(socket_name: *const c_char) -> *mut client::Client {
+    let socket_name = c_str_to_string(socket_name);
+    let socket_name_path = path::Path::new(&socket_name);
+
+    let client = Box::new(
+        // NOCOM(#sirver): error handling
+        client::Client::connect(socket_name_path).unwrap(),
+    );
+
+    unsafe { mem::transmute(client) }
 }
 
 #[no_mangle]
-pub extern "C" fn hello1(cb: extern fn(i32) -> *mut Test) {
-    let test_ptr = cb(42);
-    let test: Box<Test> = unsafe {
-        mem::transmute(test_ptr)
-    };
-
-    println!("#sirver test.a: {:#?}", test.a);
-    // let c_str = unsafe { CStr::from_ptr(c_buf) };
-    // let buf: &[u8] = c_str.to_bytes();
-    // let str_slice: &str = str::from_utf8(buf).unwrap();
-    // println!("Back in rust: {}", str_slice);
+pub extern "C" fn disconnect(client: *mut client::Client) {
+    unsafe {
+        let _: Box<client::Client> = mem::transmute(client);
+    }
 }
