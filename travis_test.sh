@@ -19,6 +19,7 @@ sphinx-build -b html -W source build/html
 popd
 
 test_crate "."
-test_crate "subsequence_match"
+test_crate "c_client"
 test_crate "gui"
+test_crate "subsequence_match"
 test_crate "term_gui"
