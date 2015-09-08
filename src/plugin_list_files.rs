@@ -95,7 +95,7 @@ pub struct ListFilesPlugin {
 
 impl ListFilesPlugin {
     pub fn new(socket_name: &path::Path) -> Self {
-        let client = client::Client::connect(socket_name).unwrap();
+        let client = client::Client::connect_unix(socket_name).unwrap();
 
         let plugin = ListFilesPlugin {
             client: client,

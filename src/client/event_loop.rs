@@ -1,10 +1,30 @@
 use ::client::rpc_loop;
 use ::ipc;
+use mio::tcp::TcpStream;
 use mio::unix::UnixStream;
 use mio;
+use std::io;
 use std::thread;
 
 const CLIENT: mio::Token = mio::Token(1);
+
+// Each reader and writer gets their own socket, so we have to clone the file descriptors for that.
+// Unfortunately, mio does not provide a trait for this already, so we make one.
+pub trait TryClone: io::Read + io::Write + mio::Evented + Sized + Send {
+    fn try_clone(&self) -> io::Result<Self>;
+}
+
+impl TryClone for UnixStream {
+    fn try_clone(&self) -> io::Result<Self> {
+        UnixStream::try_clone(&self)
+    }
+}
+
+impl TryClone for TcpStream {
+    fn try_clone(&self) -> io::Result<Self> {
+        TcpStream::try_clone(&self)
+    }
+}
 
 pub enum Command {
     Quit,
@@ -12,13 +32,13 @@ pub enum Command {
 }
 
 // NOCOM(#sirver): bad name
-struct Handler {
-    reader: ipc::Reader<UnixStream>,
-    writer: ipc::Writer<UnixStream>,
+struct Handler<T: TryClone> {
+    reader: ipc::Reader<T>,
+    writer: ipc::Writer<T>,
     function_thread_sender: rpc_loop::CommandSender,
 }
 
-impl mio::Handler for Handler {
+impl<T: TryClone> mio::Handler for Handler<T> {
     type Timeout = ();
     type Message = Command;
 
@@ -72,10 +92,10 @@ impl mio::Handler for Handler {
     }
 }
 
-pub fn spawn<'a>(stream: UnixStream, commands_tx: rpc_loop::CommandSender)
+pub fn spawn<'a, T: TryClone + 'static>(stream: T, commands_tx: rpc_loop::CommandSender)
     -> (thread::JoinHandle<()>, mio::Sender<Command>)
 {
-    let mut event_loop = mio::EventLoop::<Handler>::new().unwrap();
+    let mut event_loop = mio::EventLoop::<Handler<T>>::new().unwrap();
     let event_loop_sender = event_loop.channel();
 
     let mut handler = Handler {

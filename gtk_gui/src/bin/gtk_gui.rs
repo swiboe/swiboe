@@ -191,7 +191,7 @@ impl SwiboeGtkGui {
 fn main() {
     gtk::init().unwrap_or_else(|_| panic!("Failed to initialize GTK."));
 
-    let client = client::Client::connect(path::Path::new("/tmp/sb.socket").connect());
+    let client = client::Client::connect_unix(path::Path::new("/tmp/sb.socket").connect());
     let mut swiboe = SwiboeGtkGui::new(&client);
 
     let join_handle = thread::spawn(move || {

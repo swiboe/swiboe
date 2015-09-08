@@ -13,7 +13,9 @@ use gui::keymap_handler;
 use rustbox::{Color, RustBox};
 use std::cmp;
 use std::env;
+use std::net;
 use std::path;
+use std::str::FromStr;
 use std::sync::mpsc;
 use std::sync::{RwLock, Arc, Mutex};
 use swiboe::client;
@@ -199,8 +201,9 @@ impl BufferViewWidget {
     }
 }
 
+#[derive(Debug)]
 struct Options {
-    socket: path::PathBuf,
+    socket: String,
     config_file: path::PathBuf,
 }
 
@@ -220,7 +223,16 @@ struct TerminalGui {
 
 impl TerminalGui {
     fn new(options: &Options) -> Self {
-        let client = client::Client::connect(&options.socket).unwrap();
+        let client = match net::SocketAddr::from_str(&options.socket) {
+            Ok(value) => {
+                client::Client::connect_tcp(&value).unwrap()
+            }
+            Err(e) => {
+                let socket_path = path::PathBuf::from(&options.socket);
+                client::Client::connect_unix(&socket_path).unwrap()
+            }
+        };
+
 
         let mut config_file_runner = gui::config_file::ConfigFileRunner::new(
             client.clone());
@@ -376,10 +388,9 @@ fn parse_options() -> Options {
              .takes_value(true))
         .get_matches();
 
-
     Options {
         config_file: path::PathBuf::from(matches.value_of("CONFIG_FILE").unwrap_or("config.lua")),
-        socket: path::PathBuf::from(matches.value_of("SOCKET").unwrap()),
+        socket: matches.value_of("SOCKET").unwrap().into(),
     }
 }
 

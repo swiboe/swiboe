@@ -16,9 +16,21 @@ fn main() {
              .help("Socket address on which to listen.")
              .required(true)
              .takes_value(true))
+        .arg(clap::Arg::with_name("LISTEN")
+             .short("l")
+             .long("listen")
+             .help("IP address to listen on, e.g. 0.0.0.0:12345 to listen on all network \
+                   interfaces.")
+             .takes_value(true))
         .get_matches();
 
     let path = Path::new(matches.value_of("SOCKET").unwrap());
-    let mut server = swiboe::server::Server::launch(path);
+    let ips = if let Some(addr) = matches.value_of("LISTEN") {
+        vec![addr.into()]
+    } else {
+        Vec::new()
+    };
+
+    let mut server = swiboe::server::Server::launch(path, &ips);
     server.wait_for_shutdown();
 }

@@ -25,7 +25,7 @@ fn main() {
         .get_matches();
 
     let path = path::Path::new(matches.value_of("SOCKET").unwrap());
-    let active_client = Client::connect(path).unwrap();
+    let active_client = Client::connect_unix(path).unwrap();
 
     loop {
         let new_response: plugin_buffer::NewResponse = match active_client.call(

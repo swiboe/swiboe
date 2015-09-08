@@ -2,10 +2,13 @@
 
 use ::error::Result;
 use ::plugin_core::NewRpcRequest;
+use mio::tcp::TcpStream;
 use mio::unix::UnixStream;
 use mio;
 use serde;
+use std::net;
 use std::path;
+use std::str::FromStr;
 use std::sync::Mutex;
 use std::sync::mpsc;
 use std::thread;
@@ -19,18 +22,25 @@ pub struct Client {
 }
 
 impl Client {
-    pub fn connect(socket_name: &path::Path) -> Result<Self> {
+    pub fn connect_unix(socket_name: &path::Path) -> Result<Self> {
         let stream = try!(UnixStream::connect(&socket_name));
+        Ok(Client::common_connect(stream))
+    }
 
+    pub fn connect_tcp(address: &net::SocketAddr) -> Result<Self> {
+        let stream = try!(TcpStream::connect(address));
+        Ok(Client::common_connect(stream))
+    }
+
+    fn common_connect<T: event_loop::TryClone + 'static>(stream: T) -> Self {
         let (commands_tx, commands_rx) = mpsc::channel();
         let (event_loop_thread, event_loop_commands) = event_loop::spawn(stream, commands_tx.clone());
-
-        Ok(Client {
+        Client {
             event_loop_commands: event_loop_commands.clone(),
             rpc_loop_commands: commands_tx.clone(),
             rpc_loop_thread: Some(rpc_loop::spawn(commands_rx, commands_tx, event_loop_commands)),
             event_loop_thread: Some(event_loop_thread),
-        })
+        }
     }
 
     pub fn new_rpc(&self, name: &str, rpc: Box<rpc::server::Rpc>) {
