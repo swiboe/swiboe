@@ -4,25 +4,14 @@ language: rust
 rust:
   - nightly
 
-before_script:
+install:
   - pip install 'Sphinx' --user
-  - pip install 'travis-cargo<0.2' --user && export PATH=$HOME/.local/bin:$PATH
+  - pip install 'travis-cargo<0.2' --user
+  - export PATH=$HOME/.local/bin:$PATH
 
 # TODO(sirver): build & publish docs somewhere.
 script:
-  - pushd doc
-  - sphinx-build -b html -W source build/html
-  - popd
-  - travis-cargo build && travis-cargo test && travis-cargo bench 
-  - pushd subsequence_match
-  - travis-cargo build && travis-cargo test && travis-cargo bench 
-  - popd
-  - pushd gui
-  - travis-cargo build && travis-cargo test && travis-cargo bench 
-  - popd
-  - pushd term_gui
-  - travis-cargo build && travis-cargo test && travis-cargo bench 
-  - popd
+  - ./travis_test.sh
 
 env:
   global:
