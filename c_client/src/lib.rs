@@ -5,6 +5,8 @@
 #![feature(cstr_memory)]
 
 extern crate libc;
+extern crate serde;
+extern crate serde_json;
 extern crate swiboe;
 
 use libc::c_char;
@@ -13,6 +15,7 @@ use std::mem;
 use std::path;
 use std::str;
 use swiboe::client;
+use swiboe::rpc;
 
 // TODO(sirver): this always makes a copy, even though it might not be needed.
 fn c_str_to_string(c_buf: *const c_char) -> String {
@@ -22,9 +25,8 @@ fn c_str_to_string(c_buf: *const c_char) -> String {
     str::from_utf8(buf).unwrap().into()
 }
 
-// TODO(sirver): This crashes if the function is called connect.
 #[no_mangle]
-pub extern "C" fn create_client(socket_name: *const c_char) -> *mut client::Client {
+pub extern "C" fn swiboe_connect(socket_name: *const c_char) -> *mut client::Client {
     let socket_name = c_str_to_string(socket_name);
     let socket_name_path = path::Path::new(&socket_name);
 
@@ -37,8 +39,46 @@ pub extern "C" fn create_client(socket_name: *const c_char) -> *mut client::Clie
 }
 
 #[no_mangle]
-pub extern "C" fn disconnect(client: *mut client::Client) {
+pub extern "C" fn swiboe_disconnect(client: *mut client::Client) {
     unsafe {
         let _: Box<client::Client> = mem::transmute(client);
     }
+}
+
+struct CallbackRpc {
+    priority: u16,
+    callback: extern fn(),
+}
+
+impl client::rpc::server::Rpc for CallbackRpc {
+    fn priority(&self) -> u16 { self.priority }
+
+    fn call(&self,
+            mut context: client::rpc::server::Context,
+            _: serde_json::Value) {
+        // TODO(sirver): Calling this callback crashes.
+        // (self.callback)();
+        println!("Called!");
+        context.finish(rpc::Result::success("")).unwrap();
+    }
+}
+
+// NOCOM(#sirver): add error handling.
+#[no_mangle]
+pub extern "C" fn swiboe_new_rpc(client: *mut client::Client,
+                                 rpc_name: *const c_char,
+                                 priority: libc::uint16_t,
+                                 callback: extern fn()
+                                 ) {
+    let client: &mut client::Client = unsafe {
+        mem::transmute(client)
+    };
+
+    let rpc = Box::new(CallbackRpc {
+        priority: priority,
+        callback: callback,
+    });
+
+    let rpc_name= c_str_to_string(rpc_name);
+    client.new_rpc(&rpc_name, rpc);
 }

@@ -4,20 +4,32 @@
 # Licensed under the Apache License, Version 2.0. See LICENSE.txt
 # in the project root for license information.
 
-from ctypes import c_void_p, c_char_p
+from ctypes import c_void_p, c_char_p, c_uint16, CFUNCTYPE
 import ctypes
 import time
 
 swiboe = ctypes.cdll.LoadLibrary("target/debug/libswiboe.dylib")
 
-swiboe.create_client.restype = c_void_p
-swiboe.create_client.argtypes = [c_char_p]
+PtrClient = c_void_p
+swiboe.swiboe_connect.restype = PtrClient
+swiboe.swiboe_connect.argtypes = [c_char_p]
 
-swiboe.disconnect.restype = None
-swiboe.disconnect.argtypes = [c_void_p]
+swiboe.swiboe_disconnect.restype = None
+swiboe.swiboe_disconnect.argtypes = [PtrClient]
 
-client = swiboe.create_client("/tmp/blub.socket")
+RPC = CFUNCTYPE(None)
 
-time.sleep(5)
+swiboe.swiboe_new_rpc.restype = None
+swiboe.swiboe_new_rpc.argtypes = [PtrClient, c_char_p, c_uint16, RPC]
 
-swiboe.disconnect(client)
+client = swiboe.swiboe_connect("/tmp/blub.socket")
+
+def callback():
+    print("Called back!")
+
+swiboe.swiboe_new_rpc(client, "test.test", 100, RPC(callback))
+
+while 1:
+    time.sleep(1)
+
+swiboe.swiboe_disconnect(client)
