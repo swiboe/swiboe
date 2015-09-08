@@ -1,7 +1,7 @@
-[![Build Status](https://travis-ci.org/swiboe/swiboe.svg)](https://travis-ci.org/swiboe/swiboe)
 
 # Swiboe
 
+[![Build Status](https://travis-ci.org/swiboe/swiboe.svg)](https://travis-ci.org/swiboe/swiboe)
 [![Join the chat at https://gitter.im/swiboe/swiboe](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/swiboe/swiboe?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
 This is the groundwork the [ideal text
@@ -12,6 +12,10 @@ gradually merge into a real editor.
 My initial thoughts on text editors and my design ideas for this one are on [my
 blog](http://sirver.net). The idea is to establish a RFC process for changes
 rather quickly though.
+
+The Swiboe community meets on weekdays at 8am CEST in [my twitch
+channel](http://www.twitch.tv/sirverii). I stream live commentary of me coding
+on Swiboe.
 
 ## Philosophy
 
