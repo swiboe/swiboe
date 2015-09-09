@@ -103,7 +103,7 @@ pub fn spawn<'a, T: TryClone + 'static>(stream: T, commands_tx: rpc_loop::Comman
         writer: ipc::Writer::new(stream),
         function_thread_sender: commands_tx,
     };
-    event_loop.register_opt(
+    event_loop.register(
         &handler.reader.socket, CLIENT, mio::EventSet::readable(), mio::PollOpt::edge() |
         mio::PollOpt::oneshot()).unwrap();
     let event_loop_thread = thread::spawn(move || {

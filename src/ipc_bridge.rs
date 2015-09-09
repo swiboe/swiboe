@@ -64,7 +64,7 @@ impl IpcBridge {
                tcp_addresses: &Vec<String>,
                server_commands: server::CommandSender) -> Self {
         let unix_listener = UnixListener::bind(socket_name).unwrap();
-        event_loop.register_opt(
+        event_loop.register(
             &unix_listener,
             UNIX_LISTENER,
             mio::EventSet::readable(),
@@ -76,7 +76,7 @@ impl IpcBridge {
             .map(|addr| {
                 let addr = net::SocketAddr::from_str(addr).unwrap();
                 let server = TcpListener::bind(&addr).unwrap();
-                event_loop.register_opt(
+                event_loop.register(
                     &server,
                     mio::Token(first_client_token),
                     mio::EventSet::readable(),
@@ -117,7 +117,7 @@ impl IpcBridge {
             Some(token) => {
                 // If we successfully insert, then register our connection.
                 let conn = &mut self.connections[token];
-                event_loop.register_opt(
+                event_loop.register(
                     &*conn.reader.as_ref().unwrap().socket,
                     conn.client_id.token,
                     mio::EventSet::readable(),
