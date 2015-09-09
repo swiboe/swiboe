@@ -50,7 +50,14 @@ swiboe.map {
    -- when = in_normal_mode,
    -- priority = 1000,
    execute = function(client)
-      client:call("test.test", "{}");
+      local args = JSON:encode_pretty {
+          foo = "blah",
+          b = {
+             c = 2,
+             d = "blub",
+          },
+       }
+      client:call("test.test", args);
    end,
 }
 
