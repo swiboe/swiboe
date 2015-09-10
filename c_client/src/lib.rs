@@ -46,14 +46,47 @@ pub extern "C" fn swiboe_disconnect(client: *mut client::Client) {
     }
 }
 
-struct CallbackRpc {
-    priority: u16,
-    callback: extern fn(*const c_char) -> libc::uint16_t,
+#[no_mangle]
+pub extern "C" fn swiboe_rpc_ok(c_buf: *const c_char) -> *const rpc::Result {
+    let json_str = c_str_to_string(c_buf);
+
+    unsafe {
+        mem::transmute(Box::new(rpc::Result::success(&json_str)))
+    }
 }
 
-const RPC_OK: libc::uint16_t = 0;
-const RPC_ERR: libc::uint16_t = 1;
-const RPC_NOT_HANDLED: libc::uint16_t = 2;
+#[no_mangle]
+pub extern "C" fn swiboe_rpc_error(c_buf_error_name: *const c_char, c_buf_details: *const c_char) -> *const rpc::Result {
+    let error_name = c_str_to_string(c_buf_error_name);
+    let details = if c_buf_details.is_null() {
+        None
+    } else {
+        let json_str = c_str_to_string(c_buf_details);
+        Some(serde_json::from_str(&json_str).expect("swiboe_rpc_error: 'details' not valid json."))
+    };
+
+    let err = rpc::Error {
+        kind: rpc::ErrorKind::from_str(&error_name),
+        details: details,
+    };
+
+    unsafe {
+        mem::transmute(Box::new(rpc::Result::Err(err)))
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn swiboe_rpc_not_handled() -> *const rpc::Result {
+    unsafe {
+        mem::transmute(Box::new(rpc::Result::NotHandled))
+    }
+}
+
+pub type CCallback = extern fn(*const c_char) -> *const rpc::Result;
+struct CallbackRpc {
+    priority: u16,
+    callback: CCallback,
+}
 
 impl client::rpc::server::Rpc for CallbackRpc {
     fn priority(&self) -> u16 { self.priority }
@@ -63,18 +96,12 @@ impl client::rpc::server::Rpc for CallbackRpc {
             args: serde_json::Value) {
         let args_str = serde_json::to_string(&args).unwrap();
         let c_str = CString::new(args_str).expect("JSON contained zero byte");
-        match (self.callback)(c_str.as_ptr()) {
-            RPC_NOT_HANDLED => {
-                context.finish(rpc::Result::NotHandled).unwrap();
-            },
-            RPC_OK => {
-                // TODO(sirver): We would like to return something from our RPCs, not only an empty
-                // value.
-                context.finish(rpc::Result::success("")).unwrap();
-            },
-            RPC_ERR => { unimplemented!(); },
-            _ => panic!("RPC callback returned invalid value."),
-        }
+        let result: Box<rpc::Result> = unsafe {
+            let result = (self.callback)(c_str.as_ptr());
+            let res = mem::transmute(result);
+            res
+        };
+        context.finish(*result).unwrap();
     }
 }
 
@@ -83,7 +110,7 @@ impl client::rpc::server::Rpc for CallbackRpc {
 pub extern "C" fn swiboe_new_rpc(client: *mut client::Client,
                                  rpc_name: *const c_char,
                                  priority: libc::uint16_t,
-                                 callback: extern fn(*const c_char) -> libc::uint16_t
+                                 callback: CCallback
                                  ) {
     let client: &mut client::Client = unsafe {
         mem::transmute(client)
