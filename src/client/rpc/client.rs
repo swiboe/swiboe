@@ -3,6 +3,7 @@
 // in the project root for license information.
 
 use ::client::rpc_loop::{Command, CommandSender};
+use ::error::{Error, Result};
 use serde;
 use serde_json;
 use std::sync::mpsc;
@@ -14,34 +15,6 @@ pub struct Context {
     result: Option<::rpc::Result>,
     commands: CommandSender,
 }
-
-#[derive(Debug)]
-pub enum Error {
-    Disconnected,
-    InvalidOrUnexpectedReply(serde_json::Error),
-}
-
-// NOCOM(#sirver): impl error::Error for Error?
-
-impl From<mpsc::RecvError> for Error {
-    fn from(_: mpsc::RecvError) -> Self {
-        Error::Disconnected
-    }
-}
-
-impl From<serde_json::error::Error> for Error {
-     fn from(error: serde_json::error::Error) -> Self {
-         Error::InvalidOrUnexpectedReply(error)
-     }
-}
-
-impl From<mpsc::SendError<Command>> for Error {
-     fn from(error: mpsc::SendError<Command>) -> Self {
-         Error::Disconnected
-     }
-}
-
-pub type Result<T> = ::std::result::Result<T, Error>;
 
 impl Context {
     pub fn new<T: serde::Serialize>(commands: CommandSender,

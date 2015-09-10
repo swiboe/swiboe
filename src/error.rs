@@ -20,6 +20,8 @@ pub enum ErrorKind {
     Disconnected,
     Io(io::Error),
     JsonParsing(serde_json::error::Error),
+    RpcAlreadyFinished,
+    RpcWasCancelled,
 }
 
 // NOCOM(#sirver): kill and just use the enum
@@ -27,6 +29,20 @@ pub enum ErrorKind {
 pub struct Error {
     kind: ErrorKind,
 }
+
+// NOCOM(#sirver): neeed?
+// impl From<serde_json::error::Error> for Error {
+     // fn from(error: serde_json::error::Error) -> Self {
+         // Error::InvalidOrUnexpectedReply(error)
+     // }
+// }
+
+// impl From<mpsc::RecvError> for Error {
+    // fn from(_: mpsc::RecvError) -> Self {
+        // Error::Disconnected
+    // }
+// }
+
 
 impl Error {
     pub fn new(kind: ErrorKind) -> Self {

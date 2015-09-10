@@ -3,6 +3,7 @@
 // in the project root for license information.
 
 use ::client::rpc_loop;
+use ::error::{Result, Error, ErrorKind};
 use serde::Serialize;
 use serde_json;
 use std::result;
@@ -15,27 +16,6 @@ enum ContextState {
     Cancelled,
 }
 
-#[derive(Debug)]
-pub enum Error {
-    Finished,
-    Cancelled,
-    Disconnected,
-}
-
-// NOCOM(#sirver): impl error::Error for Error?
-
-impl From<::client::rpc::client::Error> for Error {
-    fn from(_: ::client::rpc::client::Error) -> Self {
-        Error::Disconnected
-    }
-}
-
-impl From<mpsc::SendError<::client::rpc_loop::Command>> for Error {
-    fn from(_: mpsc::SendError<::client::rpc_loop::Command>) -> Self {
-        Error::Disconnected
-    }
-}
-
 pub enum Command {
     Cancel,
 }
@@ -44,8 +24,6 @@ pub trait Rpc: Send + Sync {
     fn priority(&self) -> u16 { u16::max_value() }
     fn call(&self, context: Context, args: serde_json::Value);
 }
-
-pub type Result<T> = result::Result<T, Error>;
 
 pub struct Context {
     context: String,
@@ -86,8 +64,8 @@ impl Context {
 
         match self.state {
             ContextState::Alive => Ok(()),
-            ContextState::Finished => Err(Error::Finished),
-            ContextState::Cancelled => Err(Error::Cancelled),
+            ContextState::Finished => Err(Error::new(ErrorKind::RpcAlreadyFinished)),
+            ContextState::Cancelled => Err(Error::new(ErrorKind::RpcWasCancelled)),
         }
     }
 
