@@ -1,3 +1,7 @@
+// Copyright (c) The Swiboe development team. All rights reserved.
+// Licensed under the Apache License, Version 2.0. See LICENSE.txt
+// in the project root for license information.
+
 use ::buffer_views::{self, BufferViews, BufferView};
 use cairo::enums::{FontSlant, FontWeight};
 use cairo;
