@@ -79,6 +79,7 @@ impl Context {
         }
     }
 
+    // NOCOM(#sirver): should this not consume the context?
     pub fn wait(&mut self) -> Result<::rpc::Result> {
         while let Some(_) = try!(self.recv()) {
         }

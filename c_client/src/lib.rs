@@ -82,6 +82,38 @@ pub extern "C" fn swiboe_rpc_not_handled() -> *const rpc::Result {
     }
 }
 
+#[no_mangle]
+pub extern "C" fn swiboe_client_call_rpc(client: *const client::Client,
+                                         rpc_name: *const c_char,
+                                         args: *const c_char) -> *mut client::rpc::client::Context {
+    let client: &mut client::Client = unsafe {
+        mem::transmute(client)
+    };
+
+    let rpc_name = c_str_to_string(rpc_name);
+    let args = if args.is_null() {
+        serde_json::Value::Null
+    } else {
+        let json_str = c_str_to_string(args);
+        serde_json::from_str(&json_str).expect("swiboe_client_call_rpc: 'args' not valid json.")
+    };
+
+    unsafe {
+        mem::transmute(Box::new(client.call(&rpc_name, &args)))
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn swiboe_rpc_context_wait(context: *mut client::rpc::client::Context) {
+    let mut context: Box<client::rpc::client::Context> = unsafe {
+        mem::transmute(context)
+    };
+
+    // NOCOM(#sirver): return results to python
+    let result = context.wait();
+}
+
+
 pub type CCallback = extern fn(*const c_char) -> *const rpc::Result;
 struct CallbackRpc {
     priority: u16,

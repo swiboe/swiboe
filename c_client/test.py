@@ -33,32 +33,43 @@ swiboe.swiboe_rpc_not_handled.argtypes = []
 swiboe.swiboe_rpc_error.restype = PtrRpcResult
 swiboe.swiboe_rpc_error.argtypes = [c_char_p, c_char_p]
 
-client = swiboe.swiboe_connect("/tmp/blub.socket")
-client1 = swiboe.swiboe_connect("/tmp/blub.socket")
+PtrClientContext = c_void_p
+swiboe.swiboe_client_call_rpc.restype = PtrClientContext
+swiboe.swiboe_client_call_rpc.argtypes = [PtrClient, c_char_p, c_char_p]
 
+swiboe.swiboe_rpc_context_wait.restype = None
+swiboe.swiboe_rpc_context_wait.argtypes = [PtrClientContext]
+
+serving_client = swiboe.swiboe_connect("/tmp/blub.socket")
 # TODO(sirver): handle streaming rpcs.
 # TODO(sirver): Call other rpcs.
 
 def callback(args):
     print("callback called %s" % args)
-    d = {
-            "foo": 2,
-            "blub": [ 1, 2, 4, 8 ],
-    }
-    return swiboe.swiboe_rpc_ok(json.dumps(d))
-
-def callback1(args):
-    print("callback1 called %s" % args)
-    return swiboe.swiboe_rpc_error("Io", json.dumps({ "reason": "Out of disk space"}))
+    return swiboe.swiboe_rpc_ok("{}")
 
 rpc_callback = RPC(callback)
-rpc_callback1 = RPC(callback1)
 
-# TODO(sirver): The client should complain if the same RPC is registered twice.
-swiboe.swiboe_new_rpc(client, "test.test", 100, rpc_callback)
-swiboe.swiboe_new_rpc(client1, "test.test", 50, rpc_callback1)
+# TODO(sirver): The serving_client should complain if the same RPC is registered twice.
+swiboe.swiboe_new_rpc(serving_client, "test.test", 100, rpc_callback)
 
-while 1:
-    time.sleep(1)
+clients = [ swiboe.swiboe_connect("/tmp/blub.socket") for i in range(50) ]
+contexts = []
+num = 0
+for c in clients:
+    for i in range(100):
+        contexts.append(
+                swiboe.swiboe_client_call_rpc(c, "test.test", json.dumps({
+                    "num": num })))
+        num += 1
 
-swiboe.swiboe_disconnect(client)
+for context in contexts:
+    swiboe.swiboe_rpc_context_wait(context)
+
+for c in clients:
+    swiboe.swiboe_disconnect(c)
+
+# while 1:
+    # time.sleep(1)
+
+swiboe.swiboe_disconnect(serving_client)
