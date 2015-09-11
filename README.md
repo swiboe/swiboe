@@ -1,9 +1,6 @@
-
-# Swiboe
+# Swiboe • [![Build Status](https://travis-ci.org/swiboe/swiboe.svg)](https://travis-ci.org/swiboe/swiboe) [![Join the chat at https://gitter.im/swiboe/swiboe](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/swiboe/swiboe?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
 ![Swiboe logo](/assets/icon_square/192.png?raw=true])
-[![Build Status](https://travis-ci.org/swiboe/swiboe.svg)](https://travis-ci.org/swiboe/swiboe)
-[![Join the chat at https://gitter.im/swiboe/swiboe](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/swiboe/swiboe?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
 This is the groundwork the [ideal text
 editor](http://www.sirver.net/blog/2015/08/04/the-ideal-text-editor/). So far it
@@ -11,7 +8,7 @@ is a design and performance study and an outline of the implementation. It will
 gradually merge into a real editor.
 
 My initial thoughts on text editors and my design ideas for this one are on [my
-blog](http://sirver.net). The idea is to establish a RFC process for changes
+blog](http://sirver.net). The idea is to establish an RFC process for changes
 rather quickly though.
 
 The Swiboe community meets on weekdays at 8am CEST in [my twitch
@@ -74,8 +71,8 @@ fuzzy search through all the files in the current directory and to open one.
 
 If you are unsure where to start either reach out to me or grep for NOCOM in the
 source base - there are many NOCOM (which stand for do-not-commit) while the
-project is in outline mode. If you pick one of the NOCOM you will flesh out
-details of stuff that I only outlined so far.
+project is in outline mode. If you pick one of the NOCOMs you will flesh out the
+details of stuff that I have only outlined so far.
 
-If you prefer on something bigger picture, you will need to provide some design
-first. Best open a issue for discussing.
+If you prefer to work on something bigger picture, you will need to provide some design
+proposals first (it would be best to open an issue for discussion).
