@@ -1,4 +1,4 @@
-# Swiboe ¬ [![Build Status](https://travis-ci.org/swiboe/swiboe.svg)](https://travis-ci.org/swiboe/swiboe) [![Join the chat at https://gitter.im/swiboe/swiboe](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/swiboe/swiboe?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+# Swiboe • [![Build Status](https://travis-ci.org/swiboe/swiboe.svg)](https://travis-ci.org/swiboe/swiboe) [![Join the chat at https://gitter.im/swiboe/swiboe](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/swiboe/swiboe?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
 ![Swiboe logo](/assets/icon_square/192.png?raw=true])
 
