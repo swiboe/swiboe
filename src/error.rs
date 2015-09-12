@@ -16,12 +16,10 @@ pub type Result<T> = result::Result<T, Error>;
 
 #[derive(Debug)]
 pub enum ErrorKind {
-    ClientDisconnected,
     Disconnected,
     Io(io::Error),
     JsonParsing(serde_json::error::Error),
-    RpcAlreadyFinished,
-    RpcWasCancelled,
+    RpcDone,
 }
 
 // NOCOM(#sirver): kill and just use the enum
@@ -39,12 +37,10 @@ impl fmt::Display for Error {
 impl error::Error for Error {
   fn description(&self) -> &str {
       match self.kind {
-          ErrorKind::ClientDisconnected => "Client disconnected.",
-          ErrorKind::Disconnected => "Channel is disconnected.",
+          ErrorKind::Disconnected => "Channel or Socket is disconnected.",
           ErrorKind::Io(ref e) => e.description(),
           ErrorKind::JsonParsing(ref e) => e.description(),
-          ErrorKind::RpcAlreadyFinished => "RPC is already finished.",
-          ErrorKind::RpcWasCancelled => "RPC was cancelled.",
+          ErrorKind::RpcDone => "RPC is already finished or cancelled.",
       }
   }
 

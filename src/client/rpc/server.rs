@@ -63,8 +63,7 @@ impl Context {
 
         match self.state {
             ContextState::Alive => Ok(()),
-            ContextState::Finished => Err(Error::new(ErrorKind::RpcAlreadyFinished)),
-            ContextState::Cancelled => Err(Error::new(ErrorKind::RpcWasCancelled)),
+            ContextState::Finished | ContextState::Cancelled => Err(Error::new(ErrorKind::RpcDone)),
         }
     }
 
