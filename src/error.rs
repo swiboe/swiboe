@@ -15,17 +15,11 @@ use std::sync::mpsc;
 pub type Result<T> = result::Result<T, Error>;
 
 #[derive(Debug)]
-pub enum ErrorKind {
+pub enum Error {
     Disconnected,
     Io(io::Error),
     JsonParsing(serde_json::error::Error),
     RpcDone,
-}
-
-// NOCOM(#sirver): kill and just use the enum
-#[derive(Debug)]
-pub struct Error {
-    kind: ErrorKind,
 }
 
 impl fmt::Display for Error {
@@ -36,18 +30,18 @@ impl fmt::Display for Error {
 
 impl error::Error for Error {
   fn description(&self) -> &str {
-      match self.kind {
-          ErrorKind::Disconnected => "Channel or Socket is disconnected.",
-          ErrorKind::Io(ref e) => e.description(),
-          ErrorKind::JsonParsing(ref e) => e.description(),
-          ErrorKind::RpcDone => "RPC is already finished or cancelled.",
+      match *self {
+          Error::Disconnected => "Channel or Socket is disconnected.",
+          Error::Io(ref e) => e.description(),
+          Error::JsonParsing(ref e) => e.description(),
+          Error::RpcDone => "RPC is already finished or cancelled.",
       }
   }
 
   fn cause(&self) -> Option<&error::Error> {
-      match self.kind {
-          ErrorKind::Io(ref e) => Some(e),
-          ErrorKind::JsonParsing(ref e) => Some(e),
+      match *self {
+          Error::Io(ref e) => Some(e),
+          Error::JsonParsing(ref e) => Some(e),
           _ => None,
       }
   }
@@ -55,38 +49,30 @@ impl error::Error for Error {
 
 impl From<io::Error> for Error {
      fn from(error: io::Error) -> Self {
-         Error::new(ErrorKind::Io(error))
+         Error::Io(error)
      }
 }
 
 impl<T> From<mpsc::SendError<T>> for Error {
     fn from(_: mpsc::SendError<T>) -> Self {
-        Error::new(ErrorKind::Disconnected)
+        Error::Disconnected
     }
 }
 
 impl From<mpsc::RecvError> for Error {
      fn from(_: mpsc::RecvError) -> Self {
-         Error::new(ErrorKind::Disconnected)
+         Error::Disconnected
      }
 }
 
 impl From<serde_json::error::Error> for Error {
      fn from(error: serde_json::error::Error) -> Self {
-         Error::new(ErrorKind::JsonParsing(error))
+         Error::JsonParsing(error)
      }
 }
 
 impl<T> From<mio::NotifyError<T>> for Error {
     fn from(_: mio::NotifyError<T>) -> Self {
-        Error::new(ErrorKind::Disconnected)
-    }
-}
-
-impl Error {
-    pub fn new(kind: ErrorKind) -> Self {
-        Error {
-            kind: kind,
-        }
+        Error::Disconnected
     }
 }

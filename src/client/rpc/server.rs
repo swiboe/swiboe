@@ -3,7 +3,7 @@
 // in the project root for license information.
 
 use ::client::rpc_loop;
-use ::error::{Result, Error, ErrorKind};
+use ::error::{Result, Error};
 use serde::Serialize;
 use serde_json;
 use std::sync::mpsc;
@@ -63,7 +63,7 @@ impl Context {
 
         match self.state {
             ContextState::Alive => Ok(()),
-            ContextState::Finished | ContextState::Cancelled => Err(Error::new(ErrorKind::RpcDone)),
+            ContextState::Finished | ContextState::Cancelled => Err(Error::RpcDone),
         }
     }
 
