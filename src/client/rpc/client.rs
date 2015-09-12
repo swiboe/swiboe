@@ -3,7 +3,7 @@
 // in the project root for license information.
 
 use ::client::rpc_loop::{Command, CommandSender};
-use ::error::{Error, Result};
+use ::error::{Error, ErrorKind, Result};
 use serde;
 use serde_json;
 use std::sync::mpsc;
@@ -50,7 +50,7 @@ impl Context {
             Ok(value) => value,
             Err(err) => match err {
                 mpsc::TryRecvError::Empty => return Ok(None),
-                err => return Err(Error::Disconnected),
+                _ => return Err(Error::new(ErrorKind::Disconnected)),
             }
         };
 

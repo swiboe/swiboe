@@ -13,7 +13,7 @@ fn create_buffer(client: &client::Client, expected_index: usize, content: Option
     let request = plugin_buffer::NewRequest {
         content: content.map(|s| s.to_string()),
     };
-    let mut rpc = client.call("buffer.new", &request);
+    let mut rpc = client.call("buffer.new", &request).unwrap();
     assert_eq!(rpc.wait().unwrap(), rpc::Result::success(plugin_buffer::NewResponse {
         buffer_index: expected_index,
     }));
@@ -32,7 +32,7 @@ fn buffer_new() {
                 *callback_called.lock().unwrap() = true;
                 sender.finish(rpc::Result::success(())).unwrap();
             }
-        }));
+        })).unwrap();
         create_buffer(&client, 0, None);
     }
     assert!(*callback_called.lock().unwrap());
@@ -48,7 +48,7 @@ fn buffer_new_with_content() {
 
     let mut rpc = client.call("buffer.get_content", &plugin_buffer::GetContentRequest {
         buffer_index: 0,
-    });
+    }).unwrap();
     assert_eq!(rpc.wait().unwrap(), rpc::Result::success(plugin_buffer::GetContentResponse {
         content: content.into(),
     }));
@@ -61,7 +61,7 @@ fn buffer_open_unhandled_uri() {
 
     let mut rpc = client.call("buffer.open", &plugin_buffer::OpenRequest {
         uri: "blumba://foo".into(),
-    });
+    }).unwrap();
 
     assert_eq!(rpc::Result::NotHandled, rpc.wait().unwrap());
 }
@@ -76,14 +76,14 @@ fn buffer_open_file() {
 
     let mut rpc = client.call("buffer.open", &plugin_buffer::OpenRequest {
         uri: format!("file://{}", path.to_str().unwrap()),
-    });
+    }).unwrap();
     assert_eq!(rpc.wait().unwrap(), rpc::Result::success(plugin_buffer::OpenResponse {
         buffer_index: 0,
     }));
 
     let mut rpc = client.call("buffer.get_content", &plugin_buffer::GetContentRequest {
         buffer_index: 0,
-    });
+    }).unwrap();
     assert_eq!(rpc.wait().unwrap(), rpc::Result::success(plugin_buffer::GetContentResponse {
         content: content.into(),
     }));
@@ -102,14 +102,14 @@ fn buffer_delete() {
                 *callback_called.lock().unwrap() = true;
                 sender.finish(rpc::Result::success(())).unwrap();
             }
-        }));
+        })).unwrap();
 
         create_buffer(&client, 0, None);
 
         let request = plugin_buffer::DeleteRequest {
             buffer_index: 0,
         };
-        let mut rpc = client.call("buffer.delete", &request);
+        let mut rpc = client.call("buffer.delete", &request).unwrap();
         assert_eq!(rpc.wait().unwrap(), rpc::Result::success(()));
     }
     assert!(*callback_called.lock().unwrap());
@@ -123,7 +123,7 @@ fn buffer_delete_non_existing() {
     let request = plugin_buffer::DeleteRequest {
         buffer_index: 0,
     };
-    let mut rpc = client.call("buffer.delete", &request);
+    let mut rpc = client.call("buffer.delete", &request).unwrap();
     assert_eq!(
         rpc.wait().unwrap().unwrap_err().details.unwrap().as_string(), Some("unknown_buffer"));
 }

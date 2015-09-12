@@ -3,6 +3,7 @@
 // in the project root for license information.
 
 use ::command::GuiCommand;
+use ::error::{Result};
 use serde_json;
 use std::clone::Clone;
 use std::cmp;
@@ -185,12 +186,12 @@ impl BufferViews {
         let scroll = Scroll {
             buffer_views: buffer_view.clone(),
         };
-        client.new_rpc("gui.buffer_view.scroll", Box::new(scroll));
+        try!(client.new_rpc("gui.buffer_view.scroll", Box::new(scroll)));
 
         let move_cursor = MoveCursor {
             buffer_views: buffer_view.clone(),
         };
-        client.new_rpc("gui.buffer_view.move_cursor", Box::new(move_cursor));
+        try!(client.new_rpc("gui.buffer_view.move_cursor", Box::new(move_cursor)));
 
         buffer_view
     }

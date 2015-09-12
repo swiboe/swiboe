@@ -19,7 +19,7 @@ impl TestHarness {
         let mut socket_name = temp_directory.path().to_path_buf();
         socket_name.push("_socket");
 
-        let server = Server::launch(&socket_name, &[]);
+        let server = Server::launch(&socket_name, &[]).unwrap();
 
         TestHarness {
             server: Some(server),

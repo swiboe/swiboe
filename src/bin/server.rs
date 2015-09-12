@@ -35,6 +35,6 @@ fn main() {
         Vec::new()
     };
 
-    let mut server = swiboe::server::Server::launch(path, &ips);
+    let mut server = swiboe::server::Server::launch(path, &ips).unwrap();
     server.wait_for_shutdown();
 }

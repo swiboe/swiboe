@@ -3,6 +3,7 @@
 // in the project root for license information.
 
 use ::client;
+use ::error::{Result};
 use ::rpc;
 use serde_json;
 use std::convert;
@@ -98,16 +99,16 @@ pub struct ListFilesPlugin {
 }
 
 impl ListFilesPlugin {
-    pub fn new(socket_name: &path::Path) -> Self {
-        let client = client::Client::connect_unix(socket_name).unwrap();
+    pub fn new(socket_name: &path::Path) -> Result<Self> {
+        let client = try!(client::Client::connect_unix(socket_name));
 
         let plugin = ListFilesPlugin {
             client: client,
         };
 
         let list_files = Box::new(ListFiles);
-        plugin.client.new_rpc("list_files", list_files);
+        try!(plugin.client.new_rpc("list_files", list_files));
 
-        plugin
+        Ok(plugin)
     }
 }

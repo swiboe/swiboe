@@ -6,7 +6,6 @@ use ::client::rpc_loop;
 use ::error::{Result, Error, ErrorKind};
 use serde::Serialize;
 use serde_json;
-use std::result;
 use std::sync::mpsc;
 
 #[derive(Clone, Debug, PartialEq)]

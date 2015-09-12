@@ -30,28 +30,6 @@ pub struct Error {
     kind: ErrorKind,
 }
 
-// NOCOM(#sirver): neeed?
-// impl From<serde_json::error::Error> for Error {
-     // fn from(error: serde_json::error::Error) -> Self {
-         // Error::InvalidOrUnexpectedReply(error)
-     // }
-// }
-
-// impl From<mpsc::RecvError> for Error {
-    // fn from(_: mpsc::RecvError) -> Self {
-        // Error::Disconnected
-    // }
-// }
-
-
-impl Error {
-    pub fn new(kind: ErrorKind) -> Self {
-        Error {
-            kind: kind,
-        }
-    }
-}
-
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         error::Error::description(&*self).fmt(f)
@@ -65,15 +43,16 @@ impl error::Error for Error {
           ErrorKind::Disconnected => "Channel is disconnected.",
           ErrorKind::Io(ref e) => e.description(),
           ErrorKind::JsonParsing(ref e) => e.description(),
+          ErrorKind::RpcAlreadyFinished => "RPC is already finished.",
+          ErrorKind::RpcWasCancelled => "RPC was cancelled.",
       }
   }
 
   fn cause(&self) -> Option<&error::Error> {
       match self.kind {
-          ErrorKind::ClientDisconnected => None,
-          ErrorKind::Disconnected => None,
           ErrorKind::Io(ref e) => Some(e),
           ErrorKind::JsonParsing(ref e) => Some(e),
+          _ => None,
       }
   }
 }
@@ -84,8 +63,14 @@ impl From<io::Error> for Error {
      }
 }
 
+impl<T> From<mpsc::SendError<T>> for Error {
+    fn from(_: mpsc::SendError<T>) -> Self {
+        Error::new(ErrorKind::Disconnected)
+    }
+}
+
 impl From<mpsc::RecvError> for Error {
-     fn from(error: mpsc::RecvError) -> Self {
+     fn from(_: mpsc::RecvError) -> Self {
          Error::new(ErrorKind::Disconnected)
      }
 }
@@ -97,7 +82,15 @@ impl From<serde_json::error::Error> for Error {
 }
 
 impl<T> From<mio::NotifyError<T>> for Error {
-    fn from(error: mio::NotifyError<T>) -> Self {
+    fn from(_: mio::NotifyError<T>) -> Self {
         Error::new(ErrorKind::Disconnected)
+    }
+}
+
+impl Error {
+    pub fn new(kind: ErrorKind) -> Self {
+        Error {
+            kind: kind,
+        }
     }
 }
