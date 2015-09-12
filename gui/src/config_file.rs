@@ -69,14 +69,13 @@ unsafe extern "C" fn lua_map(lua_state: *mut lua::ffi::lua_State) -> libc::c_int
   0
 }
 
+#[allow(non_snake_case)]
 unsafe extern "C" fn lua_call(lua_state: *mut lua::ffi::lua_State) -> libc::c_int {
     let mut state = lua::State::from_ptr(lua_state);
     let function_name = state.check_string(2);
     let json_arguments_as_string = state.check_string(3);
 
-    let thin_client: &mut client::ThinClient = unsafe {
-        state.check_userdata_typed(1, "swiboe.ThinClient")
-    };
+    let thin_client: &mut client::ThinClient = state.check_userdata_typed(1, "swiboe.ThinClient");
 
 
     // NOCOM(#sirver): should not crash if json_arguments_as_string is malformed.
@@ -88,11 +87,10 @@ unsafe extern "C" fn lua_call(lua_state: *mut lua::ffi::lua_State) -> libc::c_in
     0
 }
 
+#[allow(non_snake_case)]
 unsafe extern "C" fn lua_thin_client___gc(lua_state: *mut lua::ffi::lua_State) -> libc::c_int {
     let mut state = lua::State::from_ptr(lua_state);
-    let thin_client: &mut client::ThinClient = unsafe {
-        state.check_userdata_typed(1, "swiboe.ThinClient")
-    };
+    let thin_client: &mut client::ThinClient = state.check_userdata_typed(1, "swiboe.ThinClient");
     drop(thin_client);
     0
 }
