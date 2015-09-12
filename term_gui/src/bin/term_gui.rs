@@ -21,7 +21,7 @@ use std::net;
 use std::path;
 use std::str::FromStr;
 use std::sync::mpsc;
-use std::sync::{RwLock, Arc, Mutex};
+use std::sync::{RwLock, Arc};
 use swiboe::client;
 use uuid::Uuid;
 
@@ -45,24 +45,24 @@ enum CompleterState {
 }
 
 impl CompleterWidget {
-    fn new(client: &client::Client) -> Self {
+    fn new(client: &client::Client) -> swiboe::Result<Self> {
 
         // TODO(sirver): This should use the current work directory of the server, since the server
         // might run on a different machine than the client - and certainly in a different
         // directory.
         let current_dir = env::current_dir().unwrap();
 
-        let rpc = client.call("list_files", &swiboe::plugin_list_files::ListFilesRequest {
+        let rpc = try!(client.call("list_files", &swiboe::plugin_list_files::ListFilesRequest {
             directory: current_dir.to_string_lossy().into_owned(),
-        });
+        }));
 
-        CompleterWidget {
+        Ok(CompleterWidget {
             candidates: subsequence_match::CandidateSet::new(),
             rpc: Some(rpc),
             query: "".into(),
             results: Vec::new(),
             selection_index: 0,
-        }
+        })
     }
 
     fn on_key(&mut self, key: rustbox::Key) -> CompleterState {
@@ -226,12 +226,12 @@ struct TerminalGui {
 }
 
 impl TerminalGui {
-    fn new(options: &Options) -> Self {
+    fn new(options: &Options) -> swiboe::Result<Self> {
         let client = match net::SocketAddr::from_str(&options.socket) {
             Ok(value) => {
                 client::Client::connect_tcp(&value).unwrap()
             }
-            Err(e) => {
+            Err(_) => {
                 let socket_path = path::PathBuf::from(&options.socket);
                 client::Client::connect_unix(&socket_path).unwrap()
             }
@@ -239,7 +239,7 @@ impl TerminalGui {
 
 
         let mut config_file_runner = gui::config_file::ConfigFileRunner::new(
-            client.clone());
+            try!(client.clone()));
         config_file_runner.run(&options.config_file);
 
         let rustbox = match RustBox::init(rustbox::InitOptions {
@@ -252,10 +252,9 @@ impl TerminalGui {
 
         let gui_id: String = Uuid::new_v4().to_hyphenated_string();
         let (gui_commands_tx, gui_commands_rx) = mpsc::channel();
-        let buffer_views = gui::buffer_views::BufferViews::new(&gui_id, gui_commands_tx, &client);
+        let buffer_views = try!(gui::buffer_views::BufferViews::new(&gui_id, gui_commands_tx, &client));
 
-
-        TerminalGui {
+        Ok(TerminalGui {
             config_file_runner: config_file_runner,
             client: client,
             rustbox: rustbox,
@@ -264,10 +263,10 @@ impl TerminalGui {
             completer: None,
             buffer_view_widget: None,
             gui_commands: gui_commands_rx,
-        }
+        })
     }
 
-    fn handle_events(&mut self) -> bool {
+    fn handle_events(&mut self) -> swiboe::Result<bool> {
         match self.rustbox.peek_event(time::Duration::milliseconds(5), false) {
             Ok(rustbox::Event::KeyEvent(key)) => {
                 if self.completer.is_some() {
@@ -280,19 +279,19 @@ impl TerminalGui {
                         CompleterState::Selected(result) => {
                             self.completer = None;
 
-                            let mut rpc = self.client.call("buffer.open", &swiboe::plugin_buffer::OpenRequest {
+                            let mut rpc = try!(self.client.call("buffer.open", &swiboe::plugin_buffer::OpenRequest {
                                 uri: format!("file://{}", result),
-                            });
+                            }));
                             let response: swiboe::plugin_buffer::OpenResponse = rpc.wait_for().unwrap();
 
                             let mut buffer_views = self.buffer_views.write().unwrap();
                             let view_id = buffer_views.new_view(response.buffer_index, self.rustbox.width(), self.rustbox.height());
-                            self.buffer_view_widget = Some(BufferViewWidget::new(view_id, self.client.clone()));
+                            self.buffer_view_widget = Some(BufferViewWidget::new(view_id, try!(self.client.clone())));
                         },
                     }
                 } else if let Some(key) = key {
-                    if !self.handle_key(key) {
-                        return false;
+                    if !try!(self.handle_key(key)) {
+                        return Ok(false);
                     }
                 }
             },
@@ -302,14 +301,14 @@ impl TerminalGui {
 
         while let Ok(command) = self.gui_commands.try_recv() {
             match command {
-                gui::command::GuiCommand::Quit => return false,
+                gui::command::GuiCommand::Quit => return Ok(false),
                 gui::command::GuiCommand::Redraw => (),
             }
         }
-        return true;
+        return Ok(true);
     }
 
-    fn handle_key(&mut self, key: rustbox::Key) -> bool {
+    fn handle_key(&mut self, key: rustbox::Key) -> swiboe::Result<bool> {
         let delta_t = {
             let now = time::PreciseTime::now();
             let delta_t = self.last_key_down_event.to(now);
@@ -320,9 +319,9 @@ impl TerminalGui {
 
         match key {
             // NOCOM(#sirver): should be handled through plugins.
-            rustbox::Key::Char('q') => return false,
+            rustbox::Key::Char('q') => return Ok(false),
             rustbox::Key::Ctrl('t') => {
-                self.completer = Some(CompleterWidget::new(&self.client))
+                self.completer = Some(try!(CompleterWidget::new(&self.client)))
             },
             rustbox::Key::Esc => {
                 self.config_file_runner.keymap_handler.timeout();
@@ -354,11 +353,11 @@ impl TerminalGui {
             rustbox::Key::Ctrl(some_other_key) => {
                 self.config_file_runner.keymap_handler.key_down(
                     delta_t_in_seconds, keymap_handler::Key::Ctrl);
-                self.handle_key(rustbox::Key::Char(some_other_key));
+                try!(self.handle_key(rustbox::Key::Char(some_other_key)));
             }
             _ => (),
         }
-        true
+        Ok(true)
     }
 
     fn draw(&mut self) {
@@ -401,9 +400,9 @@ fn parse_options() -> Options {
 fn main() {
     let options = parse_options();
 
-    let mut gui = TerminalGui::new(&options);
+    let mut gui = TerminalGui::new(&options).unwrap();
 
-    while (gui.handle_events()) {
+    while gui.handle_events().unwrap() {
         gui.draw();
     }
 }
