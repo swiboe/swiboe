@@ -39,4 +39,4 @@ pub mod plugin_list_files;
 pub mod rpc;
 pub mod server;
 
-pub use error::{Error, ErrorKind, Result};
+pub use error::{Error, Result};

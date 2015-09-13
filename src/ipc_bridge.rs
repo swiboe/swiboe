@@ -4,7 +4,7 @@
 
 use ::ipc;
 use ::server;
-use ::{ErrorKind, Error};
+use ::{Error, Result};
 use mio::tcp::{TcpListener, TcpStream};
 use mio::unix::{UnixListener, UnixStream};
 use mio;
@@ -150,10 +150,10 @@ impl mio::Handler for IpcBridge {
             Command::Quit => event_loop.shutdown(),
             Command::SendData(receiver, message) => {
                 let result = self.connections.get_mut(receiver.token)
-                    .ok_or(Error::new(ErrorKind::Disconnected))
+                    .ok_or(Error::Disconnected)
                     .and_then(|conn| {
                         if conn.client_id != receiver {
-                            Err(Error::new(ErrorKind::Disconnected))
+                            Err(Error::Disconnected)
                         } else {
                             // println!("{:?}: Server -> {:?}: {:#?}", time::precise_time_ns(),
                                 // receiver, message);
