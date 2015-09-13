@@ -45,6 +45,13 @@ domains of implementation. For example the namespace `buffer` contains all
 functions that do something with buffers, no matter which plugin provides the
 implementation.
 
+The choice for 16 bit for priorities is arbitrary - the number has to be high
+enough to make collisions between plugins unlikely and leave enough space to
+sort out ties between plugins once they are identified to collide. 32bit is a
+daunting high number range for a human to navigate in. Another considered choice
+was using 0 to 100000. If an implementation does not care when it is called, it
+should register with the lowest priority (0).
+
 Plugins can register an RPC with an `id` and a `priority` with Swiboe by calling
 `core.new_rpc` RPC.
 
@@ -66,8 +73,17 @@ exist until the client gets a response from Swiboe.
 
 On creation of a `PendingRpc`, Swiboe will go through the list of registered
 RPCs and assemble a list of matching RPCs for the `selector` and store it in the
-`PendingRpc`. This list is sorted by priority - higher priority RPCs are tried
-first. Swiboe will now start calling the RPCs one by one, see below.
+`PendingRpc`.
+
+This list is sorted by priority - higher priority RPCs are tried first. If some
+RPCs have the same priority, the order in which they are called is undefined -
+this is a concious choice and allows for likely optimization: For example for
+callbacks, the order should rarely matter. If many implementors therefore
+register with the same priority (likely 0), they can be all called in parallel,
+which will save time.
+
+Once an order has been define, Swiboe will now start calling the RPCs one by
+one, see below.
 
 Should an RPC be deleted from Swiboe's list while the `PendingRpc` is alive, it
 will skip over it when it is supposed to call it - as if the RPC replied
