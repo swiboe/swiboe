@@ -52,6 +52,11 @@ daunting high number range for a human to navigate in. Another considered choice
 was using 0 to 100000. If an implementation does not care when it is called, it
 should register with the lowest priority (0).
 
+Even another approach would be to sort out ties by names, i.e. explicitly state
+that `foo` implementation should go before `bar` implementation. This introduces
+stronger ties between plugins though and makes (for example) renaming of RPCs
+hard.
+
 Plugins can register an RPC with an `id` and a `priority` with Swiboe by calling
 `core.new_rpc` RPC.
 
