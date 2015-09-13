@@ -13,7 +13,6 @@ uuid = "0.1"
 
 [dependencies.lua]
 git = "https://github.com/jcmoyer/rust-lua53"
-rev = "099093a7008c78d7c87f616ea92bc89def8f4a48"
 
 [dependencies.swiboe]
 path = ".."
