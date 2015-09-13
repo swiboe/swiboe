@@ -3,6 +3,7 @@
 // in the project root for license information.
 
 use ::client;
+use ::error::{Result, Error};
 use ::rpc;
 use serde_json;
 use std::collections::HashMap;
@@ -11,6 +12,7 @@ use std::fs;
 use std::io::{self, Read};
 use std::ops;
 use std::path;
+use std::result;
 use std::string;
 use std::sync::{RwLock, Arc};
 
@@ -271,7 +273,7 @@ impl BuffersManager {
         current_buffer_index
     }
 
-    fn delete_buffer(&mut self, buffer_index: usize) -> Result<(), BufferError> {
+    fn delete_buffer(&mut self, buffer_index: usize) -> result::Result<(), BufferError> {
         try!(self.buffers.remove(&buffer_index).ok_or(BufferError::UnknownBuffer));
 
         // Fire the callback, but we do not wait for it's conclusion.
@@ -282,7 +284,7 @@ impl BuffersManager {
         Ok(())
     }
 
-    fn get(&self, index: usize) -> Result<&Buffer, BufferError> {
+    fn get(&self, index: usize) -> result::Result<&Buffer, BufferError> {
         let buffer = try!(self.buffers.get(&index).ok_or(BufferError::UnknownBuffer));
         Ok(buffer)
     }
@@ -304,29 +306,29 @@ pub struct BufferPlugin {
 }
 
 impl BufferPlugin {
-    pub fn new(socket_name: &path::Path) -> Self {
-        let client = client::Client::connect_unix(socket_name).unwrap();
+    pub fn new(socket_name: &path::Path) -> Result<Self> {
+        let client = try!(client::Client::connect_unix(socket_name));
 
         let plugin = BufferPlugin {
-            buffers: Arc::new(RwLock::new(BuffersManager::new(client.clone()))),
+            buffers: Arc::new(RwLock::new(BuffersManager::new(try!(client.clone())))),
             client: client,
         };
 
         let new = Box::new(New { buffers: plugin.buffers.clone() });
-        plugin.client.new_rpc("buffer.new", new);
+        try!(plugin.client.new_rpc("buffer.new", new));
 
         let delete = Box::new(Delete { buffers: plugin.buffers.clone() });
-        plugin.client.new_rpc("buffer.delete", delete);
+        try!(plugin.client.new_rpc("buffer.delete", delete));
 
         let get_content = Box::new(GetContent { buffers: plugin.buffers.clone() });
-        plugin.client.new_rpc("buffer.get_content", get_content);
+        try!(plugin.client.new_rpc("buffer.get_content", get_content));
 
         let open = Box::new(Open { buffers: plugin.buffers.clone() });
-        plugin.client.new_rpc("buffer.open", open);
+        try!(plugin.client.new_rpc("buffer.open", open));
 
         let list = Box::new(List { buffers: plugin.buffers.clone() });
-        plugin.client.new_rpc("buffer.list", list);
+        try!(plugin.client.new_rpc("buffer.list", list));
 
-        plugin
+        Ok(plugin)
     }
 }

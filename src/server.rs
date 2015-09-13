@@ -2,7 +2,7 @@
 // Licensed under the Apache License, Version 2.0. See LICENSE.txt
 // in the project root for license information.
 
-use ::error::Error;
+use ::error::{Error, Result};
 use ::ipc;
 use ::ipc_bridge;
 use ::plugin_buffer;
@@ -297,11 +297,10 @@ pub struct Server {
 }
 
 impl Server {
-    pub fn launch(unix_domain_socket_name: &Path, tcp_addresses: &[&str]) -> Self {
+    pub fn launch(unix_domain_socket_name: &Path, tcp_addresses: &[&str]) -> Result<Self> {
         let (tx, rx) = channel();
 
-        // TODO(sirver): grep for unwrap and remove
-        let mut event_loop = mio::EventLoop::new().unwrap();
+        let mut event_loop = mio::EventLoop::new().expect("Could not create an event loop.");
 
         let mut server = Server {
             unix_domain_socket_name: unix_domain_socket_name.to_path_buf(),
@@ -328,7 +327,7 @@ impl Server {
             server.commands.clone());
 
         server.event_loop_thread = Some(thread::spawn(move || {
-            event_loop.run(&mut ipc_bridge).unwrap();
+            event_loop.run(&mut ipc_bridge).expect("Could not start event_loop.");
         }));
 
         server.swiboe_thread = Some(thread::spawn(move || {
@@ -336,10 +335,10 @@ impl Server {
         }));
 
         server.buffer_plugin = Some(
-            plugin_buffer::BufferPlugin::new(&server.unix_domain_socket_name));
+            try!(plugin_buffer::BufferPlugin::new(&server.unix_domain_socket_name)));
         server.list_files_plugin = Some(
-            plugin_list_files::ListFilesPlugin::new(&server.unix_domain_socket_name));
-        server
+            try!(plugin_list_files::ListFilesPlugin::new(&server.unix_domain_socket_name)));
+        Ok(server)
     }
 
     pub fn shutdown(&mut self) {

@@ -12,7 +12,6 @@ use mio;
 use serde;
 use std::net;
 use std::path;
-use std::str::FromStr;
 use std::sync::Mutex;
 use std::sync::mpsc;
 use std::thread;
@@ -47,26 +46,29 @@ impl Client {
         }
     }
 
-    pub fn new_rpc(&self, name: &str, rpc: Box<rpc::server::Rpc>) {
-        // NOCOM(#sirver): what happens when this is already inserted? crash probably
-        let mut new_rpc = self.call("core.new_rpc", &NewRpcRequest {
+    pub fn new_rpc(&self, name: &str, rpc: Box<rpc::server::Rpc>) -> Result<()> {
+        let mut new_rpc = try!(self.call("core.new_rpc", &NewRpcRequest {
             priority: rpc.priority(),
             name: name.into(),
-        });
-        let success = new_rpc.wait().unwrap();
-        // NOCOM(#sirver): report failure.
+        }));
+        let result = new_rpc.wait();
+
+        if !result.is_ok() {
+            return Err(result.unwrap_err().into());
+        }
 
         self.rpc_loop_commands.send(rpc_loop::Command::NewRpc(name.into(), rpc)).expect("NewRpc");
+        Ok(())
     }
 
-    pub fn call<T: serde::Serialize>(&self, function: &str, args: &T) -> rpc::client::Context {
-        rpc::client::Context::new(self.rpc_loop_commands.clone(), function, args).unwrap()
+    pub fn call<T: serde::Serialize>(&self, function: &str, args: &T) -> Result<rpc::client::Context> {
+        rpc::client::Context::new(self.rpc_loop_commands.clone(), function, args)
     }
 
-    pub fn clone(&self) -> ThinClient {
-        ThinClient {
+    pub fn clone(&self) -> Result<ThinClient> {
+        Ok(ThinClient {
             rpc_loop_commands: Mutex::new(self.rpc_loop_commands.clone()),
-        }
+        })
     }
 }
 

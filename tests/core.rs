@@ -27,7 +27,7 @@ fn as_json(s: &str) -> serde_json::Value {
 #[test]
 fn shutdown_server_with_clients_connected() {
     let socket_name = temporary_socket_name();
-    let mut server = Server::launch(&socket_name, &[]);
+    let mut server = Server::launch(&socket_name, &[]).unwrap();
 
     let _client = client::Client::connect_unix(&socket_name).unwrap();
 
@@ -65,9 +65,9 @@ fn new_rpc_simple() {
     client1.new_rpc("test.test", Box::new(TestCall {
         priority: 0,
         result: rpc::Result::Ok(test_msg.clone()),
-    }));
+    })).unwrap();
 
-    let mut rpc = client2.call("test.test", &test_msg);
+    let mut rpc = client2.call("test.test", &test_msg).unwrap();
     assert_eq!(rpc.wait().unwrap(), rpc::Result::Ok(test_msg));
 }
 
@@ -79,17 +79,17 @@ fn new_rpc_with_priority() {
     client1.new_rpc("test.test", Box::new(TestCall {
         priority: 100,
         result: rpc::Result::Ok(as_json(r#"{ "from": "client1" }"#)),
-    }));
+    })).unwrap();
 
 
     let client2 = client::Client::connect_unix(&t.socket_name).unwrap();
     client2.new_rpc("test.test", Box::new(TestCall {
         priority: 50,
         result: rpc::Result::Ok(as_json(r#"{ "from": "client2" }"#)),
-    }));
+    })).unwrap();
 
     let client3 = client::Client::connect_unix(&t.socket_name).unwrap();
-    let mut rpc = client3.call("test.test", &as_json(r#"{}"#));
+    let mut rpc = client3.call("test.test", &as_json(r#"{}"#)).unwrap();
     assert_eq!(rpc::Result::Ok(as_json(r#"{ "from": "client2" }"#)), rpc.wait().unwrap());
 }
 
@@ -101,17 +101,17 @@ fn new_rpc_with_priority_first_does_not_handle() {
     client1.new_rpc("test.test", Box::new(TestCall {
         priority: 100,
         result: rpc::Result::Ok(as_json(r#"{ "from": "client1" }"#)),
-    }));
+    })).unwrap();
 
 
     let client2 = client::Client::connect_unix(&t.socket_name).unwrap();
     client2.new_rpc("test.test", Box::new(TestCall {
         priority: 50,
         result: rpc::Result::NotHandled,
-    }));
+    })).unwrap();
 
     let client3 = client::Client::connect_unix(&t.socket_name).unwrap();
-    let mut rpc = client3.call("test.test", &as_json(r#"{}"#));
+    let mut rpc = client3.call("test.test", &as_json(r#"{}"#)).unwrap();
     assert_eq!(rpc::Result::Ok(as_json(r#"{ "from": "client1" }"#)), rpc.wait().unwrap());
 }
 
@@ -122,45 +122,45 @@ fn client_disconnects_should_not_stop_handling_of_rpcs() {
     let client0 = client::Client::connect_unix(&t.socket_name).unwrap();
     client0.new_rpc("test.test", Box::new(TestCall {
             priority: 100, result: rpc::Result::NotHandled,
-    }));
+    })).unwrap();
 
     let client1 = client::Client::connect_unix(&t.socket_name).unwrap();
     client1.new_rpc("test.test", Box::new(TestCall {
             priority: 101, result:
                 rpc::Result::Ok(as_json(r#"{ "from": "client1" }"#)),
-    }));
+    })).unwrap();
 
     let client2 = client::Client::connect_unix(&t.socket_name).unwrap();
     client2.new_rpc("test.test", Box::new(TestCall {
             priority: 102, result: rpc::Result::NotHandled,
-    }));
+    })).unwrap();
 
     let client3 = client::Client::connect_unix(&t.socket_name).unwrap();
     client3.new_rpc("test.test", Box::new(TestCall {
             priority: 103, result:
                 rpc::Result::Ok(as_json(r#"{ "from": "client3" }"#)),
-    }));
+    })).unwrap();
 
     let client = client::Client::connect_unix(&t.socket_name).unwrap();
 
-    let mut rpc = client.call("test.test", &as_json(r#"{}"#));
+    let mut rpc = client.call("test.test", &as_json(r#"{}"#)).unwrap();
     assert_eq!(rpc::Result::Ok(as_json(r#"{ "from": "client1" }"#)), rpc.wait().unwrap());
 
     drop(client1); // clients: 0 2 3
-    let mut rpc = client.call("test.test", &as_json(r#"{}"#));
+    let mut rpc = client.call("test.test", &as_json(r#"{}"#)).unwrap();
     assert_eq!(rpc::Result::Ok(as_json(r#"{ "from": "client3" }"#)), rpc.wait().unwrap());
 
     drop(client0); // clients: 2 3
-    let mut rpc = client.call("test.test", &as_json(r#"{}"#));
+    let mut rpc = client.call("test.test", &as_json(r#"{}"#)).unwrap();
     assert_eq!(rpc::Result::Ok(as_json(r#"{ "from": "client3" }"#)), rpc.wait().unwrap());
 
     drop(client3); // clients: 2
-    let mut rpc = client.call("test.test", &as_json(r#"{}"#));
+    let mut rpc = client.call("test.test", &as_json(r#"{}"#)).unwrap();
     assert_eq!(rpc::Result::NotHandled, rpc.wait().unwrap());
 
     drop(client2); // clients:
 
-    let mut rpc = client.call("test.test", &as_json(r#"{}"#));
+    let mut rpc = client.call("test.test", &as_json(r#"{}"#)).unwrap();
     assert_eq!(rpc::Result::Err(rpc::Error {
         kind: rpc::ErrorKind::UnknownRpc,
         details: None,
@@ -172,7 +172,7 @@ fn call_not_existing_rpc() {
     let t = TestHarness::new();
 
     let client = client::Client::connect_unix(&t.socket_name).unwrap();
-    let mut rpc = client.call("not_existing", &as_json("{}"));
+    let mut rpc = client.call("not_existing", &as_json("{}")).unwrap();
     assert_eq!(rpc::Result::Err(rpc::Error {
         kind: rpc::ErrorKind::UnknownRpc,
         details: None,
@@ -195,10 +195,10 @@ fn call_streaming_rpc_simple() {
                 context.finish(rpc::Result::success(&as_json(r#"{ "foo": "blah" }"#))).unwrap();
             });
         },
-    }));
+    })).unwrap();
 
     let client = client::Client::connect_unix(&t.socket_name).unwrap();
-    let mut rpc = client.call("test.test", &as_json("{}"));
+    let mut rpc = client.call("test.test", &as_json("{}")).unwrap();
 
     assert_eq!(as_json(r#"{ "msg": "one" }"#), rpc.recv().unwrap().unwrap());
     assert_eq!(as_json(r#"{ "msg": "two" }"#), rpc.recv().unwrap().unwrap());
@@ -232,10 +232,10 @@ fn call_streaming_rpc_cancelled() {
                 *cancelled = true;
             });
         },
-    }));
+    })).unwrap();
 
     let client = client::Client::connect_unix(&t.socket_name).unwrap();
-    let mut rpc = client.call("test.test", &as_json("{}"));
+    let mut rpc = client.call("test.test", &as_json("{}")).unwrap();
 
     assert_eq!(as_json(r#"{ "value": "0" }"#), rpc.recv().unwrap().unwrap());
     assert_eq!(as_json(r#"{ "value": "1" }"#), rpc.recv().unwrap().unwrap());

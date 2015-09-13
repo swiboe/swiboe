@@ -14,6 +14,7 @@ use std::sync::{RwLock, Arc, Mutex};
 use swiboe::client;
 use swiboe::plugin_buffer;
 use swiboe::rpc;
+use swiboe;
 use uuid::Uuid;
 
 // NOCOM(#sirver): nothing in this file is tested .
@@ -174,25 +175,25 @@ pub struct BufferViews {
 }
 
 impl BufferViews {
-    pub fn new(gui_id: &str, commands: mpsc::Sender<GuiCommand>, client: &client::Client) -> Arc<RwLock<Self>> {
+    pub fn new(gui_id: &str, commands: mpsc::Sender<GuiCommand>, client: &client::Client) -> swiboe::Result<Arc<RwLock<Self>>> {
         let buffer_view = Arc::new(RwLock::new(BufferViews {
             gui_id: gui_id.to_string(),
             buffer_views: HashMap::new(),
-            client: client.clone(),
+            client: try!(client.clone()),
             commands: Mutex::new(commands),
         }));
 
         let scroll = Scroll {
             buffer_views: buffer_view.clone(),
         };
-        client.new_rpc("gui.buffer_view.scroll", Box::new(scroll));
+        try!(client.new_rpc("gui.buffer_view.scroll", Box::new(scroll)));
 
         let move_cursor = MoveCursor {
             buffer_views: buffer_view.clone(),
         };
-        client.new_rpc("gui.buffer_view.move_cursor", Box::new(move_cursor));
+        try!(client.new_rpc("gui.buffer_view.move_cursor", Box::new(move_cursor)));
 
-        buffer_view
+        Ok(buffer_view)
     }
 
     // NOCOM(#sirver): write tests for move cursor.

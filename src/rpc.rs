@@ -68,6 +68,14 @@ impl Result {
             Err(e) => e,
         }
     }
+
+    pub fn is_ok(&self) -> bool {
+        if let &Result::Ok(_) = self {
+            true
+        } else {
+            false
+        }
+    }
 }
 
 // NOCOM(#sirver): check in this file what needs to be derived. seems too much.

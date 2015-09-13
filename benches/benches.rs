@@ -29,7 +29,7 @@ fn bench_create_and_delete_buffers(b: &mut Bencher) {
         let new_response: plugin_buffer::NewResponse = match active_client.call(
             "buffer.new", &plugin_buffer::NewRequest {
                 content: Some("bli\nbla\nblub".into()),
-            }).wait().unwrap()
+            }).unwrap().wait().unwrap()
         {
             rpc::Result::Ok(value) => serde_json::from_value(value).unwrap(),
             err => panic!("{:?}", err),
@@ -38,7 +38,7 @@ fn bench_create_and_delete_buffers(b: &mut Bencher) {
         let _: plugin_buffer::DeleteResponse = match active_client.call(
             "buffer.delete", &plugin_buffer::DeleteRequest {
                 buffer_index: new_response.buffer_index
-            }).wait().unwrap() {
+            }).unwrap().wait().unwrap() {
             rpc::Result::Ok(value) => serde_json::from_value(value).unwrap(),
             err => panic!("{:?}", err),
         };

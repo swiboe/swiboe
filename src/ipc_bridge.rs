@@ -150,10 +150,10 @@ impl mio::Handler for IpcBridge {
             Command::Quit => event_loop.shutdown(),
             Command::SendData(receiver, message) => {
                 let result = self.connections.get_mut(receiver.token)
-                    .ok_or(Error::new(ErrorKind::ClientDisconnected))
+                    .ok_or(Error::new(ErrorKind::Disconnected))
                     .and_then(|conn| {
                         if conn.client_id != receiver {
-                            Err(Error::new(ErrorKind::ClientDisconnected))
+                            Err(Error::new(ErrorKind::Disconnected))
                         } else {
                             // println!("{:?}: Server -> {:?}: {:#?}", time::precise_time_ns(),
                                 // receiver, message);
