@@ -4,38 +4,16 @@
 
 use ::Result;
 use ::rpc;
-use libc::consts::os::posix88;
-use mio::{TryRead};
+use mio::{TryRead, TryWrite};
 use serde_json;
 use std::error::Error;
-use std::io::{self, Read, Write};
+use std::io::{Read, Write};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum Message {
     RpcCall(rpc::Call),
     RpcResponse(rpc::Response),
     RpcCancel(rpc::Cancel),
-}
-
-
-// TODO(hrapp): This kinda defeats the purpose of MIO a bit, but it makes it very convenient to
-// read always a full message. No buffering of our own is needed then. This might impact
-// performance really negatively and might also lead to deadlooks, so we should get rid of it AFAP.
-// mio provides some buffers that look useful.
-fn write_all<T: Write>(writer: &mut T, buffer: &[u8]) -> io::Result<()> {
-    let mut num_written = 0;
-    while num_written < buffer.len() {
-        match writer.write(&buffer[num_written..]) {
-            Ok(len) => num_written += len,
-            Err(err) => {
-                if err.raw_os_error() != Some(posix88::EAGAIN) {
-                    return Err(err);
-                }
-                // println!("#sirver write EAGAIN");
-            }
-        }
-    }
-    Ok(())
 }
 
 pub struct Reader<T: Read> {
@@ -78,28 +56,54 @@ impl<T: Read> Reader<T> {
 }
 
 pub struct Writer<T: Write> {
+    // The number of bytes already written in to_write[0]. Once all are written, to_write[0] is
+    // popped.
+    num_written: usize,
+    to_write: Vec<Vec<u8>>,
     pub socket: T,
 }
 
+pub enum WriterState {
+    MoreToWrite,
+    AllWritten,
+}
 
 impl<T: Write> Writer<T> {
     pub fn new(socket: T) -> Self {
         Writer {
             socket: socket,
+            num_written: 0,
+            to_write: Vec::new(),
         }
     }
 
-    pub fn write_message(&mut self, message: &Message) -> Result<()> {
-        // NOCOM(#sirver): is that maximal efficient?
-        let buffer = serde_json::to_string(message).unwrap();
-        let len = [
+    pub fn queue_message(&mut self, message: &Message) {
+        let buffer = serde_json::to_vec(message).unwrap();
+
+        let len = vec![
             (buffer.len() >> 0) as u8,
             (buffer.len() >> 8) as u8,
             (buffer.len() >> 16) as u8,
             (buffer.len() >> 24) as u8 ];
+        self.to_write.push(len);
+        self.to_write.push(buffer);
+    }
 
-        try!(write_all(&mut self.socket, &len));
-        try!(write_all(&mut self.socket, buffer.as_bytes()));
-        Ok(())
+    pub fn try_write(&mut self) -> Result<WriterState> {
+        if self.to_write.is_empty() {
+            return Ok(WriterState::AllWritten);
+        }
+
+        if let Some(num_written) = try!(self.socket.try_write(&self.to_write[0][self.num_written..])) {
+            self.num_written += num_written;
+        }
+
+        if self.num_written == self.to_write[0].len() {
+            self.to_write.remove(0);
+            self.num_written = 0;
+            self.try_write()
+        } else {
+            Ok(WriterState::MoreToWrite)
+        }
     }
 }

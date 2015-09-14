@@ -8,11 +8,12 @@ use ::{Error, Result};
 use mio::tcp::{TcpListener, TcpStream};
 use mio::unix::{UnixListener, UnixStream};
 use mio;
+use std::io;
 use std::net;
 use std::path::Path;
 use std::str::FromStr;
+use std::sync::{Arc, Mutex};
 use threadpool::ThreadPool;
-use std::io;
 
 // Number of threads to use for handling IO.
 const NUM_THREADS: usize = 4;
@@ -46,7 +47,7 @@ impl MioStream for TcpStream {
 struct Connection<T: io::Read + io::Write> {
     // NOCOM(#sirver): messy design
     reader: Option<ipc::Reader<T>>,
-    writer: ipc::Writer<T>,
+    writer: Arc<Mutex<ipc::Writer<T>>>,
     client_id: ClientId,
 }
 
@@ -111,7 +112,7 @@ impl IpcBridge {
                 token: token,
             };
             let connection = Connection {
-                writer: ipc::Writer::new(stream.try_clone().unwrap()),
+                writer: Arc::new(Mutex::new(ipc::Writer::new(stream.try_clone().unwrap()))),
                 reader: Some(ipc::Reader::new(stream)),
                 client_id: client_id,
             };
@@ -133,12 +134,23 @@ impl IpcBridge {
             }
         };
     }
+
+    fn reregister_for_writing(&mut self, token: mio::Token, event_loop: &mut mio::EventLoop<Self>) {
+        let conn = &mut self.connections[token];
+        let writer = conn.writer.lock().expect("Mutex poisoned");
+        event_loop.reregister(
+            &*writer.socket,
+            token,
+            mio::EventSet::writable(),
+            mio::PollOpt::edge() | mio::PollOpt::oneshot()).unwrap();
+    }
 }
 
 pub enum Command {
     Quit,
     SendData(ClientId, ipc::Message),
     ReRegisterForReading(mio::Token, ipc::Reader<Box<MioStream>>),
+    ReRegisterForWriting(mio::Token),
 }
 
 impl mio::Handler for IpcBridge {
@@ -157,13 +169,18 @@ impl mio::Handler for IpcBridge {
                         } else {
                             // println!("{:?}: Server -> {:?}: {:#?}", time::precise_time_ns(),
                                 // receiver, message);
-                            // NOCOM(#sirver): super dangerous - the reader might be handed out.
-                            conn.writer.write_message(&message)
+                            let mut writer = conn.writer.lock().unwrap();
+                            writer.queue_message(&message);
+                            Ok(())
                         }
                     });
-                if let Err(err) = result {
-                    self.commands.send(server::Command::SendDataFailed(receiver, message, err)).expect("SendFailed");
-                }
+                match result {
+                    Ok(_) => self.reregister_for_writing(receiver.token, event_loop),
+                    Err(err) => {
+                        self.commands.send(server::Command::SendDataFailed(receiver, message,
+                                                                           err)).expect("SendFailed");
+                    },
+                };
             }
             Command::ReRegisterForReading(token, reader) => {
                 // NOCOM(#sirver): I think this is dangerous.
@@ -174,6 +191,9 @@ impl mio::Handler for IpcBridge {
                     token,
                     mio::EventSet::readable(),
                     mio::PollOpt::edge() | mio::PollOpt::oneshot()).unwrap();
+            },
+            Command::ReRegisterForWriting(token) => {
+                self.reregister_for_writing(token, event_loop);
             },
         }
     }
@@ -228,6 +248,21 @@ impl mio::Handler for IpcBridge {
                             }
                         }
                         event_loop_sender.send(Command::ReRegisterForReading(token, reader)).expect("Command::ReRegisterForReading");
+                    });
+                } else if events.is_writable() {
+                    let conn = &mut self.connections[token];
+                    let writer = conn.writer.clone();
+                    let event_loop_sender = event_loop.channel();
+                    self.thread_pool.execute(move || {
+                        let mut writer = writer.lock().unwrap();
+                        match writer.try_write() {
+                            // NOCOM(#sirver): should disconnect instead of panic.
+                            Err(err) => panic!("Error while writing: {}", err),
+                            Ok(ipc::WriterState::AllWritten) => (),
+                            Ok(ipc::WriterState::MoreToWrite) => {
+                                event_loop_sender.send(Command::ReRegisterForWriting(token)).expect("Command::ReRegisterForWriting");
+                            }
+                        }
                     });
                 }
             }
