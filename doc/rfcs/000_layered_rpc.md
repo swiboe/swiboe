@@ -87,7 +87,7 @@ callbacks, the order should rarely matter. If many implementors therefore
 register with the same priority (likely 0), they can be all called in parallel,
 which will save time.
 
-Once an order has been define, Swiboe will now start calling the RPCs one by
+Once an order has been defined, Swiboe will now start calling the RPCs one by
 one, see below.
 
 Should an RPC be deleted from Swiboe's list while the `PendingRpc` is alive, it
