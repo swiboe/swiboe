@@ -47,6 +47,18 @@ pub extern "C" fn swiboe_disconnect(client: *mut client::Client) {
 }
 
 #[no_mangle]
+pub extern "C" fn swiboe_server_context_finish(context: *mut client::rpc::server::Context, rpc_result: *const rpc::Result) {
+    let mut context: Box<client::rpc::server::Context> = unsafe {
+         mem::transmute(context)
+    };
+    let result: Box<rpc::Result> = unsafe {
+         mem::transmute(rpc_result)
+    };
+    // NOCOM(#sirver): error handling.
+    context.finish(*result).unwrap();
+}
+
+#[no_mangle]
 pub extern "C" fn swiboe_rpc_ok(c_buf: *const c_char) -> *const rpc::Result {
     let json_str = c_str_to_string(c_buf);
 
@@ -114,7 +126,7 @@ pub extern "C" fn swiboe_rpc_context_wait(context: *mut client::rpc::client::Con
 }
 
 
-pub type CCallback = extern fn(*const c_char) -> *const rpc::Result;
+pub type CCallback = extern fn(*mut client::rpc::server::Context, *const c_char);
 struct CallbackRpc {
     priority: u16,
     callback: CCallback,
@@ -128,12 +140,14 @@ impl client::rpc::server::Rpc for CallbackRpc {
             args: serde_json::Value) {
         let args_str = serde_json::to_string(&args).unwrap();
         let c_str = CString::new(args_str).expect("JSON contained zero byte");
-        let result: Box<rpc::Result> = unsafe {
-            let result = (self.callback)(c_str.as_ptr());
-            let res = mem::transmute(result);
-            res
+
+        let mut box_context = Box::new(context);
+
+        unsafe {
+            let context_ptr: *mut client::rpc::server::Context =
+                mem::transmute(box_context);
+            (self.callback)(context_ptr, c_str.as_ptr());
         };
-        context.finish(*result).unwrap();
     }
 }
 

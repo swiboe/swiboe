@@ -19,7 +19,8 @@ swiboe.swiboe_disconnect.restype = None
 swiboe.swiboe_disconnect.argtypes = [PtrClient]
 
 PtrRpcResult = c_void_p
-RPC = CFUNCTYPE(PtrRpcResult, c_char_p)
+PtrServerContext = c_void_p
+RPC = CFUNCTYPE(None, PtrServerContext, c_char_p)
 
 swiboe.swiboe_new_rpc.restype = None
 swiboe.swiboe_new_rpc.argtypes = [PtrClient, c_char_p, c_uint16, RPC]
@@ -37,16 +38,22 @@ PtrClientContext = c_void_p
 swiboe.swiboe_client_call_rpc.restype = PtrClientContext
 swiboe.swiboe_client_call_rpc.argtypes = [PtrClient, c_char_p, c_char_p]
 
+# NOCOM(#sirver): rename rpc_context to either client_context or server_context
 swiboe.swiboe_rpc_context_wait.restype = None
 swiboe.swiboe_rpc_context_wait.argtypes = [PtrClientContext]
+
+swiboe.swiboe_server_context_finish.restype = None
+swiboe.swiboe_server_context_finish.argtypes = [PtrServerContext, PtrRpcResult]
 
 serving_client = swiboe.swiboe_connect("/tmp/blub.socket")
 # TODO(sirver): handle streaming rpcs.
 # TODO(sirver): Call other rpcs.
 
-def callback(args):
+def callback(rpc_context, args):
     print("callback called %s" % args)
-    return swiboe.swiboe_rpc_ok("{}")
+    result = swiboe.swiboe_rpc_ok("{}")
+    swiboe.swiboe_server_context_finish(rpc_context, result)
+    # rpc_context is no longer valid.
 
 rpc_callback = RPC(callback)
 
