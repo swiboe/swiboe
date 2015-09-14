@@ -313,7 +313,7 @@ impl<'a> LuaTable<'a> {
 
         Ok(LuaFunction {
             // NOCOM(#sirver): ouch
-            lua_state: lua::State::from_ptr(self.lua_state.as_ptr()),
+            lua_state: unsafe { lua::State::from_ptr(self.lua_state.as_ptr()) },
             reference: reference,
         })
     }
