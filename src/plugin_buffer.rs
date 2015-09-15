@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0. See LICENSE.txt
 // in the project root for license information.
 
+use ::client::RpcCaller;
 use ::client;
 use ::error::{Result, Error};
 use ::rpc;
@@ -309,7 +310,7 @@ impl BufferPlugin {
     pub fn new(socket_name: &path::Path) -> Result<Self> {
         let client = try!(client::Client::connect_unix(socket_name));
 
-        let plugin = BufferPlugin {
+        let mut plugin = BufferPlugin {
             buffers: Arc::new(RwLock::new(BuffersManager::new(try!(client.clone())))),
             client: client,
         };

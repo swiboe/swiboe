@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0. See LICENSE.txt
 // in the project root for license information.
 
+use ::client::RpcCaller;
 use ::client::rpc_loop;
 use ::error::{Result, Error};
 use serde::Serialize;
@@ -67,11 +68,6 @@ impl Context {
         }
     }
 
-    pub fn call<T: Serialize>(&mut self, function: &str, args: &T) -> Result<::client::rpc::client::Context> {
-        try!(self.check_liveness());
-        Ok(try!(::client::rpc::client::Context::new(self.rpc_loop_commands.clone(), function, args)))
-    }
-
     pub fn update<T: Serialize>(&mut self, args: &T) -> Result<()> {
         try!(self.check_liveness());
 
@@ -97,6 +93,13 @@ impl Context {
             kind: ::rpc::ResponseKind::Last(result),
         });
         Ok(try!(self.rpc_loop_commands.send(rpc_loop::Command::Send(msg))))
+    }
+}
+
+impl RpcCaller for Context {
+    fn call<T: Serialize>(&mut self, function: &str, args: &T) -> Result<::client::rpc::client::Context> {
+        try!(self.check_liveness());
+        Ok(try!(::client::rpc::client::Context::new(self.rpc_loop_commands.clone(), function, args)))
     }
 }
 

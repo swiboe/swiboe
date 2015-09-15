@@ -102,7 +102,7 @@ impl ListFilesPlugin {
     pub fn new(socket_name: &path::Path) -> Result<Self> {
         let client = try!(client::Client::connect_unix(socket_name));
 
-        let plugin = ListFilesPlugin {
+        let mut plugin = ListFilesPlugin {
             client: client,
         };
 

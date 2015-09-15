@@ -94,6 +94,37 @@ pub extern "C" fn swiboe_rpc_not_handled() -> *const rpc::Result {
     }
 }
 
+fn call<T: client::RpcCaller>(context: &mut T, rpc_name: *const c_char, args: *const c_char)
+    -> *mut client::rpc::client::Context
+{
+    let rpc_name = c_str_to_string(rpc_name);
+    let args = if args.is_null() {
+        serde_json::Value::Null
+    } else {
+        let json_str = c_str_to_string(args);
+        serde_json::from_str(&json_str).expect("call: 'args' not valid json.")
+    };
+
+    // NOCOM(#sirver): error handling
+    let rpc_context = context.call(&rpc_name, &args).unwrap();
+    unsafe {
+        mem::transmute(Box::new(client.call(&rpc_name, &args)))
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn swiboe_server_context_call_rpc(
+    context: *const client::rpc::server::Context,
+    rpc_name: *const c_char,
+    args: *const c_char) -> *mut client::rpc::client::Context {
+    let context: &mut client::rpc::server::Context = unsafe {
+        mem::transmute(context)
+    };
+
+    call(context, rpc_name, args)
+}
+
+
 #[no_mangle]
 pub extern "C" fn swiboe_client_call_rpc(client: *const client::Client,
                                          rpc_name: *const c_char,
@@ -101,18 +132,7 @@ pub extern "C" fn swiboe_client_call_rpc(client: *const client::Client,
     let client: &mut client::Client = unsafe {
         mem::transmute(client)
     };
-
-    let rpc_name = c_str_to_string(rpc_name);
-    let args = if args.is_null() {
-        serde_json::Value::Null
-    } else {
-        let json_str = c_str_to_string(args);
-        serde_json::from_str(&json_str).expect("swiboe_client_call_rpc: 'args' not valid json.")
-    };
-
-    unsafe {
-        mem::transmute(Box::new(client.call(&rpc_name, &args)))
-    }
+    call(client, rpc_name, args)
 }
 
 #[no_mangle]
