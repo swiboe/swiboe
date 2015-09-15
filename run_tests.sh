@@ -4,7 +4,7 @@
 # in the project root for license information.
 
 
-set -e
+set -ex
 
 CARGO="$(which travis-cargo || which cargo)"
 
