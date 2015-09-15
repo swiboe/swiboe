@@ -72,8 +72,10 @@ unsafe extern "C" fn lua_map(lua_state: *mut lua::ffi::lua_State) -> libc::c_int
 #[allow(non_snake_case)]
 unsafe extern "C" fn lua_call(lua_state: *mut lua::ffi::lua_State) -> libc::c_int {
     let mut state = lua::State::from_ptr(lua_state);
-    let function_name = state.check_string(2);
-    let json_arguments_as_string = state.check_string(3);
+
+    // TODO(mmatyas): use &str here
+    let function_name = state.check_string(2).to_string();
+    let json_arguments_as_string = state.check_string(3).to_string();
 
     let thin_client: &mut client::ThinClient = state.check_userdata_typed(1, "swiboe.ThinClient");
 
@@ -172,6 +174,7 @@ pub trait Key: string::ToString {
 }
 
 impl<'a> Key for &'a str {
+    // TODO(mmatyas): use &str here
     type IntoType = String;
 
     fn push(&self, lua_state: &mut lua::State) {
@@ -179,7 +182,7 @@ impl<'a> Key for &'a str {
     }
 
     fn pop(lua_state: &mut lua::State) -> Result<Self::IntoType, LuaTableError> {
-        let rv = lua_state.to_str(-1).ok_or(LuaTableError::InvalidType);
+        let rv = lua_state.to_str(-1).map(|s| s.to_owned()).ok_or(LuaTableError::InvalidType);
         lua_state.pop(1);
         rv
     }
@@ -287,7 +290,8 @@ impl<'a> LuaTable<'a> {
 
     pub fn get_string<T: Key>(&mut self, key: T) -> Result<String, LuaTableError> {
         try!(self.push_value_for_existing_key(key));
-        let rv = self.lua_state.to_str(-1).ok_or(LuaTableError::InvalidType);
+        // TODO(mmatyas): use &str here
+        let rv = self.lua_state.to_str(-1).map(|s| s.to_owned()).ok_or(LuaTableError::InvalidType);
         self.lua_state.pop(1);
         rv
     }
@@ -313,7 +317,7 @@ impl<'a> LuaTable<'a> {
 
         Ok(LuaFunction {
             // NOCOM(#sirver): ouch
-            lua_state: lua::State::from_ptr(self.lua_state.as_ptr()),
+            lua_state: unsafe { lua::State::from_ptr(self.lua_state.as_ptr()) },
             reference: reference,
         })
     }
@@ -332,7 +336,8 @@ impl<'a> LuaTable<'a> {
         self.lua_state.push_nil(); // S: table ... nil
 		while self.lua_state.next(self.table_index) {   // S: key value
 			self.lua_state.pop(1);               // S: key
-            match self.lua_state.to_str(-1) {
+            // TODO(mmatyas): use &str here
+            match self.lua_state.to_str(-1).map(|s| s.to_owned()) {
                 Some(key) => {
                     table_keys.insert(key);
                 },
