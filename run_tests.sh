@@ -4,35 +4,39 @@
 # in the project root for license information.
 
 
-set -ex
+set -e
 
 CARGO="$(which travis-cargo || which cargo)"
 
 test_crate() {
    DIR=$1; shift;
-   pushd $DIR
+   pushd $DIR > /dev/null
 
    $CARGO build
 
    # Only run tests if there is a rust file that contains #[test].
-   find . -name '*.rs' -print0 | xargs -0 grep '^\s*#\[test\]'
-   if [ $? ]; then
+   FOUND=$(find . -name '*.rs' -print0 | \
+      xargs -0 grep -q '^\s*#\[test\]' \
+      && echo yes || echo no)
+   if [[ $FOUND = "yes" ]]; then
       $CARGO test;
    fi
 
    # Only run benchmarks if there is a rust file that contains #[bench].
-   find . -name '*.rs' -print0 | xargs -0 grep '^\s*#\[bench\]'
-   if [ $? ]; then
+   FOUND=$(find . -name '*.rs' -print0 | \
+      xargs -0 grep -q '^\s*#\[bench\]' \
+      && echo yes || echo no)
+   if [[ $FOUND = "yes" ]]; then
       $CARGO bench
    fi
 
-   popd
+   popd > /dev/null
 }
 
 # Build documentation.
-pushd doc
+pushd doc > /dev/null
 sphinx-build -b html -W source build/html
-popd
+popd > /dev/null
 
 test_crate "."
 test_crate "c_client"
