@@ -2,7 +2,6 @@
 // Licensed under the Apache License, Version 2.0. See LICENSE.txt
 // in the project root for license information.
 
-#![feature(cstr_memory)]
 #![feature(result_expect)]
 
 extern crate libc;
@@ -33,7 +32,7 @@ pub extern "C" fn swiboe_connect(socket_name: *const c_char) -> *mut client::Cli
 
     let client = Box::new(
         // NOCOM(#sirver): error handling
-        client::Client::connect(socket_name_path).unwrap(),
+        client::Client::connect_unix(socket_name_path).unwrap(),
     );
 
     unsafe { mem::transmute(client) }
@@ -108,7 +107,7 @@ fn call<T: client::RpcCaller>(context: &mut T, rpc_name: *const c_char, args: *c
     // NOCOM(#sirver): error handling
     let rpc_context = context.call(&rpc_name, &args).unwrap();
     unsafe {
-        mem::transmute(Box::new(client.call(&rpc_name, &args)))
+        mem::transmute(Box::new(context.call(&rpc_name, &args)))
     }
 }
 
