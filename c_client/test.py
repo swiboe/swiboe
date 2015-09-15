@@ -60,11 +60,11 @@ rpc_callback = RPC(callback)
 # TODO(sirver): The serving_client should complain if the same RPC is registered twice.
 swiboe.swiboe_new_rpc(serving_client, "test.test", 100, rpc_callback)
 
-clients = [ swiboe.swiboe_connect("/tmp/blub.socket") for i in range(50) ]
+clients = [ swiboe.swiboe_connect("/tmp/blub.socket") for i in range(5) ]
 contexts = []
 num = 0
 for c in clients:
-    for i in range(100):
+    for i in range(10):
         contexts.append(
                 swiboe.swiboe_client_call_rpc(c, "test.test", json.dumps({
                     "num": num })))
