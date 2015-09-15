@@ -5,11 +5,12 @@
 use ::{CallbackRpc, create_file};
 use std::sync::{Arc, Mutex};
 use support::TestHarness;
+use swiboe::client::RpcCaller;
 use swiboe::client;
 use swiboe::plugin_buffer;
 use swiboe::rpc;
 
-fn create_buffer(client: &client::Client, expected_index: usize, content: Option<&str>) {
+fn create_buffer(client: &mut client::Client, expected_index: usize, content: Option<&str>) {
     let request = plugin_buffer::NewRequest {
         content: content.map(|s| s.to_string()),
     };
@@ -24,7 +25,7 @@ fn buffer_new() {
     let t = TestHarness::new();
     let callback_called = Arc::new(Mutex::new(false));
     {
-        let client = client::Client::connect_unix(&t.socket_name).unwrap();
+        let mut client = client::Client::connect_unix(&t.socket_name).unwrap();
         let callback_called = callback_called.clone();
         client.new_rpc("on.buffer.new", Box::new(CallbackRpc {
             priority: 100,
@@ -33,7 +34,7 @@ fn buffer_new() {
                 sender.finish(rpc::Result::success(())).unwrap();
             }
         })).unwrap();
-        create_buffer(&client, 0, None);
+        create_buffer(&mut client, 0, None);
     }
     assert!(*callback_called.lock().unwrap());
 }
@@ -41,10 +42,10 @@ fn buffer_new() {
 #[test]
 fn buffer_new_with_content() {
     let t = TestHarness::new();
-    let client = client::Client::connect_unix(&t.socket_name).unwrap();
+    let mut client = client::Client::connect_unix(&t.socket_name).unwrap();
 
     let content = "blub\nblah\nbli";
-    create_buffer(&client, 0, Some(content));
+    create_buffer(&mut client, 0, Some(content));
 
     let mut rpc = client.call("buffer.get_content", &plugin_buffer::GetContentRequest {
         buffer_index: 0,
@@ -57,7 +58,7 @@ fn buffer_new_with_content() {
 #[test]
 fn buffer_open_unhandled_uri() {
     let t = TestHarness::new();
-    let client = client::Client::connect_unix(&t.socket_name).unwrap();
+    let mut client = client::Client::connect_unix(&t.socket_name).unwrap();
 
     let mut rpc = client.call("buffer.open", &plugin_buffer::OpenRequest {
         uri: "blumba://foo".into(),
@@ -69,7 +70,7 @@ fn buffer_open_unhandled_uri() {
 #[test]
 fn buffer_open_file() {
     let t = TestHarness::new();
-    let client = client::Client::connect_unix(&t.socket_name).unwrap();
+    let mut client = client::Client::connect_unix(&t.socket_name).unwrap();
 
     let content = "blub\nblah\nbli";
     let path = create_file(&t, "foo", &content);
@@ -94,7 +95,7 @@ fn buffer_delete() {
     let t = TestHarness::new();
     let callback_called = Arc::new(Mutex::new(false));
     {
-        let client = client::Client::connect_unix(&t.socket_name).unwrap();
+        let mut client = client::Client::connect_unix(&t.socket_name).unwrap();
         let callback_called = callback_called.clone();
         client.new_rpc("on.buffer.deleted", Box::new(CallbackRpc {
             priority: 100,
@@ -104,7 +105,7 @@ fn buffer_delete() {
             }
         })).unwrap();
 
-        create_buffer(&client, 0, None);
+        create_buffer(&mut client, 0, None);
 
         let request = plugin_buffer::DeleteRequest {
             buffer_index: 0,
@@ -119,7 +120,7 @@ fn buffer_delete() {
 fn buffer_delete_non_existing() {
     let t = TestHarness::new();
 
-    let client = client::Client::connect_unix(&t.socket_name).unwrap();
+    let mut client = client::Client::connect_unix(&t.socket_name).unwrap();
     let request = plugin_buffer::DeleteRequest {
         buffer_index: 0,
     };

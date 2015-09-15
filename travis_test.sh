@@ -6,13 +6,15 @@
 
 set -ex
 
+CARGO="$(which travis-cargo || which cargo)"
+
 test_crate() {
    DIR=$1; shift;
    pushd $DIR
 
-   travis-cargo build
-   travis-cargo test
-   travis-cargo bench
+   $CARGO build
+   $CARGO test
+   $CARGO bench
 
    popd
 }

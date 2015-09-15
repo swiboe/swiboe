@@ -11,6 +11,7 @@ use std::convert;
 use std::ops;
 use std::sync::mpsc;
 use std::sync::{RwLock, Arc, Mutex};
+use swiboe::client::RpcCaller;
 use swiboe::client;
 use swiboe::plugin_buffer;
 use swiboe::rpc;
@@ -175,7 +176,7 @@ pub struct BufferViews {
 }
 
 impl BufferViews {
-    pub fn new(gui_id: &str, commands: mpsc::Sender<GuiCommand>, client: &client::Client) -> swiboe::Result<Arc<RwLock<Self>>> {
+    pub fn new(gui_id: &str, commands: mpsc::Sender<GuiCommand>, client: &mut client::Client) -> swiboe::Result<Arc<RwLock<Self>>> {
         let buffer_view = Arc::new(RwLock::new(BufferViews {
             gui_id: gui_id.to_string(),
             buffer_views: HashMap::new(),
@@ -235,7 +236,7 @@ impl BufferViews {
     pub fn new_view(&mut self, buffer_index: usize, width: usize, height: usize) -> String {
         let mut rpc = self.client.call("buffer.get_content", &plugin_buffer::GetContentRequest {
             buffer_index: buffer_index,
-        });
+        }).unwrap();
 
         let response: plugin_buffer::GetContentResponse = rpc.wait_for().unwrap();
         let buffer_view = BufferView::new(width, height, &response.content);

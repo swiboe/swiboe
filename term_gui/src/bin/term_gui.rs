@@ -22,7 +22,7 @@ use std::path;
 use std::str::FromStr;
 use std::sync::mpsc;
 use std::sync::{RwLock, Arc};
-use swiboe::client;
+use swiboe::client::{self, RpcCaller};
 use uuid::Uuid;
 
 fn clamp<T: Copy + cmp::Ord + std::fmt::Debug>(min: T, max: T, v: &mut T) {
@@ -45,7 +45,7 @@ enum CompleterState {
 }
 
 impl CompleterWidget {
-    fn new(client: &client::Client) -> swiboe::Result<Self> {
+    fn new(client: &mut client::Client) -> swiboe::Result<Self> {
 
         // TODO(sirver): This should use the current work directory of the server, since the server
         // might run on a different machine than the client - and certainly in a different
@@ -227,7 +227,7 @@ struct TerminalGui {
 
 impl TerminalGui {
     fn new(options: &Options) -> swiboe::Result<Self> {
-        let client = match net::SocketAddr::from_str(&options.socket) {
+        let mut client = match net::SocketAddr::from_str(&options.socket) {
             Ok(value) => {
                 client::Client::connect_tcp(&value).unwrap()
             }
@@ -252,7 +252,7 @@ impl TerminalGui {
 
         let gui_id: String = Uuid::new_v4().to_hyphenated_string();
         let (gui_commands_tx, gui_commands_rx) = mpsc::channel();
-        let buffer_views = try!(gui::buffer_views::BufferViews::new(&gui_id, gui_commands_tx, &client));
+        let buffer_views = try!(gui::buffer_views::BufferViews::new(&gui_id, gui_commands_tx, &mut client));
 
         Ok(TerminalGui {
             config_file_runner: config_file_runner,
@@ -321,7 +321,7 @@ impl TerminalGui {
             // NOCOM(#sirver): should be handled through plugins.
             rustbox::Key::Char('q') => return Ok(false),
             rustbox::Key::Ctrl('t') => {
-                self.completer = Some(try!(CompleterWidget::new(&self.client)))
+                self.completer = Some(try!(CompleterWidget::new(&mut self.client)))
             },
             rustbox::Key::Esc => {
                 self.config_file_runner.keymap_handler.timeout();
