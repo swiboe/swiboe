@@ -88,6 +88,14 @@ impl Result {
         }
     }
 
+    pub fn unwrap(self) -> serde_json::Value {
+        use self::Result::*;
+        match self {
+            Err(_) | NotHandled => panic!("Called unwrap on a non Ok() value."),
+            Ok(val) => val,
+        }
+    }
+
     pub fn is_ok(&self) -> bool {
         if let &Result::Ok(_) = self {
             true

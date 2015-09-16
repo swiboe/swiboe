@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0. See LICENSE.txt
 // in the project root for license information.
 
+#![feature(cstr_memory)]
 #![feature(result_expect)]
 
 extern crate libc;
@@ -135,14 +136,37 @@ pub extern "C" fn swiboe_client_call_rpc(client: *const client::Client,
 }
 
 #[no_mangle]
-pub extern "C" fn swiboe_rpc_context_wait(context: *mut client::rpc::client::Context) {
+pub extern "C" fn swiboe_rpc_context_wait(context: *mut client::rpc::client::Context) -> *const rpc::Result {
     let mut context: Box<client::rpc::client::Context> = unsafe {
         mem::transmute(context)
     };
 
-    // NOCOM(#sirver): return results to python
-    let result = context.wait();
-    println!("#sirver result: {:#?}", result);
+    // NOCOM(#sirver): error handling
+    let result: rpc::Result = context.wait().unwrap();
+    unsafe {
+        mem::transmute(Box::new(result))
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn swiboe_rpc_result_is_ok(rpc_result: *const rpc::Result) -> bool {
+    let rpc_result: &rpc::Result = unsafe {
+        mem::transmute(rpc_result)
+    };
+    rpc_result.is_ok()
+}
+
+// NOCOM(#sirver): add support for unwrapping errors.
+#[no_mangle]
+pub extern "C" fn swiboe_rpc_result_unwrap(rpc_result: *const rpc::Result) -> *const c_char {
+    // NOCOM(#sirver): deletes the object, needs to be documented.
+    let rpc_result: Box<rpc::Result> = unsafe {
+        mem::transmute(rpc_result)
+    };
+    let json_value = rpc_result.unwrap();
+    let json_string = serde_json::to_string(&json_value).unwrap();
+
+    CString::new(json_string).unwrap().into_raw()
 }
 
 

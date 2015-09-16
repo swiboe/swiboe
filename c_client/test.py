@@ -39,7 +39,7 @@ swiboe.swiboe_client_call_rpc.restype = PtrClientContext
 swiboe.swiboe_client_call_rpc.argtypes = [PtrClient, c_char_p, c_char_p]
 
 # NOCOM(#sirver): rename rpc_context to either client_context or server_context
-swiboe.swiboe_rpc_context_wait.restype = None
+swiboe.swiboe_rpc_context_wait.restype = PtrRpcResult
 swiboe.swiboe_rpc_context_wait.argtypes = [PtrClientContext]
 
 swiboe.swiboe_server_context_finish.restype = None
@@ -47,6 +47,12 @@ swiboe.swiboe_server_context_finish.argtypes = [PtrServerContext, PtrRpcResult]
 
 swiboe.swiboe_server_context_call_rpc.restype = PtrClientContext
 swiboe.swiboe_server_context_call_rpc.argtypes = [PtrServerContext, c_char_p, c_char_p]
+
+swiboe.swiboe_rpc_result_is_ok.restype = bool
+swiboe.swiboe_rpc_result_is_ok.argtypes = [PtrRpcResult]
+
+swiboe.swiboe_rpc_result_unwrap.restype = c_char_p
+swiboe.swiboe_rpc_result_unwrap.argtypes = [PtrRpcResult]
 
 serving_client = swiboe.swiboe_connect("/tmp/blub.socket")
 serving_client1 = swiboe.swiboe_connect("/tmp/blub.socket")
@@ -60,10 +66,14 @@ def callback1(rpc_context, args):
 def callback(rpc_context, args):
     print("callback called %s" % args)
     result = swiboe.swiboe_rpc_ok("{}")
-    # client_context = swiboe.swiboe_server_context_call_rpc(rpc_context,
-            # "test.test1", "{}")
+    client_context = swiboe.swiboe_server_context_call_rpc(rpc_context,
+            "test.test1", "{}")
     # TODO(sirver): look into getting results back.
-    # swiboe.swiboe_rpc_context_wait(client_context)
+    call_result = swiboe.swiboe_rpc_context_wait(client_context)
+    if swiboe.swiboe_rpc_result_is_ok(call_result):
+        print "RPC call was okay."
+    json_blob = swiboe.swiboe_rpc_result_unwrap(call_result)
+    print "#sirver json_blob: %r" % (json_blob)
     swiboe.swiboe_server_context_finish(rpc_context, result)
     # rpc_context is no longer valid.
 
