@@ -107,7 +107,7 @@ fn call<T: client::RpcCaller>(context: &mut T, rpc_name: *const c_char, args: *c
     // NOCOM(#sirver): error handling
     let rpc_context = context.call(&rpc_name, &args).unwrap();
     unsafe {
-        mem::transmute(Box::new(context.call(&rpc_name, &args)))
+        mem::transmute(Box::new(rpc_context))
     }
 }
 
@@ -142,6 +142,7 @@ pub extern "C" fn swiboe_rpc_context_wait(context: *mut client::rpc::client::Con
 
     // NOCOM(#sirver): return results to python
     let result = context.wait();
+    println!("#sirver result: {:#?}", result);
 }
 
 
