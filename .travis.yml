@@ -11,7 +11,7 @@ install:
 
 # TODO(sirver): build & publish docs somewhere.
 script:
-  - ./travis_test.sh
+  - ./run_tests.sh
 
 env:
   global:
