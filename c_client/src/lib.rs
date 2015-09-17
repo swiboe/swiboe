@@ -14,6 +14,7 @@ use libc::c_char;
 use std::ffi::{CStr, CString};
 use std::mem;
 use std::path;
+use std::ptr;
 use std::str;
 use swiboe::client;
 use swiboe::rpc;
@@ -56,6 +57,18 @@ pub extern "C" fn swiboe_server_context_finish(context: *mut client::rpc::server
     };
     // NOCOM(#sirver): error handling.
     context.finish(*result).unwrap();
+}
+
+#[no_mangle]
+pub extern "C" fn swiboe_server_context_update(context: *mut client::rpc::server::Context, json_c_buf: *const c_char) {
+    let mut context: &mut client::rpc::server::Context = unsafe {
+         mem::transmute(context)
+    };
+
+    let json_str = c_str_to_string(json_c_buf);
+    let json_value: serde_json::Value = serde_json::from_str(&json_str).expect("'args' was not valid JSON.");
+    // NOCOM(#sirver): error handling.
+    context.update(&json_value).unwrap();
 }
 
 #[no_mangle]
@@ -149,6 +162,23 @@ pub extern "C" fn swiboe_rpc_context_wait(context: *mut client::rpc::client::Con
 }
 
 #[no_mangle]
+pub extern "C" fn swiboe_rpc_context_recv(context: *mut client::rpc::client::Context) -> *const c_char {
+    let mut context: &mut client::rpc::client::Context = unsafe {
+        mem::transmute(context)
+    };
+
+    // NOCOM(#sirver): error handling
+    let object = context.recv().unwrap();
+    match object {
+        None => return ptr::null(),
+        Some(json_value) => {
+            let json_string = serde_json::to_string(&json_value).unwrap();
+            CString::new(json_string).unwrap().into_raw()
+        }
+    }
+}
+
+#[no_mangle]
 pub extern "C" fn swiboe_rpc_result_is_ok(rpc_result: *const rpc::Result) -> bool {
     let rpc_result: &rpc::Result = unsafe {
         mem::transmute(rpc_result)
@@ -165,7 +195,6 @@ pub extern "C" fn swiboe_rpc_result_unwrap(rpc_result: *const rpc::Result) -> *c
     };
     let json_value = rpc_result.unwrap();
     let json_string = serde_json::to_string(&json_value).unwrap();
-
     CString::new(json_string).unwrap().into_raw()
 }
 

@@ -52,7 +52,7 @@ impl CompleterWidget {
         // directory.
         let current_dir = env::current_dir().unwrap();
 
-        let rpc = try!(client.call("list_files", &swiboe::plugin_list_files::ListFilesRequest {
+        let rpc = try!(client.call("list_rust_files", &swiboe::plugin_list_files::ListFilesRequest {
             directory: current_dir.to_string_lossy().into_owned(),
         }));
 

@@ -54,54 +54,58 @@ swiboe.swiboe_rpc_result_is_ok.argtypes = [PtrRpcResult]
 swiboe.swiboe_rpc_result_unwrap.restype = c_char_p
 swiboe.swiboe_rpc_result_unwrap.argtypes = [PtrRpcResult]
 
-serving_client = swiboe.swiboe_connect("/tmp/blub.socket")
-serving_client1 = swiboe.swiboe_connect("/tmp/blub.socket")
+swiboe.swiboe_rpc_context_recv.restype = c_char_p
+swiboe.swiboe_rpc_context_recv.argtypes = [PtrClientContext]
+
+swiboe.swiboe_server_context_update.restype = None
+swiboe.swiboe_server_context_update.argtypes = [PtrServerContext, c_char_p]
+
+client = swiboe.swiboe_connect("/tmp/blub.socket")
 # TODO(sirver): handle streaming rpcs.
 
-def callback1(rpc_context, args):
-    print "#sirver args: %r" % (args)
-    result = swiboe.swiboe_rpc_ok("""{ "foo": "blah" }""")
-    swiboe.swiboe_server_context_finish(rpc_context, result)
-
-def callback(rpc_context, args):
+def callback(server_context, args_string):
+    args = json.loads(args_string)
     print("callback called %s" % args)
-    result = swiboe.swiboe_rpc_ok("{}")
-    client_context = swiboe.swiboe_server_context_call_rpc(rpc_context,
-            "test.test1", "{}")
-    # TODO(sirver): look into getting results back.
+    directory = args['directory']
+
+    client_context = swiboe.swiboe_client_call_rpc(client, "list_files", json.dumps({
+        "directory": directory,
+    }))
+
+    # NOCOM(#sirver): look into returning errors from RPCs, not only successes.
+    while True:
+        json_blob = swiboe.swiboe_rpc_context_recv(client_context)
+        if json_blob is None:
+            break
+        value = json.loads(json_blob)
+        value['files'] = [ v for v in value['files'] if
+                v.endswith(".rs") or v.endswith(".toml") ]
+        value_str = json.dumps(value)
+        print "#sirver value_str: %r" % (value_str)
+        swiboe.swiboe_server_context_update(server_context, value_str)
+
     call_result = swiboe.swiboe_rpc_context_wait(client_context)
-    if swiboe.swiboe_rpc_result_is_ok(call_result):
-        print "RPC call was okay."
-    json_blob = swiboe.swiboe_rpc_result_unwrap(call_result)
-    print "#sirver json_blob: %r" % (json_blob)
-    swiboe.swiboe_server_context_finish(rpc_context, result)
-    # rpc_context is no longer valid.
+    swiboe.swiboe_server_context_finish(server_context, call_result)
+
+
+    # result = swiboe.swiboe_rpc_ok("{}")
+    # client_context = swiboe.swiboe_server_context_call_rpc(rpc_context,
+            # "test.test1", "{}")
+    # # TODO(sirver): look into getting results back.
+    # call_result = swiboe.swiboe_rpc_context_wait(client_context)
+    # if swiboe.swiboe_rpc_result_is_ok(call_result):
+        # print "RPC call was okay."
+    # json_blob = swiboe.swiboe_rpc_result_unwrap(call_result)
+    # print "#sirver json_blob: %r" % (json_blob)
+    # swiboe.swiboe_server_context_finish(rpc_context, result)
+    # # rpc_context is no longer valid.
 
 rpc_callback = RPC(callback)
-rpc_callback1 = RPC(callback1)
 
-# TODO(sirver): The serving_client should complain if the same RPC is registered twice.
-swiboe.swiboe_new_rpc(serving_client, "test.test", 100, rpc_callback)
-swiboe.swiboe_new_rpc(serving_client1, "test.test1", 100, rpc_callback1)
+# TODO(sirver): The client should complain if the same RPC is registered twice.
+swiboe.swiboe_new_rpc(client, "list_rust_files", 100, rpc_callback)
 
-clients = [ swiboe.swiboe_connect("/tmp/blub.socket") for i in range(5) ]
-contexts = []
-num = 0
-for c in clients:
-    for i in range(10):
-        contexts.append(
-                swiboe.swiboe_client_call_rpc(c, "test.test", json.dumps({
-                    "num": num })))
-        num += 1
+while 1:
+    time.sleep(1)
 
-for context in contexts:
-    swiboe.swiboe_rpc_context_wait(context)
-
-for c in clients:
-    swiboe.swiboe_disconnect(c)
-
-# while 1:
-    # time.sleep(1)
-
-swiboe.swiboe_disconnect(serving_client1)
-swiboe.swiboe_disconnect(serving_client)
+swiboe.swiboe_disconnect(client)
