@@ -2,7 +2,7 @@
 name = "term_gui"
 version = "0.1.0"
 dependencies = [
- "clap 1.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "clap 1.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "rustbox 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_json 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -19,7 +19,7 @@ name = "advapi32-sys"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
- "winapi 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "winapi 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "winapi-build 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -67,8 +67,13 @@ version = "0.2.10"
 source = "git+https://github.com/carllerche/bytes?rev=7edb577d0a#7edb577d0ae7302606636cb0154e0d067ad7affd"
 
 [[package]]
+name = "cfg-if"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[[package]]
 name = "clap"
-version = "1.3.1"
+version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "ansi_term 0.6.3 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -97,7 +102,7 @@ name = "kernel32-sys"
 version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
- "winapi 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "winapi 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "winapi-build 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -126,25 +131,29 @@ dependencies = [
 [[package]]
 name = "mio"
 version = "0.5.0-pre"
-source = "git+https://github.com/carllerche/mio.git#330fecc5c6f3b469f920c3d0c3de51f32d10ece4"
+source = "git+https://github.com/carllerche/mio.git?rev=15b05993bd0761ddf7a1a22396d545908dd3a0a3#15b05993bd0761ddf7a1a22396d545908dd3a0a3"
 dependencies = [
  "bytes 0.2.10 (git+https://github.com/carllerche/bytes?rev=7edb577d0a)",
  "clock_ticks 0.0.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "libc 0.1.10 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "net2 0.2.7 (registry+https://github.com/rust-lang/crates.io-index)",
+ "net2 0.2.10 (registry+https://github.com/rust-lang/crates.io-index)",
  "nix 0.4.0 (git+https://github.com/carllerche/nix-rust?rev=f37e45628e)",
  "slab 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "winapi 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "winapi 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "wio 0.1.0 (git+https://github.com/alexcrichton/wio)",
 ]
 
 [[package]]
 name = "net2"
-version = "0.2.7"
+version = "0.2.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
+ "cfg-if 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "kernel32-sys 0.1.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "libc 0.1.10 (registry+https://github.com/rust-lang/crates.io-index)",
+ "winapi 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "ws2_32-sys 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -193,7 +202,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "advapi32-sys 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "libc 0.1.10 (registry+https://github.com/rust-lang/crates.io-index)",
- "winapi 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "winapi 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -270,9 +279,9 @@ dependencies = [
 name = "swiboe"
 version = "0.1.0"
 dependencies = [
- "clap 1.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "clap 1.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "libc 0.1.10 (registry+https://github.com/rust-lang/crates.io-index)",
- "mio 0.5.0-pre (git+https://github.com/carllerche/mio.git)",
+ "mio 0.5.0-pre (git+https://github.com/carllerche/mio.git?rev=15b05993bd0761ddf7a1a22396d545908dd3a0a3)",
  "serde 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_json 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_macros 0.5.3 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -312,7 +321,7 @@ dependencies = [
  "kernel32-sys 0.1.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "libc 0.1.10 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand 0.3.11 (registry+https://github.com/rust-lang/crates.io-index)",
- "winapi 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "winapi 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -332,7 +341,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "kernel32-sys 0.1.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "libc 0.1.10 (registry+https://github.com/rust-lang/crates.io-index)",
- "winapi 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "winapi 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -346,7 +355,7 @@ dependencies = [
 
 [[package]]
 name = "winapi"
-version = "0.2.2"
+version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
@@ -361,8 +370,8 @@ source = "git+https://github.com/alexcrichton/wio#688efd237386bb670cf556107c1488
 dependencies = [
  "kernel32-sys 0.1.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "libc 0.1.10 (registry+https://github.com/rust-lang/crates.io-index)",
- "net2 0.2.7 (registry+https://github.com/rust-lang/crates.io-index)",
- "winapi 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "net2 0.2.10 (registry+https://github.com/rust-lang/crates.io-index)",
+ "winapi 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "ws2_32-sys 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -371,6 +380,7 @@ name = "ws2_32-sys"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
- "winapi 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "winapi 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "winapi-build 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
+
