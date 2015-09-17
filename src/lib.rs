@@ -4,10 +4,7 @@
 
 #![feature(custom_derive, plugin)]
 #![feature(drain)]
-#![feature(result_expect)]
 #![plugin(serde_macros)]
-
-// NOCOM(#sirver): move travis configuration into shell scripts like in UltiSnips.
 
 extern crate libc;
 extern crate mio;
