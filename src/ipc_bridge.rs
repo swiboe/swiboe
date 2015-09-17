@@ -188,7 +188,7 @@ impl mio::Handler for IpcBridge {
             },
             mio::Token(some_token) if some_token < self.first_client_token => {
                 // TCP connection
-                let stream = self.tcp_listeners[some_token - 1].accept().unwrap().unwrap();
+                let (stream, _) = self.tcp_listeners[some_token - 1].accept().unwrap().unwrap();
                 self.new_client(event_loop, Box::new(stream));
             },
             client_token => {
