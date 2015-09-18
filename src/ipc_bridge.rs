@@ -127,6 +127,15 @@ impl IpcBridge {
                     conn.client_id.token,
                     mio::EventSet::readable(),
                     mio::PollOpt::edge() | mio::PollOpt::oneshot()).unwrap();
+
+                // We have nothing to write right now, but we still need to register the socket
+                // once for writing. Otherwise reregister will fail later on.
+                let writer = conn.writer.lock().unwrap();
+                event_loop.register(
+                    &*writer.socket,
+                    conn.client_id.token,
+                    mio::EventSet::writable(),
+                    mio::PollOpt::edge() | mio::PollOpt::oneshot()).unwrap();
             },
             None => {
                 // If we fail to insert, `conn` will go out of scope and be dropped.
