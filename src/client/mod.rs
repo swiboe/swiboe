@@ -16,6 +16,11 @@ use std::sync::Mutex;
 use std::sync::mpsc;
 use std::thread;
 
+
+pub trait RpcCaller {
+    fn call<T: serde::Serialize>(&mut self, function: &str, args: &T) -> Result<::client::rpc::client::Context>;
+}
+
 pub struct Client {
     event_loop_commands: mio::Sender<event_loop::Command>,
     rpc_loop_commands: rpc_loop::CommandSender,
@@ -46,7 +51,7 @@ impl Client {
         }
     }
 
-    pub fn new_rpc(&self, name: &str, rpc: Box<rpc::server::Rpc>) -> Result<()> {
+    pub fn new_rpc(&mut self, name: &str, rpc: Box<rpc::server::Rpc>) -> Result<()> {
         let mut new_rpc = try!(self.call("core.new_rpc", &NewRpcRequest {
             priority: rpc.priority(),
             name: name.into(),
@@ -61,16 +66,19 @@ impl Client {
         Ok(())
     }
 
-    pub fn call<T: serde::Serialize>(&self, function: &str, args: &T) -> Result<rpc::client::Context> {
-        rpc::client::Context::new(self.rpc_loop_commands.clone(), function, args)
-    }
-
     pub fn clone(&self) -> Result<ThinClient> {
         Ok(ThinClient {
             rpc_loop_commands: Mutex::new(self.rpc_loop_commands.clone()),
         })
     }
 }
+
+impl RpcCaller for Client {
+    fn call<T: serde::Serialize>(&mut self, function: &str, args: &T) -> Result<rpc::client::Context> {
+        rpc::client::Context::new(self.rpc_loop_commands.clone(), function, args)
+    }
+}
+
 
 impl Drop for Client {
     fn drop(&mut self) {
@@ -97,14 +105,6 @@ pub struct ThinClient {
 // NOCOM(#sirver): figure out the difference between a Sender, an Context and come up with better
 // names.
 impl ThinClient {
-    pub fn call<T: serde::Serialize>(&self, function: &str, args: &T) -> rpc::client::Context {
-        let commands = {
-            let commands = self.rpc_loop_commands.lock().unwrap();
-            commands.clone()
-        };
-        rpc::client::Context::new(commands, function, args).unwrap()
-    }
-
     pub fn clone(&self) -> Self {
         let commands = {
             let commands = self.rpc_loop_commands.lock().unwrap();
@@ -115,6 +115,17 @@ impl ThinClient {
         }
     }
 }
+
+impl RpcCaller for ThinClient {
+    fn call<T: serde::Serialize>(&mut self, function: &str, args: &T) -> Result<rpc::client::Context> {
+        let commands = {
+            let commands = self.rpc_loop_commands.lock().unwrap();
+            commands.clone()
+        };
+        rpc::client::Context::new(commands, function, args)
+    }
+}
+
 
 mod event_loop;
 mod rpc_loop;

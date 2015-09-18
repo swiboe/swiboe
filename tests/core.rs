@@ -9,6 +9,7 @@ use std::path;
 use std::sync;
 use std::thread;
 use support::TestHarness;
+use swiboe::client::RpcCaller;
 use swiboe::client;
 use swiboe::rpc;
 use swiboe::server::Server;
@@ -57,8 +58,8 @@ impl client::rpc::server::Rpc for TestCall {
 fn new_rpc_simple() {
     let t = TestHarness::new();
 
-    let client1 = client::Client::connect_unix(&t.socket_name).unwrap();
-    let client2 = client::Client::connect_unix(&t.socket_name).unwrap();
+    let mut client1 = client::Client::connect_unix(&t.socket_name).unwrap();
+    let mut client2 = client::Client::connect_unix(&t.socket_name).unwrap();
 
     let test_msg: serde_json::Value = as_json(r#"{ "blub": "blah" }"#);
 
@@ -75,20 +76,20 @@ fn new_rpc_simple() {
 fn new_rpc_with_priority() {
     let t = TestHarness::new();
 
-    let client1 = client::Client::connect_unix(&t.socket_name).unwrap();
+    let mut client1 = client::Client::connect_unix(&t.socket_name).unwrap();
     client1.new_rpc("test.test", Box::new(TestCall {
         priority: 100,
         result: rpc::Result::Ok(as_json(r#"{ "from": "client1" }"#)),
     })).unwrap();
 
 
-    let client2 = client::Client::connect_unix(&t.socket_name).unwrap();
+    let mut client2 = client::Client::connect_unix(&t.socket_name).unwrap();
     client2.new_rpc("test.test", Box::new(TestCall {
         priority: 50,
         result: rpc::Result::Ok(as_json(r#"{ "from": "client2" }"#)),
     })).unwrap();
 
-    let client3 = client::Client::connect_unix(&t.socket_name).unwrap();
+    let mut client3 = client::Client::connect_unix(&t.socket_name).unwrap();
     let mut rpc = client3.call("test.test", &as_json(r#"{}"#)).unwrap();
     assert_eq!(rpc::Result::Ok(as_json(r#"{ "from": "client2" }"#)), rpc.wait().unwrap());
 }
@@ -97,20 +98,20 @@ fn new_rpc_with_priority() {
 fn new_rpc_with_priority_first_does_not_handle() {
     let t = TestHarness::new();
 
-    let client1 = client::Client::connect_unix(&t.socket_name).unwrap();
+    let mut client1 = client::Client::connect_unix(&t.socket_name).unwrap();
     client1.new_rpc("test.test", Box::new(TestCall {
         priority: 100,
         result: rpc::Result::Ok(as_json(r#"{ "from": "client1" }"#)),
     })).unwrap();
 
 
-    let client2 = client::Client::connect_unix(&t.socket_name).unwrap();
+    let mut client2 = client::Client::connect_unix(&t.socket_name).unwrap();
     client2.new_rpc("test.test", Box::new(TestCall {
         priority: 50,
         result: rpc::Result::NotHandled,
     })).unwrap();
 
-    let client3 = client::Client::connect_unix(&t.socket_name).unwrap();
+    let mut client3 = client::Client::connect_unix(&t.socket_name).unwrap();
     let mut rpc = client3.call("test.test", &as_json(r#"{}"#)).unwrap();
     assert_eq!(rpc::Result::Ok(as_json(r#"{ "from": "client1" }"#)), rpc.wait().unwrap());
 }
@@ -119,29 +120,29 @@ fn new_rpc_with_priority_first_does_not_handle() {
 fn client_disconnects_should_not_stop_handling_of_rpcs() {
     let t = TestHarness::new();
 
-    let client0 = client::Client::connect_unix(&t.socket_name).unwrap();
+    let mut client0 = client::Client::connect_unix(&t.socket_name).unwrap();
     client0.new_rpc("test.test", Box::new(TestCall {
             priority: 100, result: rpc::Result::NotHandled,
     })).unwrap();
 
-    let client1 = client::Client::connect_unix(&t.socket_name).unwrap();
+    let mut client1 = client::Client::connect_unix(&t.socket_name).unwrap();
     client1.new_rpc("test.test", Box::new(TestCall {
             priority: 101, result:
                 rpc::Result::Ok(as_json(r#"{ "from": "client1" }"#)),
     })).unwrap();
 
-    let client2 = client::Client::connect_unix(&t.socket_name).unwrap();
+    let mut client2 = client::Client::connect_unix(&t.socket_name).unwrap();
     client2.new_rpc("test.test", Box::new(TestCall {
             priority: 102, result: rpc::Result::NotHandled,
     })).unwrap();
 
-    let client3 = client::Client::connect_unix(&t.socket_name).unwrap();
+    let mut client3 = client::Client::connect_unix(&t.socket_name).unwrap();
     client3.new_rpc("test.test", Box::new(TestCall {
             priority: 103, result:
                 rpc::Result::Ok(as_json(r#"{ "from": "client3" }"#)),
     })).unwrap();
 
-    let client = client::Client::connect_unix(&t.socket_name).unwrap();
+    let mut client = client::Client::connect_unix(&t.socket_name).unwrap();
 
     let mut rpc = client.call("test.test", &as_json(r#"{}"#)).unwrap();
     assert_eq!(rpc::Result::Ok(as_json(r#"{ "from": "client1" }"#)), rpc.wait().unwrap());
@@ -171,7 +172,7 @@ fn client_disconnects_should_not_stop_handling_of_rpcs() {
 fn call_not_existing_rpc() {
     let t = TestHarness::new();
 
-    let client = client::Client::connect_unix(&t.socket_name).unwrap();
+    let mut client = client::Client::connect_unix(&t.socket_name).unwrap();
     let mut rpc = client.call("not_existing", &as_json("{}")).unwrap();
     assert_eq!(rpc::Result::Err(rpc::Error {
         kind: rpc::ErrorKind::UnknownRpc,
@@ -184,7 +185,7 @@ fn call_streaming_rpc_simple() {
     // NOCOM(#sirver): test for next_result on non streaming rpc
     let t = TestHarness::new();
 
-    let streaming_client = client::Client::connect_unix(&t.socket_name).unwrap();
+    let mut streaming_client = client::Client::connect_unix(&t.socket_name).unwrap();
     streaming_client.new_rpc("test.test", Box::new(CallbackRpc {
         priority: 50,
         callback: |mut context: client::rpc::server::Context, _| {
@@ -197,7 +198,7 @@ fn call_streaming_rpc_simple() {
         },
     })).unwrap();
 
-    let client = client::Client::connect_unix(&t.socket_name).unwrap();
+    let mut client = client::Client::connect_unix(&t.socket_name).unwrap();
     let mut rpc = client.call("test.test", &as_json("{}")).unwrap();
 
     assert_eq!(as_json(r#"{ "msg": "one" }"#), rpc.recv().unwrap().unwrap());
@@ -211,7 +212,7 @@ fn call_streaming_rpc_cancelled() {
     let cancelled = sync::Arc::new(sync::Mutex::new(false));
 
     let t = TestHarness::new();
-    let streaming_client = client::Client::connect_unix(&t.socket_name).unwrap();
+    let mut streaming_client = client::Client::connect_unix(&t.socket_name).unwrap();
     let cancelled_clone = cancelled.clone();
     streaming_client.new_rpc("test.test", Box::new(CallbackRpc {
         priority: 50,
@@ -234,7 +235,7 @@ fn call_streaming_rpc_cancelled() {
         },
     })).unwrap();
 
-    let client = client::Client::connect_unix(&t.socket_name).unwrap();
+    let mut client = client::Client::connect_unix(&t.socket_name).unwrap();
     let mut rpc = client.call("test.test", &as_json("{}")).unwrap();
 
     assert_eq!(as_json(r#"{ "value": "0" }"#), rpc.recv().unwrap().unwrap());

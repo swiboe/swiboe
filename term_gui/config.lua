@@ -46,6 +46,22 @@ swiboe.map {
 }
 
 swiboe.map {
+   keys = { "s" },
+   -- when = in_normal_mode,
+   -- priority = 1000,
+   execute = function(client)
+      local args = JSON:encode_pretty {
+          foo = "blah",
+          b = {
+             c = 2,
+             d = "blub",
+          },
+       }
+      client:call("test.test", args);
+   end,
+}
+
+swiboe.map {
    keys = { "<Up>" },
    -- when = in_normal_mode,
    -- priority = 1000,

@@ -13,6 +13,7 @@ use std::mem;
 use std::path;
 use std::ptr;
 use std::string;
+use swiboe::client::RpcCaller;
 use swiboe::client;
 
 const REGISTRY_NAME_FOR_CONFIG_FILE_RUNNER: &'static str = "config_file_runner";
@@ -83,7 +84,7 @@ unsafe extern "C" fn lua_call(lua_state: *mut lua::ffi::lua_State) -> libc::c_in
     // NOCOM(#sirver): should not crash if json_arguments_as_string is malformed.
     let args: serde_json::Value = serde_json::from_str(&json_arguments_as_string).unwrap();
 
-    let mut rpc = thin_client.call(&function_name, &args);
+    let mut rpc = thin_client.call(&function_name, &args).unwrap();
     // NOCOM(#sirver): return failure information to Lua.
     let rv = rpc.wait();
     0

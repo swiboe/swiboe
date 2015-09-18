@@ -13,7 +13,7 @@ extern crate test;
 #[path="../tests/support/mod.rs"] mod support;
 
 use support::{TestHarness};
-use swiboe::client::Client;
+use swiboe::client::{RpcCaller, Client};
 use swiboe::plugin_buffer;
 use swiboe::rpc;
 use test::Bencher;
@@ -23,7 +23,7 @@ use test::Bencher;
 #[bench]
 fn bench_create_and_delete_buffers(b: &mut Bencher) {
     let t = TestHarness::new();
-    let active_client = Client::connect_unix(&t.socket_name).unwrap();
+    let mut active_client = Client::connect_unix(&t.socket_name).unwrap();
 
     b.iter(|| {
         let new_response: plugin_buffer::NewResponse = match active_client.call(
