@@ -55,6 +55,7 @@ pub extern "C" fn swiboe_server_context_finish(context: *mut client::rpc::server
     let result: Box<rpc::Result> = unsafe {
          mem::transmute(rpc_result)
     };
+    println!("#sirver result: {:#?}", result);
     // NOCOM(#sirver): error handling.
     context.finish(*result).unwrap();
 }
@@ -75,8 +76,10 @@ pub extern "C" fn swiboe_server_context_update(context: *mut client::rpc::server
 pub extern "C" fn swiboe_rpc_ok(c_buf: *const c_char) -> *const rpc::Result {
     let json_str = c_str_to_string(c_buf);
 
+    let json_value: serde_json::Value = serde_json::from_str(&json_str).expect("c_buf was not a valid JSON object.");
+
     unsafe {
-        mem::transmute(Box::new(rpc::Result::success(&json_str)))
+        mem::transmute(Box::new(rpc::Result::Ok(json_value)))
     }
 }
 
@@ -119,9 +122,9 @@ fn call<T: client::RpcCaller>(context: &mut T, rpc_name: *const c_char, args: *c
     };
 
     // NOCOM(#sirver): error handling
-    let rpc_context = context.call(&rpc_name, &args).unwrap();
+    let client_context = context.call(&rpc_name, &args).unwrap();
     unsafe {
-        mem::transmute(Box::new(rpc_context))
+        mem::transmute(Box::new(client_context))
     }
 }
 
@@ -149,7 +152,7 @@ pub extern "C" fn swiboe_client_call_rpc(client: *const client::Client,
 }
 
 #[no_mangle]
-pub extern "C" fn swiboe_rpc_context_wait(context: *mut client::rpc::client::Context) -> *const rpc::Result {
+pub extern "C" fn swiboe_client_context_wait(context: *mut client::rpc::client::Context) -> *const rpc::Result {
     let mut context: Box<client::rpc::client::Context> = unsafe {
         mem::transmute(context)
     };
@@ -162,7 +165,7 @@ pub extern "C" fn swiboe_rpc_context_wait(context: *mut client::rpc::client::Con
 }
 
 #[no_mangle]
-pub extern "C" fn swiboe_rpc_context_recv(context: *mut client::rpc::client::Context) -> *const c_char {
+pub extern "C" fn swiboe_client_context_recv(context: *mut client::rpc::client::Context) -> *const c_char {
     let mut context: &mut client::rpc::client::Context = unsafe {
         mem::transmute(context)
     };
@@ -186,7 +189,6 @@ pub extern "C" fn swiboe_rpc_result_is_ok(rpc_result: *const rpc::Result) -> boo
     rpc_result.is_ok()
 }
 
-// NOCOM(#sirver): add support for unwrapping errors.
 #[no_mangle]
 pub extern "C" fn swiboe_rpc_result_unwrap(rpc_result: *const rpc::Result) -> *const c_char {
     // NOCOM(#sirver): deletes the object, needs to be documented.
