@@ -25,15 +25,17 @@ fn buffer_new() {
     let t = TestHarness::new();
     let callback_called = Arc::new(Mutex::new(false));
     {
-        let mut client = client::Client::connect_unix(&t.socket_name).unwrap();
+        let mut serving_client = client::Client::connect_unix(&t.socket_name).unwrap();
         let callback_called = callback_called.clone();
-        client.new_rpc("on.buffer.new", Box::new(CallbackRpc {
+        serving_client.new_rpc("on.buffer.new", Box::new(CallbackRpc {
             priority: 100,
             callback: move |mut sender: client::rpc::server::Context, _| {
                 *callback_called.lock().unwrap() = true;
                 sender.finish(rpc::Result::success(())).unwrap();
             }
         })).unwrap();
+
+        let mut client = client::Client::connect_unix(&t.socket_name).unwrap();
         create_buffer(&mut client, 0, None);
     }
     assert!(*callback_called.lock().unwrap());
@@ -95,9 +97,9 @@ fn buffer_delete() {
     let t = TestHarness::new();
     let callback_called = Arc::new(Mutex::new(false));
     {
-        let mut client = client::Client::connect_unix(&t.socket_name).unwrap();
+        let mut serving_client = client::Client::connect_unix(&t.socket_name).unwrap();
         let callback_called = callback_called.clone();
-        client.new_rpc("on.buffer.deleted", Box::new(CallbackRpc {
+        serving_client.new_rpc("on.buffer.deleted", Box::new(CallbackRpc {
             priority: 100,
             callback: move |mut sender: client::rpc::server::Context, _| {
                 *callback_called.lock().unwrap() = true;
@@ -105,6 +107,7 @@ fn buffer_delete() {
             }
         })).unwrap();
 
+        let mut client = client::Client::connect_unix(&t.socket_name).unwrap();
         create_buffer(&mut client, 0, None);
 
         let request = plugin_buffer::DeleteRequest {
