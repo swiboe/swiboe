@@ -19,6 +19,7 @@ pub enum Message {
 pub struct Reader<T: Read> {
     pub socket: T,
     read_buffer: Vec<u8>,
+    size_buffer: [u8; 4],
 }
 
 impl<T: Read> Reader<T> {
@@ -26,7 +27,29 @@ impl<T: Read> Reader<T> {
         Reader {
             socket: socket,
             read_buffer: Vec::with_capacity(1024),
+            size_buffer: [0; 4],
         }
+    }
+
+    // NOCOM(#sirver): simplyfy code.
+    pub fn read_one_message(&mut self) -> Result<Message> {
+        try!(self.socket.read_exact(&mut self.size_buffer));
+        let msg_len =
+            ((self.size_buffer[3] as usize) << 24) |
+            ((self.size_buffer[2] as usize) << 16) |
+            ((self.size_buffer[1] as usize) <<  8) |
+            ((self.size_buffer[0] as usize) <<  0);
+
+        self.read_buffer.reserve(msg_len);
+        unsafe {
+            self.read_buffer.set_len(msg_len);
+        }
+        try!(self.socket.read_exact(&mut self.read_buffer));
+
+        // NOCOM(#sirver): this should not unwrap.
+        let msg = String::from_utf8(self.read_buffer.drain(..msg_len).collect()).unwrap();
+        let message: Message = try!(serde_json::from_str(&msg));
+        return Ok(message)
     }
 
     pub fn read_message(&mut self) -> Result<Option<Message>> {

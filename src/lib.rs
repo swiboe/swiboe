@@ -4,6 +4,7 @@
 
 #![feature(custom_derive, plugin)]
 #![feature(drain)]
+#![feature(read_exact)]
 #![plugin(serde_macros)]
 
 extern crate libc;
@@ -12,6 +13,7 @@ extern crate serde;
 extern crate serde_json;
 extern crate threadpool;
 extern crate time;
+extern crate unix_socket;
 extern crate uuid;
 
 #[macro_export]
