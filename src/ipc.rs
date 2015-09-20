@@ -89,6 +89,16 @@ pub enum WriterState {
     AllWritten,
 }
 
+fn encode(message: &Message) -> Result<(Vec<u8>, Vec<u8>)> {
+    let buffer = try!(serde_json::to_vec(message));
+    let len = vec![
+        (buffer.len() >> 0) as u8,
+        (buffer.len() >> 8) as u8,
+        (buffer.len() >> 16) as u8,
+        (buffer.len() >> 24) as u8 ];
+    Ok((len, buffer))
+}
+
 impl<T: Write> Writer<T> {
     pub fn new(socket: T) -> Self {
         Writer {
@@ -98,14 +108,16 @@ impl<T: Write> Writer<T> {
         }
     }
 
-    pub fn queue_message(&mut self, message: &Message) {
-        let buffer = serde_json::to_vec(message).unwrap();
+    pub fn write_message(&mut self, message: &Message) -> Result<()> {
+        let (len, buffer) = try!(encode(message));
+        try!(self.socket.write_all(&len));
+        try!(self.socket.write_all(&buffer));
+        Ok(())
+    }
 
-        let len = vec![
-            (buffer.len() >> 0) as u8,
-            (buffer.len() >> 8) as u8,
-            (buffer.len() >> 16) as u8,
-            (buffer.len() >> 24) as u8 ];
+    pub fn queue_message(&mut self, message: &Message) {
+        // NOCOM(#sirver): should not unwrap
+        let (len, buffer) = encode(message).unwrap();
         self.to_write.push(len);
         self.to_write.push(buffer);
     }
