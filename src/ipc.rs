@@ -18,63 +18,61 @@ pub enum Message {
 
 pub struct Reader<T: Read> {
     pub socket: T,
-    read_buffer: Vec<u8>,
-    size_buffer: [u8; 4],
+    buffer: Vec<u8>,
+}
+
+fn parse_length(buf: &[u8]) -> usize {
+    ((buf[3] as usize) << 24) |
+    ((buf[2] as usize) << 16) |
+    ((buf[1] as usize) <<  8) |
+    ((buf[0] as usize) <<  0)
+}
+
+// Tries to parse a JSON message into an ipc::Message struct.
+fn to_message(data: &[u8]) -> Result<Message> {
+    let message: Message = try!(serde_json::from_slice(data));
+    return Ok(message)
 }
 
 impl<T: Read> Reader<T> {
     pub fn new(socket: T) -> Self {
         Reader {
             socket: socket,
-            read_buffer: Vec::with_capacity(1024),
-            size_buffer: [0; 4],
+            buffer: Vec::with_capacity(1024),
         }
     }
 
-    // NOCOM(#sirver): simplyfy code.
-    pub fn read_one_message(&mut self) -> Result<Message> {
-        try!(self.socket.read_exact(&mut self.size_buffer));
-        let msg_len =
-            ((self.size_buffer[3] as usize) << 24) |
-            ((self.size_buffer[2] as usize) << 16) |
-            ((self.size_buffer[1] as usize) <<  8) |
-            ((self.size_buffer[0] as usize) <<  0);
+    /// Read one full message - this expects the underlying socket to be blocking.
+    pub fn read_message(&mut self) -> Result<Message> {
+        let mut size_buf = [0u8; 4];
+        try!(self.socket.read_exact(&mut size_buf));
+        let msg_len = parse_length(&size_buf);
 
-        self.read_buffer.reserve(msg_len);
+        self.buffer.reserve(msg_len);
         unsafe {
-            self.read_buffer.set_len(msg_len);
+            self.buffer.set_len(msg_len);
         }
-        try!(self.socket.read_exact(&mut self.read_buffer));
-
-        // NOCOM(#sirver): this should not unwrap.
-        let msg = String::from_utf8(self.read_buffer.drain(..msg_len).collect()).unwrap();
-        let message: Message = try!(serde_json::from_str(&msg));
-        return Ok(message)
+        try!(self.socket.read_exact(&mut self.buffer));
+        to_message(&self.buffer)
     }
 
-    pub fn read_message(&mut self) -> Result<Option<Message>> {
-        // This might reallocate 'read_buffer' if it is too small.
-        try!(self.socket.try_read_buf(&mut self.read_buffer));
-
-        // We have read less than 4 bytes. We have to wait for more data to arrive.
-        if self.read_buffer.len() < 4 {
+    /// Read all data currently available on the socket and returns the next full message that is
+    /// available or None if there is no full one.
+    pub fn try_read_message(&mut self) -> Result<Option<Message>> {
+        // This might reallocate 'buffer' if it is too small.
+        try!(self.socket.try_read_buf(&mut self.buffer));
+        if self.buffer.len() < 4 {
             return Ok(None);
         }
 
-        let msg_len =
-            ((self.read_buffer[3] as usize) << 24) |
-            ((self.read_buffer[2] as usize) << 16) |
-            ((self.read_buffer[1] as usize) <<  8) |
-            ((self.read_buffer[0] as usize) <<  0);
-
-        if self.read_buffer.len() < msg_len + 4 {
+        let msg_len = parse_length(&self.buffer[..4]);
+        if self.buffer.len() < msg_len + 4 {
             return Ok(None);
         }
+        let message = to_message(&self.buffer[4..4+msg_len]);
+        self.buffer.drain(..4+msg_len);
 
-        // NOCOM(#sirver): this should not unwrap.
-        let msg = String::from_utf8(self.read_buffer.drain(..4+msg_len).skip(4).collect()).unwrap();
-        let message: Message = try!(serde_json::from_str(&msg));
-        return Ok(Some(message))
+        message.map(|message| Some(message))
     }
 }
 

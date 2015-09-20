@@ -233,7 +233,7 @@ impl mio::Handler for IpcBridge {
                     let event_loop_sender = event_loop.channel();
                     self.thread_pool.execute(move || {
                         loop {
-                            match reader.read_message() {
+                            match reader.try_read_message() {
                                 // NOCOM(#sirver): should disconnect instead of panic.
                                 Err(err) => panic!("Error while reading: {}", err),
                                 Ok(None) => break,

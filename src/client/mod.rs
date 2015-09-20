@@ -7,24 +7,35 @@
 use ::error::Result;
 use ::ipc;
 use ::plugin_core::NewRpcRequest;
-use std::net::{self, TcpStream};
-use unix_socket::UnixStream;
 use serde;
 use std::io;
+use std::net::{self, TcpStream};
 use std::path;
-use std::sync::Mutex;
-use std::sync::mpsc;
+use std::sync::{mpsc, Mutex};
 use std::thread;
+use unix_socket::UnixStream;
 
+/// An abstraction that can call remove RPCs.
 pub trait RpcCaller {
     fn call<T: serde::Serialize>(&mut self, function: &str, args: &T) -> Result<::client::rpc::client::Context>;
 }
 
+/// A client maintains a connection to a Swiboe server. It can also serve RPCs that can only be
+/// called by the server.
 pub struct Client {
+    // Connection to the logic loop.
     rpc_loop_commands: rpc_loop::CommandSender,
+
+    // The thread dealing with all the logic in the client.
     rpc_loop_thread: Option<thread::JoinHandle<()>>,
+
+    // The threads dealing with IO. There is a separate thread for reading and one for writing.
+    // Both of them block on their IO.
     read_thread: Option<thread::JoinHandle<()>>,
     write_thread: Option<thread::JoinHandle<()>>,
+
+    // Function to bring down the connection used for IO. The 'read_thread' and 'write_thread' will
+    // both error then and terminate.
     shutdown_socket_func: Box<Fn() -> ()>,
 }
 
@@ -41,9 +52,7 @@ impl Client {
 
     pub fn connect_tcp(address: &net::SocketAddr) -> Result<Self> {
         let writer_stream = try!(TcpStream::connect(address));
-        try!(writer_stream.set_write_timeout(None));
         let reader_stream = try!(writer_stream.try_clone());
-        try!(reader_stream.set_read_timeout(None));
         let shutdown_stream = try!(writer_stream.try_clone());
         Ok(Client::common_connect(reader_stream, writer_stream, Box::new(move || {
             let _ = shutdown_stream.shutdown(net::Shutdown::Both);
@@ -57,7 +66,7 @@ impl Client {
         let reader_commands_tx = commands_tx.clone();
         let read_thread = thread::spawn(move || {
             let mut reader = ipc::Reader::new(reader_stream);
-            while let Ok(message) = reader.read_one_message() {
+            while let Ok(message) = reader.read_message() {
                 let command = rpc_loop::Command::Received(message);
                 if reader_commands_tx.send(command).is_err() {
                     break;
@@ -130,12 +139,12 @@ impl Drop for Client {
     }
 }
 
+/// A ThinClient is an RpcCaller, but does not maintain and cannot register new RPCs. It can
+/// be cloned, so that many threads can do RPCs in parallel.
 pub struct ThinClient {
     rpc_loop_commands: Mutex<rpc_loop::CommandSender>,
 }
 
-// NOCOM(#sirver): figure out the difference between a Sender, an Context and come up with better
-// names.
 impl ThinClient {
     pub fn clone(&self) -> Self {
         let commands = {
