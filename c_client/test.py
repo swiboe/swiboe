@@ -5,6 +5,8 @@
 # in the project root for license information.
 
 import json
+import os
+import subprocess
 import time
 import unittest
 
@@ -13,15 +15,29 @@ import swiboe
 
 # NOCOM(#sirver): make SWIBOE_LIBRARY passable on the commandline for the test runner.
 
-class TestStringMethods(unittest.TestCase):
+# NOCOM(#sirver): should not be hardcoded.
+TEST_SERVER="../target/debug/test_server"
+
+class TestSwiboeClientLowLevel(unittest.TestCase):
+
+    def setUp(self):
+        self.server_process = subprocess.Popen(
+                [TEST_SERVER], stdout = subprocess.PIPE)
+        self.test_dir = self.server_process.stdout.readline().strip()
+        # NOCOM(#sirver): this should just be in the json file.
+        self.socket_name = os.path.join(self.test_dir, "_socket")
+
+    def tearDown(self):
+        self.server_process.kill()
+
     # NOCOM(#sirver): all of these tests should bring up the swiboe server
     # themselves, so that we can run tests in isolation and parallel.
     def test_connect_and_disconnect(self):
-        client = library.swiboe_connect("/tmp/blub.socket")
+        client = library.swiboe_connect(self.socket_name)
         library.swiboe_disconnect(client)
 
     def test_new_rpc(self):
-        client = library.swiboe_connect("/tmp/blub.socket")
+        client = library.swiboe_connect(self.socket_name)
 
         def callback(server_context, args_string):
             return
@@ -30,7 +46,7 @@ class TestStringMethods(unittest.TestCase):
         library.swiboe_disconnect(client)
 
     def test_call_successfull_rpc(self):
-        serving_client = library.swiboe_connect("/tmp/blub.socket")
+        serving_client = library.swiboe_connect(self.socket_name)
         golden_return = { "blub": "foo" }
         def callback(server_context, args_string):
             call_result = library.swiboe_rpc_ok(json.dumps(golden_return))
@@ -38,7 +54,7 @@ class TestStringMethods(unittest.TestCase):
         rpc_callback = swiboe.RPC(callback)
         library.swiboe_new_rpc(serving_client, "test.test", 100, rpc_callback)
 
-        client = library.swiboe_connect("/tmp/blub.socket")
+        client = library.swiboe_connect(self.socket_name)
         client_context = library.swiboe_client_call_rpc(
                 client, "test.test", "null")
         call_result = library.swiboe_client_context_wait(client_context)

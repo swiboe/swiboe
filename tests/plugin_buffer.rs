@@ -4,11 +4,11 @@
 
 use ::{CallbackRpc, create_file};
 use std::sync::{Arc, Mutex};
-use support::TestHarness;
 use swiboe::client::RpcCaller;
 use swiboe::client;
 use swiboe::plugin_buffer;
 use swiboe::rpc;
+use swiboe::testing::TestHarness;
 
 fn create_buffer(client: &mut client::Client, expected_index: usize, content: Option<&str>) {
     let request = plugin_buffer::NewRequest {

@@ -10,6 +10,7 @@ extern crate libc;
 extern crate mio;
 extern crate serde;
 extern crate serde_json;
+extern crate tempdir;
 extern crate threadpool;
 extern crate time;
 extern crate uuid;
@@ -35,5 +36,6 @@ pub mod plugin_core;
 pub mod plugin_list_files;
 pub mod rpc;
 pub mod server;
+pub mod testing;
 
 pub use error::{Error, Result};

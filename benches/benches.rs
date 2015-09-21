@@ -10,12 +10,10 @@ extern crate swiboe;
 extern crate tempdir;
 extern crate test;
 
-#[path="../tests/support/mod.rs"] mod support;
-
-use support::{TestHarness};
 use swiboe::client::{RpcCaller, Client};
 use swiboe::plugin_buffer;
 use swiboe::rpc;
+use swiboe::testing::TestHarness;
 use test::Bencher;
 
 

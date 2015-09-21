@@ -2,9 +2,6 @@
 // Licensed under the Apache License, Version 2.0. See LICENSE.txt
 // in the project root for license information.
 
-#![feature(cstr_memory)]
-#![feature(result_expect)]
-
 extern crate libc;
 extern crate serde;
 extern crate serde_json;

@@ -2,8 +2,8 @@
 // Licensed under the Apache License, Version 2.0. See LICENSE.txt
 // in the project root for license information.
 
+use ::server::Server;
 use std::path::PathBuf;
-use swiboe::server::Server;
 use tempdir::TempDir;
 
 pub struct TestHarness {
@@ -26,6 +26,10 @@ impl TestHarness {
             socket_name: socket_name,
             temp_directory: temp_directory,
         }
+    }
+
+    pub fn wait_for_shutdown(&mut self) {
+        self.server.as_mut().unwrap().wait_for_shutdown();
     }
 }
 
