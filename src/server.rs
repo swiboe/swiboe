@@ -57,7 +57,7 @@ pub struct Swiboe {
 }
 
 impl Swiboe {
-    pub fn spin_forever(&mut self) {
+    pub fn spin_forever(&mut self) -> Result<()> {
         while let Ok(command) = self.commands.recv() {
             match command {
                 Command::Quit => break,
@@ -86,12 +86,12 @@ impl Swiboe {
                     // Special case 'core.'. We handle them immediately.
                     if rpc_call.function.starts_with(CORE_FUNCTIONS_PREFIX) {
                         let result = self.plugin_core.call(client_id, &rpc_call);
-                        self.ipc_bridge_commands.send(ipc_bridge::Command::SendData(
+                        try!(self.ipc_bridge_commands.send(ipc_bridge::Command::SendData(
                                 client_id,
                                 ipc::Message::RpcResponse(rpc::Response {
                                     context: rpc_call.context.clone(),
                                     kind: rpc::ResponseKind::Last(result),
-                                }))).unwrap();
+                                }))));
                     } else {
                         match self.functions.get(&rpc_call.function as &str) {
                             Some(vec) => {
@@ -103,14 +103,14 @@ impl Swiboe {
                                     rpc_call: rpc_call.clone(),
                                     caller: client_id,
                                 });
-                                self.ipc_bridge_commands.send(ipc_bridge::Command::SendData(
+                                try!(self.ipc_bridge_commands.send(ipc_bridge::Command::SendData(
                                         function.client_id,
                                         ipc::Message::RpcCall(rpc_call)
-                                        )).unwrap();
+                                        )));
                                 // NOCOM(#sirver): we ignore timeouts.
                             },
                             None => {
-                                self.ipc_bridge_commands.send(ipc_bridge::Command::SendData(
+                                try!(self.ipc_bridge_commands.send(ipc_bridge::Command::SendData(
                                         client_id,
                                         ipc::Message::RpcResponse(rpc::Response {
                                             context: rpc_call.context.clone(),
@@ -118,16 +118,16 @@ impl Swiboe {
                                                 kind: rpc::ErrorKind::UnknownRpc,
                                                 details: None,
                                             })),
-                                        }))).unwrap();
+                                        }))));
                             }
                         }
                     }
                 },
                 Command::RpcResponse(rpc_response) => {
-                    self.on_rpc_response(rpc_response)
+                    try!(self.on_rpc_response(rpc_response));
                 },
                 Command::RpcCancel(rpc_cancel) => {
-                    self.on_rpc_cancel(rpc_cancel)
+                    try!(self.on_rpc_cancel(rpc_cancel));
                 },
                 Command::SendDataFailed(client_id, msg, err) => {
                     let action = match msg {
@@ -137,10 +137,10 @@ impl Swiboe {
                             "dropped the RpcResponse/RpcCall."
                         },
                         ipc::Message::RpcCall(rpc_call) => {
-                            self.on_rpc_response(rpc::Response {
+                            try!(self.on_rpc_response(rpc::Response {
                                 context: rpc_call.context,
                                 kind: rpc::ResponseKind::Last(rpc::Result::NotHandled),
-                            });
+                            }));
                             "surrogate replied as NotHandled."
                         }
                     };
@@ -182,15 +182,16 @@ impl Swiboe {
                     }
                 }
             }
-        }
+        };
+        Ok(())
     }
 
-    fn on_rpc_cancel(&mut self, rpc_cancel: rpc::Cancel) {
+    fn on_rpc_cancel(&mut self, rpc_cancel: rpc::Cancel) -> Result<()> {
         let running_rpc = match self.running_rpcs.entry(rpc_cancel.context.clone()) {
             Entry::Occupied(running_rpc) => running_rpc,
             Entry::Vacant(_) => {
                 // Unknown RPC. We simply drop this message.
-                return;
+                return Ok(());
             }
         };
 
@@ -205,47 +206,48 @@ impl Swiboe {
             Some(function) => {
                 // NOCOM(#sirver): eventually, when we keep proper track of our rpc calls, this should be
                 // able to move again.
-                self.ipc_bridge_commands.send(ipc_bridge::Command::SendData(
+                try!(self.ipc_bridge_commands.send(ipc_bridge::Command::SendData(
                         function.client_id,
                         ipc::Message::RpcCancel(rpc_cancel)
-                        )).unwrap();
+                        )));
             },
             None => {
                 // NOCOM(#sirver): Wait what... nothing to cancel?
             }
         };
+        Ok(())
     }
 
-    fn on_rpc_response(&mut self, rpc_response: rpc::Response) {
+    fn on_rpc_response(&mut self, rpc_response: rpc::Response) -> Result<()> {
         let mut running_rpc = match self.running_rpcs.entry(rpc_response.context.clone()) {
             Entry::Occupied(running_rpc) => running_rpc,
             Entry::Vacant(_) => {
                 // Unknown RPC. We simply drop this message.
-                return;
+                return Ok(());
             }
         };
 
         match rpc_response.kind {
             rpc::ResponseKind::Partial(value) => {
                 let running_rpc = running_rpc.get();
-                self.ipc_bridge_commands.send(ipc_bridge::Command::SendData(
+                try!(self.ipc_bridge_commands.send(ipc_bridge::Command::SendData(
                         running_rpc.caller,
                         ipc::Message::RpcResponse(rpc::Response {
                             context: running_rpc.rpc_call.context.clone(),
                             kind: rpc::ResponseKind::Partial(value),
-                        }))).unwrap();
+                        }))));
             },
             rpc::ResponseKind::Last(result) => match result {
                 rpc::Result::Ok(_) | rpc::Result::Err(_) => {
                     let running_rpc = running_rpc.remove();
-                    self.ipc_bridge_commands.send(ipc_bridge::Command::SendData(
+                    try!(self.ipc_bridge_commands.send(ipc_bridge::Command::SendData(
                             running_rpc.caller,
                             ipc::Message::RpcResponse(rpc::Response {
                                 context: running_rpc.rpc_call.context,
                                 kind: rpc::ResponseKind::Last(
                                     result
                                 ),
-                            }))).unwrap();
+                            }))));
                 },
                 rpc::Result::NotHandled => {
                     // TODO(sirver): If a new function has been registered or been deleted since we
@@ -264,24 +266,25 @@ impl Swiboe {
                         Some(function) => {
                             // NOCOM(#sirver): eventually, when we keep proper track of our rpc calls, this should be
                             // able to move again.
-                            self.ipc_bridge_commands.send(ipc_bridge::Command::SendData(
+                            try!(self.ipc_bridge_commands.send(ipc_bridge::Command::SendData(
                                     function.client_id,
                                     ipc::Message::RpcCall(running_rpc.rpc_call.clone())
-                                    )).unwrap();
+                                    )));
                         },
                         None => {
-                            self.ipc_bridge_commands.send(ipc_bridge::Command::SendData(
+                            try!(self.ipc_bridge_commands.send(ipc_bridge::Command::SendData(
                                     running_rpc.caller,
                                     ipc::Message::RpcResponse(rpc::Response {
                                         context: running_rpc.rpc_call.context.clone(),
                                         kind: rpc::ResponseKind::Last(rpc::Result::NotHandled),
-                                    }))).unwrap();
+                                    }))));
                         }
                     };
                     // NOCOM(#sirver): we ignore timeouts.
                 }
             },
-        }
+        };
+        Ok(())
     }
 }
 
@@ -331,7 +334,12 @@ impl Server {
         }));
 
         server.swiboe_thread = Some(thread::spawn(move || {
-            swiboe.spin_forever();
+            loop {
+                match swiboe.spin_forever() {
+                    Err(err) => println!("#sirver spin_forever: {:#?}", err),
+                    Ok(()) => break,
+                };
+            }
         }));
 
         server.buffer_plugin = Some(

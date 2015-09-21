@@ -16,7 +16,7 @@ fn wait_for_true_with_timeout(mutex: &Mutex<bool>) -> bool {
         if *mutex.lock().unwrap() {
             return true;
         }
-        thread::sleep_ms(250);
+        thread::sleep_ms(50);
     }
     false
 }

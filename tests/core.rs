@@ -222,8 +222,9 @@ fn call_streaming_rpc_cancelled() {
                 let mut count = 0;
                 // NOCOM(#sirver): cancelled? grep for that.
                 while !context.cancelled() {
-                    context.update(
-                        &as_json(&format!(r#"{{ "value": "{}" }}"#, count))).unwrap();
+                    // It might have been cancelled between our check and now, so ignore errors.
+                    let _ = context.update(
+                        &as_json(&format!(r#"{{ "value": "{}" }}"#, count)));
                     thread::sleep_ms(10);
                     count += 1
                 }

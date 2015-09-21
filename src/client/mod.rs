@@ -46,7 +46,7 @@ impl Client {
         let reader_stream = try!(writer_stream.try_clone());
         let shutdown_stream = try!(writer_stream.try_clone());
         Ok(Client::common_connect(reader_stream, writer_stream, Box::new(move || {
-            let _ = shutdown_stream.shutdown(net::Shutdown::Both);
+            let _ = shutdown_stream.shutdown(net::Shutdown::Read);
         })))
     }
 
@@ -55,7 +55,7 @@ impl Client {
         let reader_stream = try!(writer_stream.try_clone());
         let shutdown_stream = try!(writer_stream.try_clone());
         Ok(Client::common_connect(reader_stream, writer_stream, Box::new(move || {
-            let _ = shutdown_stream.shutdown(net::Shutdown::Both);
+            let _ = shutdown_stream.shutdown(net::Shutdown::Read);
         })))
     }
 
@@ -77,9 +77,7 @@ impl Client {
         let write_thread = thread::spawn(move || {
             let mut writer = ipc::Writer::new(writer_stream);
             while let Ok(message) = send_rx.recv() {
-                if writer.write_message(&message).is_err() {
-                    break;
-                }
+                writer.write_message(&message).expect("Writing failed");
             }
         });
 
