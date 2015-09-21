@@ -51,9 +51,16 @@ impl<T: TryClone> mio::Handler for Handler<T> {
             Command::Quit => event_loop.shutdown(),
             Command::Send(message) => {
                 // println!("{:?}: Client -> Server {:?}", time::precise_time_ns(), message);
-                if let Err(err) = self.writer.write_message(&message) {
-                    println!("Shutting down, since sending failed: {:?}", err);
-                    event_loop.channel().send(Command::Quit).expect("Quit");
+                self.writer.queue_message(&message);
+                loop {
+                    match self.writer.try_write() {
+                        Ok(ipc::WriterState::AllWritten) => break,
+                        Err(err) =>  {
+                            println!("Shutting down, since sending failed: {:?}", err);
+                            event_loop.channel().send(Command::Quit).expect("Quit");
+                        },
+                        Ok(ipc::WriterState::MoreToWrite) => (),
+                    }
                 }
             }
         }
