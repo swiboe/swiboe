@@ -2,11 +2,9 @@
 // Licensed under the Apache License, Version 2.0. See LICENSE.txt
 // in the project root for license information.
 
-use ::client::event_loop;
 use ::client::rpc;
 use ::error::Result;
 use ::ipc;
-use mio;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::mpsc;
@@ -39,7 +37,7 @@ impl RunningRpc {
 // NOCOM(#sirver): name is no longer fitting
 struct RpcLoop {
     remote_procedures: HashMap<String, Arc<Box<rpc::server::Rpc>>>,
-    event_loop_sender: mio::Sender<event_loop::Command>,
+    send_queue: mpsc::Sender<ipc::Message>,
     running_rpc_calls: HashMap<String, RunningRpc>,
     command_sender: CommandSender,
     // NOCOM(#sirver): maybe not use a channel to send data to rpcs?
@@ -95,18 +93,18 @@ impl RpcLoop {
                     }
                 },
                 Command::Send(message) => {
-                    try!(self.event_loop_sender.send(event_loop::Command::Send(message)));
+                    try!(self.send_queue.send(message));
                 },
                 Command::OutgoingCall(context, tx, message) => {
                     self.running_function_calls.insert(context, tx);
                     // NOCOM(#sirver): can the message be constructed here?
-                    try!(self.event_loop_sender.send(event_loop::Command::Send(message)));
+                    try!(self.send_queue.send(message));
                 }
                 Command::CancelOutgoingRpc(context) => {
                     let msg = ::ipc::Message::RpcCancel(::rpc::Cancel {
                         context: context,
                     });
-                    try!(self.event_loop_sender.send(event_loop::Command::Send(msg)));
+                    try!(self.send_queue.send(msg));
                 }
             }
         };
@@ -116,14 +114,14 @@ impl RpcLoop {
 
 pub fn spawn<'a>(commands: mpsc::Receiver<Command>,
                  command_sender: CommandSender,
-                 event_loop_sender: mio::Sender<event_loop::Command>) -> thread::JoinHandle<()>
+                 send_queue: mpsc::Sender<ipc::Message>) -> thread::JoinHandle<()>
 {
     thread::spawn(move || {
         let mut thread = RpcLoop {
             remote_procedures: HashMap::new(),
             running_function_calls: HashMap::new(),
             running_rpc_calls: HashMap::new(),
-            event_loop_sender: event_loop_sender,
+            send_queue: send_queue,
             command_sender: command_sender,
             // NOCOM(#sirver): that seems silly.
             thread_pool: ThreadPool::new(1),

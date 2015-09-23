@@ -73,7 +73,7 @@ impl IpcBridge {
             &unix_listener,
             UNIX_LISTENER,
             mio::EventSet::readable(),
-            mio::PollOpt::edge()).unwrap();
+            mio::PollOpt::level()).unwrap();
 
         let mut first_client_token = 1;
         let tcp_listeners: Vec<_> =
@@ -85,7 +85,7 @@ impl IpcBridge {
                     &server,
                     mio::Token(first_client_token),
                     mio::EventSet::readable(),
-                    mio::PollOpt::edge()).unwrap();
+                    mio::PollOpt::level()).unwrap();
                 first_client_token += 1;
                 server
             }).collect();
@@ -126,7 +126,7 @@ impl IpcBridge {
                     &*conn.reader.as_ref().unwrap().socket,
                     conn.client_id.token,
                     mio::EventSet::readable(),
-                    mio::PollOpt::edge() | mio::PollOpt::oneshot()).unwrap();
+                    mio::PollOpt::level() | mio::PollOpt::oneshot()).unwrap();
 
                 // We have nothing to write right now, but we still need to register the socket
                 // once for writing. Otherwise reregister will fail later on.
@@ -135,7 +135,7 @@ impl IpcBridge {
                     &*writer.socket,
                     conn.client_id.token,
                     mio::EventSet::writable(),
-                    mio::PollOpt::edge() | mio::PollOpt::oneshot()).unwrap();
+                    mio::PollOpt::level() | mio::PollOpt::oneshot()).unwrap();
             },
             None => {
                 // If we fail to insert, `conn` will go out of scope and be dropped.
@@ -144,14 +144,16 @@ impl IpcBridge {
         };
     }
 
-    fn reregister_for_writing(&mut self, token: mio::Token, event_loop: &mut mio::EventLoop<Self>) {
-        let conn = &mut self.connections[token];
-        let writer = conn.writer.lock().expect("Mutex poisoned");
-        event_loop.reregister(
-            &*writer.socket,
-            token,
-            mio::EventSet::writable(),
-            mio::PollOpt::edge() | mio::PollOpt::oneshot()).unwrap();
+    fn reregister_for_writing(&mut self, token: mio::Token, event_loop: &mut mio::EventLoop<Self>) -> Result<()> {
+        if let Some(conn) = self.connections.get_mut(token) {
+            let writer = conn.writer.lock().expect("Mutex poisoned");
+            try!(event_loop.reregister(
+                    &*writer.socket,
+                    token,
+                    mio::EventSet::writable(),
+                    mio::PollOpt::level() | mio::PollOpt::oneshot()));
+        }
+        Ok(())
     }
 }
 
@@ -176,15 +178,14 @@ impl mio::Handler for IpcBridge {
                         if conn.client_id != receiver {
                             Err(Error::Disconnected)
                         } else {
-                            // println!("{:?}: Server -> {:?}: {:#?}", time::precise_time_ns(),
-                                // receiver, message);
+                            // println!("Server -> {:?}: {:#?}", receiver, message);
                             let mut writer = conn.writer.lock().unwrap();
                             writer.queue_message(&message);
                             Ok(())
                         }
                     });
                 match result {
-                    Ok(_) => self.reregister_for_writing(receiver.token, event_loop),
+                    Ok(_) => self.reregister_for_writing(receiver.token, event_loop).expect("reregister for writing"),
                     Err(err) => {
                         self.commands.send(server::Command::SendDataFailed(receiver, message,
                                                                            err)).expect("SendFailed");
@@ -192,17 +193,17 @@ impl mio::Handler for IpcBridge {
                 };
             }
             Command::ReRegisterForReading(token, reader) => {
-                // NOCOM(#sirver): I think this is dangerous.
-                let conn = &mut self.connections[token];
-                conn.reader = Some(reader);
-                event_loop.reregister(
-                    &*conn.reader.as_ref().unwrap().socket,
-                    token,
-                    mio::EventSet::readable(),
-                    mio::PollOpt::edge() | mio::PollOpt::oneshot()).unwrap();
+                if let Some(conn) = self.connections.get_mut(token) {
+                    conn.reader = Some(reader);
+                    event_loop.reregister(
+                        &*conn.reader.as_ref().unwrap().socket,
+                        token,
+                        mio::EventSet::readable(),
+                        mio::PollOpt::level() | mio::PollOpt::oneshot()).unwrap();
+                }
             },
             Command::ReRegisterForWriting(token) => {
-                self.reregister_for_writing(token, event_loop);
+                self.reregister_for_writing(token, event_loop).expect("reregister_for_writing");
             },
         }
     }
@@ -211,68 +212,87 @@ impl mio::Handler for IpcBridge {
         match token {
             UNIX_LISTENER => {
                 // Unix domain socket connection.
-                let stream = self.unix_listener.accept().unwrap().unwrap();
-                self.new_client(event_loop, Box::new(stream));
+                if let Some(stream) = self.unix_listener.accept().expect("UNIX_LISTENER::accept") {
+                    self.new_client(event_loop, Box::new(stream));
+                }
 
             },
             mio::Token(some_token) if some_token < self.first_client_token => {
                 // TCP connection
-                let (stream, _) = self.tcp_listeners[some_token - 1].accept().unwrap().unwrap();
-                self.new_client(event_loop, Box::new(stream));
+                if let Some((stream, _)) = self.tcp_listeners[some_token - 1].accept().expect("TCP listener::accept") {
+                    self.new_client(event_loop, Box::new(stream));
+                }
             },
             client_token => {
-                if events.is_hup() {
-                    let connection = self.connections.remove(client_token).unwrap();
-                    self.commands.send(
-                        server::Command::ClientDisconnected(connection.client_id)).expect("ClientDisconnected");
-                } else if events.is_readable() {
-                    let conn = &mut self.connections[token];
-                    let mut reader = conn.reader.take().unwrap();
-                    let commands = self.commands.clone();
-                    let client_id = conn.client_id;
-                    let event_loop_sender = event_loop.channel();
-                    self.thread_pool.execute(move || {
-                        loop {
-                            match reader.read_message() {
-                                // NOCOM(#sirver): should disconnect instead of panic.
-                                Err(err) => panic!("Error while reading: {}", err),
-                                Ok(None) => break,
-                                Ok(Some(message)) => {
-                                    // println!("{:?}: {:?} -> Server: {:#?}", time::precise_time_ns(),
-                                    // client_id, message);
-                                    match message {
-                                        // NOCOM(#sirver): pack them together in one message?
-                                        ipc::Message::RpcCall(rpc_call) => {
-                                            commands.send(server::Command::RpcCall(
-                                                    client_id, rpc_call)).expect("RpcCall");
-                                        },
-                                        ipc::Message::RpcResponse(rpc_response) => {
-                                            commands.send(server::Command::RpcResponse(rpc_response)).expect("RpcResponse");
-                                        },
-                                        ipc::Message::RpcCancel(rpc_cancel) => {
-                                            commands.send(server::Command::RpcCancel(rpc_cancel)).expect("RpcCancel");
-                                        },
+                // println!("#sirver client_token: {:?},events: {:?}", client_token, events);
+                if events.is_readable() {
+                    if let Some(conn) = self.connections.get_mut(token) {
+                        let mut reader = conn.reader.take().unwrap();
+                        let commands = self.commands.clone();
+                        let client_id = conn.client_id;
+                        let event_loop_sender = event_loop.channel();
+                        self.thread_pool.execute(move || {
+                            loop {
+                                match reader.try_read_message() {
+                                    // NOCOM(#sirver): should disconnect instead of panic.
+                                    Err(err) => panic!("Error while reading: {}", err),
+                                    Ok(None) => break,
+                                    Ok(Some(message)) => {
+                                        // println!("{:?} -> Server: {:#?}", client_id, message);
+                                        match message {
+                                            // NOCOM(#sirver): pack them together in one message?
+                                            // NOCOM(#hrapp): that can actually also fail since the
+                                            // thread_pool does not wait for its thread to
+                                            // terminate on deletion.
+                                            ipc::Message::RpcCall(rpc_call) => {
+                                                commands.send(server::Command::RpcCall(
+                                                        client_id, rpc_call)).expect("RpcCall");
+                                            },
+                                            ipc::Message::RpcResponse(rpc_response) => {
+                                                commands.send(server::Command::RpcResponse(rpc_response)).expect("RpcResponse");
+                                            },
+                                            ipc::Message::RpcCancel(rpc_cancel) => {
+                                                commands.send(server::Command::RpcCancel(rpc_cancel)).expect("RpcCancel");
+                                            },
+                                        }
                                     }
                                 }
                             }
-                        }
-                        event_loop_sender.send(Command::ReRegisterForReading(token, reader)).expect("Command::ReRegisterForReading");
-                    });
-                } else if events.is_writable() {
-                    let conn = &mut self.connections[token];
-                    let writer = conn.writer.clone();
-                    let event_loop_sender = event_loop.channel();
-                    self.thread_pool.execute(move || {
-                        let mut writer = writer.lock().unwrap();
-                        match writer.try_write() {
-                            // NOCOM(#sirver): should disconnect instead of panic.
-                            Err(err) => panic!("Error while writing: {}", err),
-                            Ok(ipc::WriterState::AllWritten) => (),
-                            Ok(ipc::WriterState::MoreToWrite) => {
-                                event_loop_sender.send(Command::ReRegisterForWriting(token)).expect("Command::ReRegisterForWriting");
+                            // The ipc_bridge might have been shut down in the meantime, so ignore send
+                            // errors.
+                            // println!("#sirver read token: {:#?}", token);
+                            let _ = event_loop_sender.send(Command::ReRegisterForReading(token, reader));
+                        });
+                    }
+                }
+
+                if events.is_writable() {
+                    if let Some(conn) = self.connections.get_mut(token) {
+                        let writer = conn.writer.clone();
+                        let event_loop_sender = event_loop.channel();
+                        self.thread_pool.execute(move || {
+                            let mut writer = writer.lock().expect("writer");
+                            match writer.try_write() {
+                                // NOCOM(#sirver): should disconnect instead of panic.
+                                Err(err) => panic!("Error while writing: {}", err),
+                                Ok(ipc::WriterState::AllWritten) => (),
+                                Ok(ipc::WriterState::MoreToWrite) => {
+                                    // println!("#sirver write token: {:?}", token);
+                                    // The ipc_bridge might have been shut down in the meantime, so ignore send
+                                    // errors.
+                                    let _ = event_loop_sender.send(Command::ReRegisterForWriting(token));
+                                }
                             }
-                        }
-                    });
+                        });
+                    }
+                }
+
+                if events.is_hup() {
+                    if let Some(connection) = self.connections.remove(client_token) {
+                        self.commands.send(
+                            server::Command::ClientDisconnected(connection.client_id)).expect("ClientDisconnected");
+                    }
+                    return;
                 }
             }
         }

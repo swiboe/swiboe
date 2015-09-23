@@ -123,11 +123,11 @@ struct Delete {
 impl client::rpc::server::Rpc for Delete {
     fn call(&self, mut context: client::rpc::server::Context, args: serde_json::Value) {
         let request: DeleteRequest = try_rpc!(context, serde_json::from_value(args));
-        let mut buffers = self.buffers.write().unwrap();
+        let mut buffers = self.buffers.write().expect("Delete::call: locking buffers.");
         try_rpc!(context, buffers.delete_buffer(request.buffer_index));
 
         let response = DeleteResponse;
-        context.finish(rpc::Result::success(response)).unwrap();
+        context.finish(rpc::Result::success(response)).expect("Delete::call: finish");
     }
 }
 

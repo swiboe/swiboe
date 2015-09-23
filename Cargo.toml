@@ -12,6 +12,7 @@ serde_macros = "0.5.3"
 tempdir = "0.3.4"
 threadpool = "0.1.4"
 time = "0.1.32"
+unix_socket = "0.4.5"
 uuid = "0.1"
 
 [dependencies.mio]
