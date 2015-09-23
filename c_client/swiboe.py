@@ -37,6 +37,8 @@ def load_shared_library(shared_library):
     library.swiboe_disconnect.restype = None
     library.swiboe_disconnect.argtypes = [PtrClient]
 
+    # TODO(sirver): The client should complain if the same RPC is registered
+    # twice.
     library.swiboe_new_rpc.restype = None
     library.swiboe_new_rpc.argtypes = [PtrClient, c_char_p, c_uint16, RPC]
 
