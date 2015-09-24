@@ -4,7 +4,7 @@
 # Licensed under the Apache License, Version 2.0. See LICENSE.txt
 # in the project root for license information.
 
-from ctypes import c_void_p, c_char_p, c_uint16, CFUNCTYPE
+from ctypes import c_void_p, c_char_p, c_uint16, c_int32, CFUNCTYPE, POINTER
 import ctypes
 import json
 import os
@@ -16,6 +16,7 @@ PtrClient = c_void_p
 PtrClientContext = c_void_p
 PtrRpcResult = c_void_p
 PtrServerContext = c_void_p
+Result = c_int32
 
 RPC = CFUNCTYPE(None, PtrServerContext, c_char_p)
 
@@ -31,8 +32,8 @@ def load_shared_library(shared_library):
             shared_library = 'libswiboe.so'
     library = ctypes.cdll.LoadLibrary(shared_library)
 
-    library.swiboe_connect.restype = PtrClient
-    library.swiboe_connect.argtypes = [c_char_p]
+    library.swiboe_connect.restype = Result
+    library.swiboe_connect.argtypes = [c_char_p, POINTER(PtrClient)]
 
     library.swiboe_disconnect.restype = None
     library.swiboe_disconnect.argtypes = [PtrClient]

@@ -5,6 +5,7 @@
 # in the project root for license information.
 
 import argparse
+import ctypes
 import json
 import os
 import subprocess
@@ -18,6 +19,14 @@ class TestSwiboeClientLowLevel(unittest.TestCase):
     SHARED_LIBRARY = None
     TEST_SERVER = None
 
+    def _checked_connect(self):
+        client = swiboe.PtrClient()
+        result = self.library.swiboe_connect(
+                self.socket_name, ctypes.byref(client))
+        # NOCOM(#sirver): we would like a symbolic name for 0
+        self.assertEqual(result, 0)
+        return client
+
     def setUp(self):
         self.library = swiboe.SwiboeLibrary(self.SHARED_LIBRARY)
         self.server_process = subprocess.Popen(
@@ -28,12 +37,19 @@ class TestSwiboeClientLowLevel(unittest.TestCase):
     def tearDown(self):
         self.server_process.kill()
 
+    def test_connect_with_invalid_socket(self):
+        client = swiboe.PtrClient()
+        result = self.library.swiboe_connect(
+                "foobarblub", ctypes.byref(client))
+        # NOCOM(#sirver): we would like a symbolic name for 0
+        self.assertEqual(result, 1)
+
     def test_connect_and_disconnect(self):
-        client = self.library.swiboe_connect(self.socket_name)
+        client = self._checked_connect()
         self.library.swiboe_disconnect(client)
 
     def test_new_rpc(self):
-        client = self.library.swiboe_connect(self.socket_name)
+        client = self._checked_connect()
 
         def callback(server_context, args_string):
             return
@@ -43,7 +59,7 @@ class TestSwiboeClientLowLevel(unittest.TestCase):
         self.library.swiboe_disconnect(client)
 
     def test_call_not_handled_rpc(self):
-        serving_client = self.library.swiboe_connect(self.socket_name)
+        serving_client = self._checked_connect()
 
         def callback(server_context, args_string):
             call_result = self.library.swiboe_rpc_not_handled()
@@ -53,7 +69,7 @@ class TestSwiboeClientLowLevel(unittest.TestCase):
         self.library.swiboe_new_rpc(
             serving_client, 'test.test', 100, rpc_callback)
 
-        client = self.library.swiboe_connect(self.socket_name)
+        client = self._checked_connect()
         client_context = self.library.swiboe_client_call_rpc(
             client, 'test.test', 'null')
         call_result = self.library.swiboe_client_context_wait(client_context)
@@ -63,7 +79,7 @@ class TestSwiboeClientLowLevel(unittest.TestCase):
         self.library.swiboe_disconnect(serving_client)
 
     def test_call_rpc_returning_error(self):
-        serving_client = self.library.swiboe_connect(self.socket_name)
+        serving_client = self._checked_connect()
         error = {'details': 'Needed foo, got blah.'}
 
         def callback(server_context, args_string):
@@ -75,7 +91,7 @@ class TestSwiboeClientLowLevel(unittest.TestCase):
         self.library.swiboe_new_rpc(
             serving_client, 'test.test', 100, rpc_callback)
 
-        client = self.library.swiboe_connect(self.socket_name)
+        client = self._checked_connect()
         client_context = self.library.swiboe_client_call_rpc(
             client, 'test.test', 'null')
         call_result = self.library.swiboe_client_context_wait(client_context)
@@ -88,7 +104,7 @@ class TestSwiboeClientLowLevel(unittest.TestCase):
         self.library.swiboe_disconnect(serving_client)
 
     def test_call_successfull_rpc(self):
-        serving_client = self.library.swiboe_connect(self.socket_name)
+        serving_client = self._checked_connect()
         golden_return = {'blub': 'foo'}
 
         def callback(server_context, args_string):
@@ -99,7 +115,7 @@ class TestSwiboeClientLowLevel(unittest.TestCase):
         self.library.swiboe_new_rpc(
             serving_client, 'test.test', 100, rpc_callback)
 
-        client = self.library.swiboe_connect(self.socket_name)
+        client = self._checked_connect()
         client_context = self.library.swiboe_client_call_rpc(
             client, 'test.test', 'null')
         call_result = self.library.swiboe_client_context_wait(client_context)
@@ -112,7 +128,7 @@ class TestSwiboeClientLowLevel(unittest.TestCase):
         self.library.swiboe_disconnect(serving_client)
 
     def test_call_successfull_rpc_from_inside_rpc(self):
-        serving_client1 = self.library.swiboe_connect(self.socket_name)
+        serving_client1 = self._checked_connect()
         golden_return = {'blub': 'foo'}
 
         def callback1(server_context, args_string):
@@ -123,7 +139,7 @@ class TestSwiboeClientLowLevel(unittest.TestCase):
         self.library.swiboe_new_rpc(
             serving_client1, 'test.test', 100, rpc_callback1)
 
-        serving_client2 = self.library.swiboe_connect(self.socket_name)
+        serving_client2 = self._checked_connect()
 
         def callback2(server_context, args_string):
             client_context = self.library.swiboe_server_context_call_rpc(server_context, 'test.test',
@@ -136,7 +152,7 @@ class TestSwiboeClientLowLevel(unittest.TestCase):
         self.library.swiboe_new_rpc(
             serving_client2, 'test.foo', 100, rpc_callback2)
 
-        client = self.library.swiboe_connect(self.socket_name)
+        client = self._checked_connect()
         client_context = self.library.swiboe_client_call_rpc(
             client, 'test.foo', 'null')
         call_result = self.library.swiboe_client_context_wait(client_context)
@@ -150,7 +166,7 @@ class TestSwiboeClientLowLevel(unittest.TestCase):
         self.library.swiboe_disconnect(serving_client2)
 
     def test_streaming_successfull_rpc(self):
-        serving_client = self.library.swiboe_connect(self.socket_name)
+        serving_client = self._checked_connect()
 
         last = {'blub': 'foo'}
 
@@ -166,7 +182,7 @@ class TestSwiboeClientLowLevel(unittest.TestCase):
         self.library.swiboe_new_rpc(
             serving_client, 'test.test', 100, rpc_callback)
 
-        client = self.library.swiboe_connect(self.socket_name)
+        client = self._checked_connect()
         client_context = self.library.swiboe_client_call_rpc(
             client, 'test.test', 'null')
 

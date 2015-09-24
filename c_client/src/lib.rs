@@ -13,8 +13,23 @@ use std::mem;
 use std::path;
 use std::ptr;
 use std::str;
-use swiboe::client;
-use swiboe::rpc;
+use swiboe::{client, rpc};
+
+pub type CAbiResult = libc::int32_t;
+
+macro_rules! try_cabi {
+    ($expr:expr) => (match $expr {
+        ::std::result::Result::Ok(val) => val,
+        ::std::result::Result::Err(swiboe_error) => {
+            // NOCOM(#sirver): this more cases
+            // match swiboe_error {
+            // }
+            return 1;
+        }
+    })
+}
+
+const SUCCESS: CAbiResult = 0;
 
 // TODO(sirver): this always makes a copy, even though it might not be needed.
 fn c_str_to_string(c_buf: *const c_char) -> String {
@@ -25,16 +40,17 @@ fn c_str_to_string(c_buf: *const c_char) -> String {
 }
 
 #[no_mangle]
-pub extern "C" fn swiboe_connect(socket_name: *const c_char) -> *mut client::Client {
+pub extern "C" fn swiboe_connect(socket_name: *const c_char, client: *mut *const client::Client) -> CAbiResult {
     let socket_name = c_str_to_string(socket_name);
     let socket_name_path = path::Path::new(&socket_name);
 
-    let client = Box::new(
-        // NOCOM(#sirver): error handling
-        client::Client::connect_unix(socket_name_path).unwrap(),
+    let client_box = Box::new(
+        try_cabi!(client::Client::connect_unix(socket_name_path))
     );
-
-    unsafe { mem::transmute(client) }
+    unsafe {
+        *client = mem::transmute(client_box);
+    }
+    SUCCESS
 }
 
 #[no_mangle]
