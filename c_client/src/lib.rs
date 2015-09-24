@@ -15,7 +15,7 @@ use std::ptr;
 use std::str;
 use swiboe::{client, rpc};
 
-pub type CAbiResult = libc::int32_t;
+pub type CApiResult = libc::int32_t;
 
 macro_rules! try_cabi {
     ($expr:expr) => (match $expr {
@@ -29,7 +29,7 @@ macro_rules! try_cabi {
     })
 }
 
-const SUCCESS: CAbiResult = 0;
+const SUCCESS: CApiResult = 0;
 
 // TODO(sirver): this always makes a copy, even though it might not be needed.
 fn c_str_to_string(c_buf: *const c_char) -> String {
@@ -40,7 +40,7 @@ fn c_str_to_string(c_buf: *const c_char) -> String {
 }
 
 #[no_mangle]
-pub extern "C" fn swiboe_connect(socket_name: *const c_char, client: *mut *const client::Client) -> CAbiResult {
+pub extern "C" fn swiboe_connect(socket_name: *const c_char, client: *mut *const client::Client) -> CApiResult {
     let socket_name = c_str_to_string(socket_name);
     let socket_name_path = path::Path::new(&socket_name);
 
