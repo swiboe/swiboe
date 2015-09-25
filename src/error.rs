@@ -20,6 +20,7 @@ pub enum Error {
     Io(io::Error),
     JsonParsing(serde_json::error::Error),
     RpcDone,
+    InvalidUtf8,
 }
 
 impl fmt::Display for Error {
@@ -35,6 +36,7 @@ impl error::Error for Error {
           Error::Io(ref e) => e.description(),
           Error::JsonParsing(ref e) => e.description(),
           Error::RpcDone => "RPC is already finished or cancelled.",
+          Error::InvalidUtf8 => "Invalid utf-8 string encountered.",
       }
   }
 
@@ -50,6 +52,12 @@ impl error::Error for Error {
 impl From<io::Error> for Error {
      fn from(error: io::Error) -> Self {
          Error::Io(error)
+     }
+}
+
+impl From<::std::str::Utf8Error> for Error {
+     fn from(_: ::std::str::Utf8Error) -> Self {
+         Error::InvalidUtf8
      }
 }
 

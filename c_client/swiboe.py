@@ -20,6 +20,14 @@ Result = c_int32
 
 RPC = CFUNCTYPE(None, PtrServerContext, c_char_p)
 
+# Error codes
+SUCCESS = 0
+ERR_DISCONNECTED = 1
+ERR_IO = 2
+ERR_JSON_PARSING = 3
+ERR_RPC_DONE = 4
+ERR_INVALID_UTF8 = 5
+
 def load_shared_library(shared_library):
     # TODO(sirver): This needs extending for Windows.
     if shared_library is None:
@@ -35,12 +43,12 @@ def load_shared_library(shared_library):
     library.swiboe_connect.restype = Result
     library.swiboe_connect.argtypes = [c_char_p, POINTER(PtrClient)]
 
-    library.swiboe_disconnect.restype = None
+    library.swiboe_disconnect.restype = Result
     library.swiboe_disconnect.argtypes = [PtrClient]
 
     # TODO(sirver): The client should complain if the same RPC is registered
     # twice.
-    library.swiboe_new_rpc.restype = None
+    library.swiboe_new_rpc.restype = Result
     library.swiboe_new_rpc.argtypes = [PtrClient, c_char_p, c_uint16, RPC]
 
     library.swiboe_rpc_ok.restype = PtrRpcResult
@@ -75,7 +83,7 @@ def load_shared_library(shared_library):
     library.swiboe_client_context_recv.restype = c_char_p
     library.swiboe_client_context_recv.argtypes = [PtrClientContext]
 
-    library.swiboe_server_context_update.restype = None
+    library.swiboe_server_context_update.restype = Result
     library.swiboe_server_context_update.argtypes = [PtrServerContext, c_char_p]
 
     return library

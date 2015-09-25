@@ -23,9 +23,11 @@ class TestSwiboeClientLowLevel(unittest.TestCase):
         client = swiboe.PtrClient()
         result = self.library.swiboe_connect(
                 self.socket_name, ctypes.byref(client))
-        # NOCOM(#sirver): we would like a symbolic name for 0
-        self.assertEqual(result, 0)
+        self._ok(result)
         return client
+
+    def _ok(self, result):
+        self.assertEqual(swiboe.SUCCESS, result)
 
     def setUp(self):
         self.library = swiboe.SwiboeLibrary(self.SHARED_LIBRARY)
@@ -41,12 +43,11 @@ class TestSwiboeClientLowLevel(unittest.TestCase):
         client = swiboe.PtrClient()
         result = self.library.swiboe_connect(
                 "foobarblub", ctypes.byref(client))
-        # NOCOM(#sirver): we would like a symbolic name for 0
-        self.assertEqual(result, 1)
+        self.assertEqual(2, swiboe.ERR_IO)
 
     def test_connect_and_disconnect(self):
         client = self._checked_connect()
-        self.library.swiboe_disconnect(client)
+        self._ok(self.library.swiboe_disconnect(client))
 
     def test_new_rpc(self):
         client = self._checked_connect()
@@ -54,9 +55,9 @@ class TestSwiboeClientLowLevel(unittest.TestCase):
         def callback(server_context, args_string):
             return
         rpc_callback = swiboe.RPC(callback)
-        self.library.swiboe_new_rpc(
-            client, 'list_rust_files', 100, rpc_callback)
-        self.library.swiboe_disconnect(client)
+        self._ok(self.library.swiboe_new_rpc(
+            client, 'list_rust_files', 100, rpc_callback))
+        self._ok(self.library.swiboe_disconnect(client))
 
     def test_call_not_handled_rpc(self):
         serving_client = self._checked_connect()
@@ -66,8 +67,8 @@ class TestSwiboeClientLowLevel(unittest.TestCase):
             self.library.swiboe_server_context_finish(
                 server_context, call_result)
         rpc_callback = swiboe.RPC(callback)
-        self.library.swiboe_new_rpc(
-            serving_client, 'test.test', 100, rpc_callback)
+        self._ok(self.library.swiboe_new_rpc(
+            serving_client, 'test.test', 100, rpc_callback))
 
         client = self._checked_connect()
         client_context = self.library.swiboe_client_call_rpc(
@@ -75,8 +76,8 @@ class TestSwiboeClientLowLevel(unittest.TestCase):
         call_result = self.library.swiboe_client_context_wait(client_context)
         self.assertFalse(self.library.swiboe_rpc_result_is_ok(call_result))
 
-        self.library.swiboe_disconnect(client)
-        self.library.swiboe_disconnect(serving_client)
+        self._ok(self.library.swiboe_disconnect(client))
+        self._ok(self.library.swiboe_disconnect(serving_client))
 
     def test_call_rpc_returning_error(self):
         serving_client = self._checked_connect()
@@ -88,8 +89,8 @@ class TestSwiboeClientLowLevel(unittest.TestCase):
             self.library.swiboe_server_context_finish(
                 server_context, call_result)
         rpc_callback = swiboe.RPC(callback)
-        self.library.swiboe_new_rpc(
-            serving_client, 'test.test', 100, rpc_callback)
+        self._ok(self.library.swiboe_new_rpc(
+            serving_client, 'test.test', 100, rpc_callback))
 
         client = self._checked_connect()
         client_context = self.library.swiboe_client_call_rpc(
@@ -100,8 +101,8 @@ class TestSwiboeClientLowLevel(unittest.TestCase):
         # NOCOM(#sirver): Inpsect error. Need swiboe_rpc_unwrap_err or
         # something.
 
-        self.library.swiboe_disconnect(client)
-        self.library.swiboe_disconnect(serving_client)
+        self._ok(self.library.swiboe_disconnect(client))
+        self._ok(self.library.swiboe_disconnect(serving_client))
 
     def test_call_successfull_rpc(self):
         serving_client = self._checked_connect()
@@ -112,8 +113,8 @@ class TestSwiboeClientLowLevel(unittest.TestCase):
             self.library.swiboe_server_context_finish(
                 server_context, call_result)
         rpc_callback = swiboe.RPC(callback)
-        self.library.swiboe_new_rpc(
-            serving_client, 'test.test', 100, rpc_callback)
+        self._ok(self.library.swiboe_new_rpc(
+            serving_client, 'test.test', 100, rpc_callback))
 
         client = self._checked_connect()
         client_context = self.library.swiboe_client_call_rpc(
@@ -124,8 +125,8 @@ class TestSwiboeClientLowLevel(unittest.TestCase):
         json_blob = self.library.swiboe_rpc_result_unwrap(call_result)
         self.assertEqual(golden_return, json.loads(json_blob))
 
-        self.library.swiboe_disconnect(client)
-        self.library.swiboe_disconnect(serving_client)
+        self._ok(self.library.swiboe_disconnect(client))
+        self._ok(self.library.swiboe_disconnect(serving_client))
 
     def test_call_successfull_rpc_from_inside_rpc(self):
         serving_client1 = self._checked_connect()
@@ -136,8 +137,8 @@ class TestSwiboeClientLowLevel(unittest.TestCase):
             self.library.swiboe_server_context_finish(
                 server_context, call_result)
         rpc_callback1 = swiboe.RPC(callback1)
-        self.library.swiboe_new_rpc(
-            serving_client1, 'test.test', 100, rpc_callback1)
+        self._ok(self.library.swiboe_new_rpc(
+            serving_client1, 'test.test', 100, rpc_callback1))
 
         serving_client2 = self._checked_connect()
 
@@ -149,8 +150,8 @@ class TestSwiboeClientLowLevel(unittest.TestCase):
             self.library.swiboe_server_context_finish(
                 server_context, call_result)
         rpc_callback2 = swiboe.RPC(callback2)
-        self.library.swiboe_new_rpc(
-            serving_client2, 'test.foo', 100, rpc_callback2)
+        self._ok(self.library.swiboe_new_rpc(
+            serving_client2, 'test.foo', 100, rpc_callback2))
 
         client = self._checked_connect()
         client_context = self.library.swiboe_client_call_rpc(
@@ -161,9 +162,9 @@ class TestSwiboeClientLowLevel(unittest.TestCase):
         json_blob = self.library.swiboe_rpc_result_unwrap(call_result)
         self.assertEqual(golden_return, json.loads(json_blob))
 
-        self.library.swiboe_disconnect(client)
-        self.library.swiboe_disconnect(serving_client1)
-        self.library.swiboe_disconnect(serving_client2)
+        self._ok(self.library.swiboe_disconnect(client))
+        self._ok(self.library.swiboe_disconnect(serving_client1))
+        self._ok(self.library.swiboe_disconnect(serving_client2))
 
     def test_streaming_successfull_rpc(self):
         serving_client = self._checked_connect()
@@ -173,14 +174,14 @@ class TestSwiboeClientLowLevel(unittest.TestCase):
         def callback(server_context, args_string):
             for i in range(1, 4):
                 update = {'count': i}
-                self.library.swiboe_server_context_update(server_context,
-                                                          json.dumps(update))
+                self._ok(self.library.swiboe_server_context_update(server_context,
+                                                          json.dumps(update)))
             call_result = self.library.swiboe_rpc_ok(json.dumps(last))
             self.library.swiboe_server_context_finish(
                 server_context, call_result)
         rpc_callback = swiboe.RPC(callback)
-        self.library.swiboe_new_rpc(
-            serving_client, 'test.test', 100, rpc_callback)
+        self._ok(self.library.swiboe_new_rpc(
+            serving_client, 'test.test', 100, rpc_callback))
 
         client = self._checked_connect()
         client_context = self.library.swiboe_client_call_rpc(
@@ -201,8 +202,8 @@ class TestSwiboeClientLowLevel(unittest.TestCase):
         json_blob = self.library.swiboe_rpc_result_unwrap(call_result)
         self.assertEqual(last, json.loads(json_blob))
 
-        self.library.swiboe_disconnect(client)
-        self.library.swiboe_disconnect(serving_client)
+        self._ok(self.library.swiboe_disconnect(client))
+        self._ok(self.library.swiboe_disconnect(serving_client))
 
 
 def flatten_test_suite(suite):
