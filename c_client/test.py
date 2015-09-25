@@ -43,7 +43,7 @@ class TestSwiboeClientLowLevel(unittest.TestCase):
         client = swiboe.PtrClient()
         result = self.library.swiboe_connect(
                 "foobarblub", ctypes.byref(client))
-        self.assertEqual(2, swiboe.ERR_IO)
+        self.assertEqual(result, swiboe.ERR_IO)
 
     def test_connect_and_disconnect(self):
         client = self._checked_connect()
