@@ -18,40 +18,61 @@ pub enum Message {
 
 pub struct Reader<T: Read> {
     pub socket: T,
-    read_buffer: Vec<u8>,
+    buffer: Vec<u8>,
+}
+
+fn parse_length(buf: &[u8]) -> usize {
+    ((buf[3] as usize) << 24) |
+    ((buf[2] as usize) << 16) |
+    ((buf[1] as usize) <<  8) |
+    ((buf[0] as usize) <<  0)
+}
+
+// Tries to parse a JSON message into an ipc::Message struct.
+fn to_message(data: &[u8]) -> Result<Message> {
+    let message: Message = try!(serde_json::from_slice(data));
+    return Ok(message)
 }
 
 impl<T: Read> Reader<T> {
     pub fn new(socket: T) -> Self {
         Reader {
             socket: socket,
-            read_buffer: Vec::with_capacity(1024),
+            buffer: Vec::with_capacity(1024),
         }
     }
 
-    pub fn read_message(&mut self) -> Result<Option<Message>> {
-        // This might reallocate 'read_buffer' if it is too small.
-        try!(self.socket.try_read_buf(&mut self.read_buffer));
+    /// Read one full message - this expects the underlying socket to be blocking.
+    pub fn read_message(&mut self) -> Result<Message> {
+        let mut size_buf = [0u8; 4];
+        try!(self.socket.read_exact(&mut size_buf));
+        let msg_len = parse_length(&size_buf);
 
-        // We have read less than 4 bytes. We have to wait for more data to arrive.
-        if self.read_buffer.len() < 4 {
+        self.buffer.reserve(msg_len);
+        unsafe {
+            self.buffer.set_len(msg_len);
+        }
+        try!(self.socket.read_exact(&mut self.buffer));
+        to_message(&self.buffer)
+    }
+
+    /// Read all data currently available on the socket and returns the next full message that is
+    /// available or None if there is no full one.
+    pub fn try_read_message(&mut self) -> Result<Option<Message>> {
+        // This might reallocate 'buffer' if it is too small.
+        try!(self.socket.try_read_buf(&mut self.buffer));
+        if self.buffer.len() < 4 {
             return Ok(None);
         }
 
-        let msg_len =
-            ((self.read_buffer[3] as usize) << 24) |
-            ((self.read_buffer[2] as usize) << 16) |
-            ((self.read_buffer[1] as usize) <<  8) |
-            ((self.read_buffer[0] as usize) <<  0);
-
-        if self.read_buffer.len() < msg_len + 4 {
+        let msg_len = parse_length(&self.buffer[..4]);
+        if self.buffer.len() < msg_len + 4 {
             return Ok(None);
         }
+        let message = to_message(&self.buffer[4..4+msg_len]);
+        self.buffer.drain(..4+msg_len);
 
-        // NOCOM(#sirver): this should not unwrap.
-        let msg = String::from_utf8(self.read_buffer.drain(..4+msg_len).skip(4).collect()).unwrap();
-        let message: Message = try!(serde_json::from_str(&msg));
-        return Ok(Some(message))
+        message.map(|message| Some(message))
     }
 }
 
@@ -68,6 +89,16 @@ pub enum WriterState {
     AllWritten,
 }
 
+fn encode(message: &Message) -> Result<(Vec<u8>, Vec<u8>)> {
+    let buffer = try!(serde_json::to_vec(message));
+    let len = vec![
+        (buffer.len() >> 0) as u8,
+        (buffer.len() >> 8) as u8,
+        (buffer.len() >> 16) as u8,
+        (buffer.len() >> 24) as u8 ];
+    Ok((len, buffer))
+}
+
 impl<T: Write> Writer<T> {
     pub fn new(socket: T) -> Self {
         Writer {
@@ -77,14 +108,16 @@ impl<T: Write> Writer<T> {
         }
     }
 
-    pub fn queue_message(&mut self, message: &Message) {
-        let buffer = serde_json::to_vec(message).unwrap();
+    pub fn write_message(&mut self, message: &Message) -> Result<()> {
+        let (len, buffer) = try!(encode(message));
+        try!(self.socket.write_all(&len));
+        try!(self.socket.write_all(&buffer));
+        Ok(())
+    }
 
-        let len = vec![
-            (buffer.len() >> 0) as u8,
-            (buffer.len() >> 8) as u8,
-            (buffer.len() >> 16) as u8,
-            (buffer.len() >> 24) as u8 ];
+    pub fn queue_message(&mut self, message: &Message) {
+        // NOCOM(#sirver): should not unwrap
+        let (len, buffer) = encode(message).unwrap();
         self.to_write.push(len);
         self.to_write.push(buffer);
     }

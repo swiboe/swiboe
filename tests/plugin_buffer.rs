@@ -4,11 +4,22 @@
 
 use ::{CallbackRpc, create_file};
 use std::sync::{Arc, Mutex};
+use std::thread;
 use swiboe::client::RpcCaller;
 use swiboe::client;
 use swiboe::plugin_buffer;
 use swiboe::rpc;
 use swiboe::testing::TestHarness;
+
+fn wait_for_true_with_timeout(mutex: &Mutex<bool>) -> bool {
+    for _ in (0..10) {
+        if *mutex.lock().unwrap() {
+            return true;
+        }
+        thread::sleep_ms(50);
+    }
+    false
+}
 
 fn create_buffer(client: &mut client::Client, expected_index: usize, content: Option<&str>) {
     let request = plugin_buffer::NewRequest {
@@ -24,21 +35,20 @@ fn create_buffer(client: &mut client::Client, expected_index: usize, content: Op
 fn buffer_new() {
     let t = TestHarness::new();
     let callback_called = Arc::new(Mutex::new(false));
+    let mut client = client::Client::connect_unix(&t.socket_name).unwrap();
     {
-        let mut serving_client = client::Client::connect_unix(&t.socket_name).unwrap();
         let callback_called = callback_called.clone();
-        serving_client.new_rpc("on.buffer.new", Box::new(CallbackRpc {
+        client.new_rpc("on.buffer.new", Box::new(CallbackRpc {
             priority: 100,
             callback: move |mut sender: client::rpc::server::Context, _| {
-                *callback_called.lock().unwrap() = true;
                 sender.finish(rpc::Result::success(())).unwrap();
+                *callback_called.lock().unwrap() = true;
             }
         })).unwrap();
 
-        let mut client = client::Client::connect_unix(&t.socket_name).unwrap();
         create_buffer(&mut client, 0, None);
     }
-    assert!(*callback_called.lock().unwrap());
+    assert!(wait_for_true_with_timeout(&*callback_called));
 }
 
 #[test]
@@ -96,18 +106,17 @@ fn buffer_open_file() {
 fn buffer_delete() {
     let t = TestHarness::new();
     let callback_called = Arc::new(Mutex::new(false));
+    let mut client = client::Client::connect_unix(&t.socket_name).unwrap();
     {
-        let mut serving_client = client::Client::connect_unix(&t.socket_name).unwrap();
         let callback_called = callback_called.clone();
-        serving_client.new_rpc("on.buffer.deleted", Box::new(CallbackRpc {
+        client.new_rpc("on.buffer.deleted", Box::new(CallbackRpc {
             priority: 100,
             callback: move |mut sender: client::rpc::server::Context, _| {
-                *callback_called.lock().unwrap() = true;
                 sender.finish(rpc::Result::success(())).unwrap();
+                *callback_called.lock().unwrap() = true;
             }
         })).unwrap();
 
-        let mut client = client::Client::connect_unix(&t.socket_name).unwrap();
         create_buffer(&mut client, 0, None);
 
         let request = plugin_buffer::DeleteRequest {
@@ -116,7 +125,7 @@ fn buffer_delete() {
         let mut rpc = client.call("buffer.delete", &request).unwrap();
         assert_eq!(rpc.wait().unwrap(), rpc::Result::success(()));
     }
-    assert!(*callback_called.lock().unwrap());
+    assert!(wait_for_true_with_timeout(&*callback_called));
 }
 
 #[test]

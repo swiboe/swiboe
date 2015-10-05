@@ -5,49 +5,88 @@
 #![allow(deprecated)]
 
 use ::error::Result;
+use ::ipc;
 use ::plugin_core::NewRpcRequest;
-use mio::tcp::TcpStream;
-use mio::unix::UnixStream;
-use mio;
 use serde;
-use std::net;
+use std::io;
+use std::net::{self, TcpStream};
 use std::path;
-use std::sync::Mutex;
-use std::sync::mpsc;
+use std::sync::{mpsc, Mutex};
 use std::thread;
+use unix_socket::UnixStream;
 
-
+/// An abstraction that can call remove RPCs.
 pub trait RpcCaller {
     fn call<T: serde::Serialize>(&mut self, function: &str, args: &T) -> Result<::client::rpc::client::Context>;
 }
 
+/// A client maintains a connection to a Swiboe server. It can also serve RPCs that can only be
+/// called by the server.
 pub struct Client {
-    event_loop_commands: mio::Sender<event_loop::Command>,
+    // Connection to the logic loop.
     rpc_loop_commands: rpc_loop::CommandSender,
 
+    // The thread dealing with all the logic in the client.
     rpc_loop_thread: Option<thread::JoinHandle<()>>,
-    event_loop_thread: Option<thread::JoinHandle<()>>,
+
+    // The threads dealing with IO. There is a separate thread for reading and one for writing.
+    // Both of them block on their IO.
+    read_thread: Option<thread::JoinHandle<()>>,
+    write_thread: Option<thread::JoinHandle<()>>,
+
+    // Function to bring down the connection used for IO. The 'read_thread' and 'write_thread' will
+    // both error then and terminate.
+    shutdown_socket_func: Box<Fn() -> ()>,
 }
+
 
 impl Client {
     pub fn connect_unix(socket_name: &path::Path) -> Result<Self> {
-        let stream = try!(UnixStream::connect(&socket_name));
-        Ok(Client::common_connect(stream))
+        let writer_stream = try!(UnixStream::connect(&socket_name));
+        let reader_stream = try!(writer_stream.try_clone());
+        let shutdown_stream = try!(writer_stream.try_clone());
+        Ok(Client::common_connect(reader_stream, writer_stream, Box::new(move || {
+            let _ = shutdown_stream.shutdown(net::Shutdown::Read);
+        })))
     }
 
     pub fn connect_tcp(address: &net::SocketAddr) -> Result<Self> {
-        let stream = try!(TcpStream::connect(address));
-        Ok(Client::common_connect(stream))
+        let writer_stream = try!(TcpStream::connect(address));
+        let reader_stream = try!(writer_stream.try_clone());
+        let shutdown_stream = try!(writer_stream.try_clone());
+        Ok(Client::common_connect(reader_stream, writer_stream, Box::new(move || {
+            let _ = shutdown_stream.shutdown(net::Shutdown::Read);
+        })))
     }
 
-    fn common_connect<T: event_loop::TryClone + 'static>(stream: T) -> Self {
+    fn common_connect<Reader: io::Read + Send + 'static, Writer: io::Write + Send + 'static>(reader_stream: Reader, writer_stream: Writer, shutdown_func: Box<Fn() -> ()>) -> Self {
         let (commands_tx, commands_rx) = mpsc::channel();
-        let (event_loop_thread, event_loop_commands) = event_loop::spawn(stream, commands_tx.clone());
+        let (send_tx, send_rx) = mpsc::channel::<ipc::Message>();
+
+        let reader_commands_tx = commands_tx.clone();
+        let read_thread = thread::spawn(move || {
+            let mut reader = ipc::Reader::new(reader_stream);
+            while let Ok(message) = reader.read_message() {
+                let command = rpc_loop::Command::Received(message);
+                if reader_commands_tx.send(command).is_err() {
+                    break;
+                }
+            };
+        });
+
+        let write_thread = thread::spawn(move || {
+            let mut writer = ipc::Writer::new(writer_stream);
+            while let Ok(message) = send_rx.recv() {
+                writer.write_message(&message).expect("Writing failed");
+            }
+        });
+
         Client {
-            event_loop_commands: event_loop_commands.clone(),
             rpc_loop_commands: commands_tx.clone(),
-            rpc_loop_thread: Some(rpc_loop::spawn(commands_rx, commands_tx, event_loop_commands)),
-            event_loop_thread: Some(event_loop_thread),
+            rpc_loop_thread: Some(rpc_loop::spawn(commands_rx, commands_tx, send_tx)),
+            read_thread: Some(read_thread),
+            write_thread: Some(write_thread),
+            shutdown_socket_func: shutdown_func,
         }
     }
 
@@ -82,28 +121,28 @@ impl RpcCaller for Client {
 
 impl Drop for Client {
     fn drop(&mut self) {
-        // Either thread might have panicked at this point, so we can not rely on the sends to go
-        // through. We just tell both (again) to Quit and hope they actually join. Order matters -
-        // the event loop keeps everything going, so we should it down first.
-        let _ = self.event_loop_commands.send(event_loop::Command::Quit);
-        if let Some(thread) = self.event_loop_thread.take() {
-            thread.join().expect("Joining event_loop_thread failed.");
-        }
-
         let _ = self.rpc_loop_commands.send(rpc_loop::Command::Quit);
         if let Some(thread) = self.rpc_loop_thread.take() {
             thread.join().expect("Joining rpc_loop_thread failed.");
         }
 
+        (self.shutdown_socket_func)();
+
+        if let Some(thread) = self.write_thread.take() {
+            thread.join().expect("Joining write_thread failed.");
+        }
+        if let Some(thread) = self.read_thread.take() {
+            thread.join().expect("Joining read_thread failed.");
+        }
     }
 }
 
+/// A ThinClient is an RpcCaller, but does not maintain and cannot register new RPCs. It can
+/// be cloned, so that many threads can do RPCs in parallel.
 pub struct ThinClient {
     rpc_loop_commands: Mutex<rpc_loop::CommandSender>,
 }
 
-// NOCOM(#sirver): figure out the difference between a Sender, an Context and come up with better
-// names.
 impl ThinClient {
     pub fn clone(&self) -> Self {
         let commands = {
@@ -127,7 +166,6 @@ impl RpcCaller for ThinClient {
 }
 
 
-mod event_loop;
 mod rpc_loop;
 
 pub mod rpc;
