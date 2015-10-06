@@ -152,12 +152,12 @@ pub extern "C" fn swiboe_rpc_not_handled() -> *const rpc::Result {
 }
 
 fn call<T: client::RpcCaller>(context: &mut T, rpc_name: *const c_char, args: *const c_char)
-    -> *mut client::rpc::client::Context
+    -> swiboe::Result<*mut client::rpc::client::Context>
 {
     let rpc_name_c_buf = unsafe {
         CStr::from_ptr(rpc_name)
     };
-    let rpc_name = c_str_to_str(&rpc_name_c_buf).unwrap();
+    let rpc_name = try!(c_str_to_str(&rpc_name_c_buf));
     let args = if args.is_null() {
         serde_json::Value::Null
     } else {
@@ -167,34 +167,41 @@ fn call<T: client::RpcCaller>(context: &mut T, rpc_name: *const c_char, args: *c
         c_str_to_json(&args_c_str).unwrap()
     };
 
-    // NOCOM(#sirver): error handling
-    let client_context = context.call(&rpc_name, &args).unwrap();
-    unsafe {
+    let client_context = try!(context.call(&rpc_name, &args));
+    Ok(unsafe {
         mem::transmute(Box::new(client_context))
-    }
+    })
 }
 
 #[no_mangle]
 pub extern "C" fn swiboe_server_context_call_rpc(
     context: *const client::rpc::server::Context,
     rpc_name: *const c_char,
-    args: *const c_char) -> *mut client::rpc::client::Context {
+    args: *const c_char,
+    client_context: *mut *mut client::rpc::client::Context) -> CApiResult {
     let context: &mut client::rpc::server::Context = unsafe {
         mem::transmute(context)
     };
 
-    call(context, rpc_name, args)
+    unsafe {
+        *client_context = try_capi!(call(context, rpc_name, args));
+    }
+    SUCCESS
 }
 
 
 #[no_mangle]
 pub extern "C" fn swiboe_client_call_rpc(client: *const client::Client,
                                          rpc_name: *const c_char,
-                                         args: *const c_char) -> *mut client::rpc::client::Context {
+                                         args: *const c_char,
+                                         client_context: *mut *mut client::rpc::client::Context) -> CApiResult {
     let client: &mut client::Client = unsafe {
         mem::transmute(client)
     };
-    call(client, rpc_name, args)
+    unsafe {
+        *client_context = try_capi!(call(client, rpc_name, args));
+    }
+    SUCCESS
 }
 
 #[no_mangle]
