@@ -205,16 +205,16 @@ pub extern "C" fn swiboe_client_call_rpc(client: *const client::Client,
 }
 
 #[no_mangle]
-pub extern "C" fn swiboe_client_context_wait(context: *mut client::rpc::client::Context) -> *const rpc::Result {
+pub extern "C" fn swiboe_client_context_wait(context: *mut client::rpc::client::Context, rpc_result: *mut *const rpc::Result) -> CApiResult {
     let mut context: Box<client::rpc::client::Context> = unsafe {
         mem::transmute(context)
     };
 
-    // NOCOM(#sirver): error handling
-    let result: rpc::Result = context.wait().unwrap();
+    let result: rpc::Result = try_capi!(context.wait());
     unsafe {
-        mem::transmute(Box::new(result))
+        *rpc_result = mem::transmute(Box::new(result))
     }
+    SUCCESS
 }
 
 #[no_mangle]

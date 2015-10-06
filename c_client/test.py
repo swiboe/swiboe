@@ -74,7 +74,8 @@ class TestSwiboeClientLowLevel(unittest.TestCase):
         client_context = swiboe.PtrClientContext()
         self._ok(self.library.swiboe_client_call_rpc(
             client, 'test.test', 'null', ctypes.byref(client_context)))
-        call_result = self.library.swiboe_client_context_wait(client_context)
+        call_result = swiboe.PtrRpcResult()
+        self._ok(self.library.swiboe_client_context_wait(client_context, ctypes.byref(call_result)))
         self.assertFalse(self.library.swiboe_rpc_result_is_ok(call_result))
 
         self._ok(self.library.swiboe_disconnect(client))
@@ -97,7 +98,8 @@ class TestSwiboeClientLowLevel(unittest.TestCase):
         client_context = swiboe.PtrClientContext()
         self._ok(self.library.swiboe_client_call_rpc(
             client, 'test.test', 'null', ctypes.byref(client_context)))
-        call_result = self.library.swiboe_client_context_wait(client_context)
+        call_result = swiboe.PtrRpcResult()
+        self._ok(self.library.swiboe_client_context_wait(client_context, ctypes.byref(call_result)))
         self.assertFalse(self.library.swiboe_rpc_result_is_ok(call_result))
 
         # NOCOM(#sirver): Inpsect error. Need swiboe_rpc_unwrap_err or
@@ -122,7 +124,8 @@ class TestSwiboeClientLowLevel(unittest.TestCase):
         client_context = swiboe.PtrClientContext()
         self._ok(self.library.swiboe_client_call_rpc(
             client, 'test.test', 'null', ctypes.byref(client_context)))
-        call_result = self.library.swiboe_client_context_wait(client_context)
+        call_result = swiboe.PtrRpcResult()
+        self._ok(self.library.swiboe_client_context_wait(client_context, ctypes.byref(call_result)))
         self.assertTrue(self.library.swiboe_rpc_result_is_ok(call_result))
 
         json_blob = self.library.swiboe_rpc_result_unwrap(call_result)
@@ -149,8 +152,8 @@ class TestSwiboeClientLowLevel(unittest.TestCase):
             client_context = swiboe.PtrClientContext()
             self._ok(self.library.swiboe_server_context_call_rpc(server_context, 'test.test',
                                                                          args_string, ctypes.byref(client_context)))
-            call_result = self.library.swiboe_client_context_wait(
-                client_context)
+            call_result = swiboe.PtrRpcResult()
+            self._ok(self.library.swiboe_client_context_wait(client_context, ctypes.byref(call_result)))
             self.library.swiboe_server_context_finish(
                 server_context, call_result)
         rpc_callback2 = swiboe.RPC(callback2)
@@ -161,7 +164,8 @@ class TestSwiboeClientLowLevel(unittest.TestCase):
         client_context = swiboe.PtrClientContext()
         self._ok(self.library.swiboe_client_call_rpc(
             client, 'test.foo', 'null', ctypes.byref(client_context)))
-        call_result = self.library.swiboe_client_context_wait(client_context)
+        call_result = swiboe.PtrRpcResult()
+        self._ok(self.library.swiboe_client_context_wait(client_context, ctypes.byref(call_result)))
         self.assertTrue(self.library.swiboe_rpc_result_is_ok(call_result))
 
         json_blob = self.library.swiboe_rpc_result_unwrap(call_result)
@@ -202,7 +206,8 @@ class TestSwiboeClientLowLevel(unittest.TestCase):
         self.assertEqual(
             None, self.library.swiboe_client_context_recv(client_context))
 
-        call_result = self.library.swiboe_client_context_wait(client_context)
+        call_result = swiboe.PtrRpcResult()
+        self._ok(self.library.swiboe_client_context_wait(client_context, ctypes.byref(call_result)))
         self.assertTrue(self.library.swiboe_rpc_result_is_ok(call_result))
 
         json_blob = self.library.swiboe_rpc_result_unwrap(call_result)

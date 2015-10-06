@@ -64,8 +64,8 @@ def load_shared_library(shared_library):
     library.swiboe_client_call_rpc.restype = Result
     library.swiboe_client_call_rpc.argtypes = [PtrClient, c_char_p, c_char_p, POINTER(PtrClientContext)]
 
-    library.swiboe_client_context_wait.restype = PtrRpcResult
-    library.swiboe_client_context_wait.argtypes = [PtrClientContext]
+    library.swiboe_client_context_wait.restype = Result
+    library.swiboe_client_context_wait.argtypes = [PtrClientContext, POINTER(PtrRpcResult)]
 
     library.swiboe_server_context_finish.restype = None
     library.swiboe_server_context_finish.argtypes = [
