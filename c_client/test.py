@@ -64,8 +64,8 @@ class TestSwiboeClientLowLevel(unittest.TestCase):
 
         def callback(server_context, args_string):
             call_result = self.library.swiboe_rpc_not_handled()
-            self.library.swiboe_server_context_finish(
-                server_context, call_result)
+            self._ok(self.library.swiboe_server_context_finish(
+                server_context, call_result))
         rpc_callback = swiboe.RPC(callback)
         self._ok(self.library.swiboe_new_rpc(
             serving_client, 'test.test', 100, rpc_callback))
@@ -88,8 +88,8 @@ class TestSwiboeClientLowLevel(unittest.TestCase):
         def callback(server_context, args_string):
             call_result = self.library.swiboe_rpc_error(
                 'InvalidArgs', json.dumps(error))
-            self.library.swiboe_server_context_finish(
-                server_context, call_result)
+            self._ok(self.library.swiboe_server_context_finish(
+                server_context, call_result))
         rpc_callback = swiboe.RPC(callback)
         self._ok(self.library.swiboe_new_rpc(
             serving_client, 'test.test', 100, rpc_callback))
@@ -114,8 +114,8 @@ class TestSwiboeClientLowLevel(unittest.TestCase):
 
         def callback(server_context, args_string):
             call_result = self.library.swiboe_rpc_ok(json.dumps(golden_return))
-            self.library.swiboe_server_context_finish(
-                server_context, call_result)
+            self._ok(self.library.swiboe_server_context_finish(
+                server_context, call_result))
         rpc_callback = swiboe.RPC(callback)
         self._ok(self.library.swiboe_new_rpc(
             serving_client, 'test.test', 100, rpc_callback))
@@ -140,8 +140,8 @@ class TestSwiboeClientLowLevel(unittest.TestCase):
 
         def callback1(server_context, args_string):
             call_result = self.library.swiboe_rpc_ok(json.dumps(golden_return))
-            self.library.swiboe_server_context_finish(
-                server_context, call_result)
+            self._ok(self.library.swiboe_server_context_finish(
+                server_context, call_result))
         rpc_callback1 = swiboe.RPC(callback1)
         self._ok(self.library.swiboe_new_rpc(
             serving_client1, 'test.test', 100, rpc_callback1))
@@ -154,8 +154,8 @@ class TestSwiboeClientLowLevel(unittest.TestCase):
                                                                          args_string, ctypes.byref(client_context)))
             call_result = swiboe.PtrRpcResult()
             self._ok(self.library.swiboe_client_context_wait(client_context, ctypes.byref(call_result)))
-            self.library.swiboe_server_context_finish(
-                server_context, call_result)
+            self._ok(self.library.swiboe_server_context_finish(
+                server_context, call_result))
         rpc_callback2 = swiboe.RPC(callback2)
         self._ok(self.library.swiboe_new_rpc(
             serving_client2, 'test.foo', 100, rpc_callback2))
@@ -186,8 +186,8 @@ class TestSwiboeClientLowLevel(unittest.TestCase):
                 self._ok(self.library.swiboe_server_context_update(server_context,
                                                           json.dumps(update)))
             call_result = self.library.swiboe_rpc_ok(json.dumps(last))
-            self.library.swiboe_server_context_finish(
-                server_context, call_result)
+            self._ok(self.library.swiboe_server_context_finish(
+                server_context, call_result))
         rpc_callback = swiboe.RPC(callback)
         self._ok(self.library.swiboe_new_rpc(
             serving_client, 'test.test', 100, rpc_callback))
@@ -197,14 +197,22 @@ class TestSwiboeClientLowLevel(unittest.TestCase):
         self._ok(self.library.swiboe_client_call_rpc(
             client, 'test.test', 'null', ctypes.byref(client_context)))
 
-        self.assertEqual(1,
-                         json.loads(self.library.swiboe_client_context_recv(client_context))['count'])
-        self.assertEqual(2,
-                         json.loads(self.library.swiboe_client_context_recv(client_context))['count'])
-        self.assertEqual(3,
-                         json.loads(self.library.swiboe_client_context_recv(client_context))['count'])
-        self.assertEqual(
-            None, self.library.swiboe_client_context_recv(client_context))
+        json_str = ctypes.c_char_p()
+        self._ok(self.library.swiboe_client_context_recv(client_context, ctypes.byref(json_str)))
+
+        self.assertEqual(1, json.loads(json_str.value)['count'])
+
+        json_str = ctypes.c_char_p()
+        self._ok(self.library.swiboe_client_context_recv(client_context, ctypes.byref(json_str)))
+        self.assertEqual(2, json.loads(json_str.value)['count'])
+
+        json_str = ctypes.c_char_p()
+        self._ok(self.library.swiboe_client_context_recv(client_context, ctypes.byref(json_str)))
+        self.assertEqual(3, json.loads(json_str.value)['count'])
+
+        json_str = ctypes.c_char_p()
+        self._ok(self.library.swiboe_client_context_recv(client_context, ctypes.byref(json_str)))
+        self.assertEqual(None, json_str.value)
 
         call_result = swiboe.PtrRpcResult()
         self._ok(self.library.swiboe_client_context_wait(client_context, ctypes.byref(call_result)))

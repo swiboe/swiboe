@@ -79,16 +79,15 @@ pub extern "C" fn swiboe_disconnect(client: *mut client::Client) -> CApiResult {
 }
 
 #[no_mangle]
-pub extern "C" fn swiboe_server_context_finish(context: *mut client::rpc::server::Context, rpc_result: *const rpc::Result) {
+pub extern "C" fn swiboe_server_context_finish(context: *mut client::rpc::server::Context, rpc_result: *const rpc::Result) -> CApiResult {
     let mut context: Box<client::rpc::server::Context> = unsafe {
          mem::transmute(context)
     };
     let result: Box<rpc::Result> = unsafe {
          mem::transmute(rpc_result)
     };
-    println!("#sirver result: {:#?}", result);
-    // NOCOM(#sirver): error handling.
-    context.finish(*result).unwrap();
+    try_capi!(context.finish(*result));
+    SUCCESS
 }
 
 #[no_mangle]
@@ -218,20 +217,26 @@ pub extern "C" fn swiboe_client_context_wait(context: *mut client::rpc::client::
 }
 
 #[no_mangle]
-pub extern "C" fn swiboe_client_context_recv(context: *mut client::rpc::client::Context) -> *const c_char {
+pub extern "C" fn swiboe_client_context_recv(context: *mut client::rpc::client::Context, json_c_str: *mut *const c_char) -> CApiResult {
+    // We expect the input parameter to be an unallocated string.
+    assert_eq!(ptr::null(), unsafe { *json_c_str });
+
     let mut context: &mut client::rpc::client::Context = unsafe {
         mem::transmute(context)
     };
 
-    // NOCOM(#sirver): error handling
-    let object = context.recv().unwrap();
+    let object = try_capi!(context.recv());
     match object {
-        None => return ptr::null(),
+        None => (),
         Some(json_value) => {
             let json_string = serde_json::to_string(&json_value).unwrap();
-            CString::new(json_string).unwrap().into_raw()
+            let c_json_str = CString::new(json_string).unwrap().into_raw();
+            unsafe {
+                *json_c_str = c_json_str;
+            }
         }
     }
+    SUCCESS
 }
 
 #[no_mangle]
