@@ -39,17 +39,18 @@ macro_rules! try_capi {
     })
 }
 
-fn c_str_to_str(c_str: &CStr) -> swiboe::Result<&str> {
-    Ok(try!(str::from_utf8(c_str.to_bytes())))
+/// Converts a buffer we got passed from the API user or dies if the input is invalid.
+fn to_str_or_die(c_str: &CStr) -> &str {
+    str::from_utf8(c_str.to_bytes())
+        .expect("argument was not a valid UTF-8 encoded string.")
 }
 
-fn c_str_to_json(c_str: &CStr) -> swiboe::Result<serde_json::Value> {
-    let json_str = try!(c_str_to_str(c_str));
-    // TODO(sirver): We return errors on invalid UTF8, but blow up on invalid JSON. That is
-    // inconsistent.
+/// Converts a buffer we got passed from the API user or dies if the input is invalid.
+fn to_json_or_die(c_str: &CStr) -> serde_json::Value {
+    let json_str = to_str_or_die(c_str);
     let json_value: serde_json::Value = serde_json::from_str(json_str)
-        .expect("'args' was not valid JSON.");
-    Ok(json_value)
+        .expect("argument was not valid JSON.");
+    json_value
 }
 
 #[no_mangle]
@@ -58,7 +59,7 @@ pub extern "C" fn swiboe_connect(socket_name: *const c_char, client: *mut *const
         CStr::from_ptr(socket_name)
     };
 
-    let socket_name = try_capi!(c_str_to_str(&socket_name_cstr));
+    let socket_name = to_str_or_die(&socket_name_cstr);
     let socket_name_path = path::Path::new(socket_name);
 
     let client_box = Box::new(
@@ -99,10 +100,9 @@ pub extern "C" fn swiboe_server_context_update(context: *mut client::rpc::server
     let json_c_str = unsafe {
         CStr::from_ptr(json_c_buf)
     };
-    let json_value = c_str_to_json(&json_c_str).unwrap();
+    let json_value = to_json_or_die(&json_c_str);
 
-    // NOCOM(#sirver): error handling.
-    context.update(&json_value).unwrap();
+    try_capi!(context.update(&json_value));
     SUCCESS
 }
 
@@ -111,7 +111,7 @@ pub extern "C" fn swiboe_rpc_ok(c_buf: *const c_char) -> *const rpc::Result {
     let json_c_str = unsafe {
         CStr::from_ptr(c_buf)
     };
-    let json_value = c_str_to_json(&json_c_str).unwrap();
+    let json_value = to_json_or_die(&json_c_str);
     unsafe {
         mem::transmute(Box::new(rpc::Result::Ok(json_value)))
     }
@@ -122,7 +122,7 @@ pub extern "C" fn swiboe_rpc_error(c_buf_error_name: *const c_char, c_buf_detail
     let c_str_error_name = unsafe {
         CStr::from_ptr(c_buf_error_name)
     };
-    let error_name = c_str_to_str(&c_str_error_name).unwrap();
+    let error_name = to_str_or_die(&c_str_error_name);
 
     let details = if c_buf_details.is_null() {
         None
@@ -130,7 +130,7 @@ pub extern "C" fn swiboe_rpc_error(c_buf_error_name: *const c_char, c_buf_detail
         let c_str_details = unsafe {
             CStr::from_ptr(c_buf_details)
         };
-        Some(c_str_to_json(&c_str_details).unwrap())
+        Some(to_json_or_die(&c_str_details))
     };
 
     let err = rpc::Error {
@@ -156,14 +156,14 @@ fn call<T: client::RpcCaller>(context: &mut T, rpc_name: *const c_char, args: *c
     let rpc_name_c_buf = unsafe {
         CStr::from_ptr(rpc_name)
     };
-    let rpc_name = try!(c_str_to_str(&rpc_name_c_buf));
+    let rpc_name = to_str_or_die(&rpc_name_c_buf);
     let args = if args.is_null() {
         serde_json::Value::Null
     } else {
         let args_c_str = unsafe {
             CStr::from_ptr(args)
         };
-        c_str_to_json(&args_c_str).unwrap()
+        to_json_or_die(&args_c_str)
     };
 
     let client_context = try!(context.call(&rpc_name, &args));
@@ -300,7 +300,7 @@ pub extern "C" fn swiboe_new_rpc(client: *mut client::Client,
         callback: callback,
     });
 
-    let rpc_name = try_capi!(c_str_to_str(rpc_name_cstr));
+    let rpc_name = to_str_or_die(rpc_name_cstr);
     try_capi!(client.new_rpc(rpc_name, rpc));
     SUCCESS
 }

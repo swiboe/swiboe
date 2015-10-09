@@ -6,11 +6,8 @@
 
 from ctypes import c_void_p, c_char_p, c_uint16, c_int32, CFUNCTYPE, POINTER
 import ctypes
-import json
 import os
 import platform
-import time
-import sys
 
 PtrClient = c_void_p
 PtrClientContext = c_void_p
@@ -26,7 +23,6 @@ ERR_DISCONNECTED = 1
 ERR_IO = 2
 ERR_JSON_PARSING = 3
 ERR_RPC_DONE = 4
-# TODO(sirver): Reconsider this: should we not crash on bad utf-8 input?
 ERR_INVALID_UTF8 = 5
 
 def load_shared_library(shared_library):
@@ -47,8 +43,6 @@ def load_shared_library(shared_library):
     library.swiboe_disconnect.restype = Result
     library.swiboe_disconnect.argtypes = [PtrClient]
 
-    # TODO(sirver): The client should complain if the same RPC is registered
-    # twice.
     library.swiboe_new_rpc.restype = Result
     library.swiboe_new_rpc.argtypes = [PtrClient, c_char_p, c_uint16, RPC]
 
