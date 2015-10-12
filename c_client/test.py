@@ -86,9 +86,8 @@ class TestSwiboeClientLowLevel(unittest.TestCase):
         error = {'details': u'Needed föö, got blah.'}
 
         def callback(server_context, args_string):
-            # NOCOM(#sirver): change this to take integer values.
             call_result = self.library.swiboe_rpc_error(
-                'InvalidArgs', json.dumps(error))
+                swiboe.RPC_ERR_INVALID_ARGS, json.dumps(error))
             self._ok(self.library.swiboe_server_context_finish(
                 server_context, call_result))
         rpc_callback = swiboe.RPC(callback)

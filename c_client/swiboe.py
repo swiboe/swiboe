@@ -59,7 +59,7 @@ def load_shared_library(shared_library):
     library.swiboe_rpc_not_handled.argtypes = []
 
     library.swiboe_rpc_error.restype = PtrRpcResult
-    library.swiboe_rpc_error.argtypes = [c_char_p, c_char_p]
+    library.swiboe_rpc_error.argtypes = [RpcErrorKind, c_char_p]
 
     library.swiboe_client_call_rpc.restype = Result
     library.swiboe_client_call_rpc.argtypes = [PtrClient, c_char_p, c_char_p, POINTER(PtrClientContext)]

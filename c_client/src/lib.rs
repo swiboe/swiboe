@@ -16,31 +16,43 @@ use std::str;
 use swiboe::{client, rpc};
 
 
-// Local results.
-pub type CApiResult = libc::int32_t;
-const SUCCESS: CApiResult = 0;
-const ERR_DISCONNECTED: CApiResult = 1;
-const ERR_IO: CApiResult = 2;
-const ERR_JSON_PARSING: CApiResult = 3;
-const ERR_RPC_DONE: CApiResult = 4;
-const ERR_INVALID_UTF8: CApiResult = 5;
+/// Local results.
+#[repr(i32)]
+pub enum CApiResult {
+    SUCCESS = 0,
+    ERR_DISCONNECTED = 1,
+    ERR_IO = 2,
+    ERR_JSON_PARSING = 3,
+    ERR_RPC_DONE = 4,
+    ERR_INVALID_UTF8 = 5,
+}
 
-// RPC errors.
-pub type CApiRpcErrorKind = libc::int32_t;
-const RPC_ERR_UNKNOWN: CApiRpcErrorKind = 1;
-const RPC_ERR_IO: CApiRpcErrorKind = 2;
-const RPC_ERR_INVALID_ARGS: CApiRpcErrorKind = 3;
+/// RPC errors.
+#[repr(i32)]
+pub enum CApiRpcErrorKind {
+    RPC_ERR_UNKNOWN = 1,
+    RPC_ERR_IO = 2,
+    RPC_ERR_INVALID_ARGS = 3,
+}
+
+fn to_rpc_error_kind(kind: CApiRpcErrorKind) -> rpc::ErrorKind {
+    match kind {
+        CApiRpcErrorKind::RPC_ERR_UNKNOWN => rpc::ErrorKind::UnknownRpc,
+        CApiRpcErrorKind::RPC_ERR_IO => rpc::ErrorKind::Io,
+        CApiRpcErrorKind::RPC_ERR_INVALID_ARGS => rpc::ErrorKind::InvalidArgs,
+    }
+}
 
 macro_rules! try_capi {
     ($expr:expr) => (match $expr {
         ::std::result::Result::Ok(val) => val,
         ::std::result::Result::Err(swiboe_error) => {
             return match swiboe_error {
-                swiboe::Error::Disconnected => ERR_DISCONNECTED,
-                swiboe::Error::Io(_) => ERR_IO,
-                swiboe::Error::JsonParsing(_) => ERR_JSON_PARSING,
-                swiboe::Error::RpcDone => ERR_RPC_DONE,
-                swiboe::Error::InvalidUtf8 => ERR_INVALID_UTF8,
+                swiboe::Error::Disconnected => CApiResult::ERR_DISCONNECTED,
+                swiboe::Error::Io(_) => CApiResult::ERR_IO,
+                swiboe::Error::JsonParsing(_) => CApiResult::ERR_JSON_PARSING,
+                swiboe::Error::RpcDone => CApiResult::ERR_RPC_DONE,
+                swiboe::Error::InvalidUtf8 => CApiResult::ERR_INVALID_UTF8,
             }
         }
     })
@@ -75,7 +87,7 @@ pub extern "C" fn swiboe_connect(socket_name: *const c_char, client: *mut *const
     unsafe {
         *client = mem::transmute(client_box);
     }
-    SUCCESS
+    CApiResult::SUCCESS
 }
 
 #[no_mangle]
@@ -83,7 +95,7 @@ pub extern "C" fn swiboe_disconnect(client: *mut client::Client) -> CApiResult {
     unsafe {
         let _: Box<client::Client> = mem::transmute(client);
     }
-    SUCCESS
+    CApiResult::SUCCESS
 }
 
 #[no_mangle]
@@ -95,7 +107,7 @@ pub extern "C" fn swiboe_server_context_finish(context: *mut client::rpc::server
          mem::transmute(rpc_result)
     };
     try_capi!(context.finish(*result));
-    SUCCESS
+    CApiResult::SUCCESS
 }
 
 #[no_mangle]
@@ -110,7 +122,7 @@ pub extern "C" fn swiboe_server_context_update(context: *mut client::rpc::server
     let json_value = to_json_or_die(&json_c_str);
 
     try_capi!(context.update(&json_value));
-    SUCCESS
+    CApiResult::SUCCESS
 }
 
 #[no_mangle]
@@ -125,12 +137,7 @@ pub extern "C" fn swiboe_rpc_ok(c_buf: *const c_char) -> *const rpc::Result {
 }
 
 #[no_mangle]
-pub extern "C" fn swiboe_rpc_error(c_buf_error_name: *const c_char, c_buf_details: *const c_char) -> *const rpc::Result {
-    let c_str_error_name = unsafe {
-        CStr::from_ptr(c_buf_error_name)
-    };
-    let error_name = to_str_or_die(&c_str_error_name);
-
+pub extern "C" fn swiboe_rpc_error(error_kind: CApiRpcErrorKind, c_buf_details: *const c_char) -> *const rpc::Result {
     let details = if c_buf_details.is_null() {
         None
     } else {
@@ -141,7 +148,7 @@ pub extern "C" fn swiboe_rpc_error(c_buf_error_name: *const c_char, c_buf_detail
     };
 
     let err = rpc::Error {
-        kind: rpc::ErrorKind::from_str(&error_name),
+        kind: to_rpc_error_kind(error_kind),
         details: details,
     };
 
@@ -192,7 +199,7 @@ pub extern "C" fn swiboe_server_context_call_rpc(
     unsafe {
         *client_context = try_capi!(call(context, rpc_name, args));
     }
-    SUCCESS
+    CApiResult::SUCCESS
 }
 
 
@@ -207,7 +214,7 @@ pub extern "C" fn swiboe_client_call_rpc(client: *const client::Client,
     unsafe {
         *client_context = try_capi!(call(client, rpc_name, args));
     }
-    SUCCESS
+    CApiResult::SUCCESS
 }
 
 #[no_mangle]
@@ -220,7 +227,7 @@ pub extern "C" fn swiboe_client_context_wait(context: *mut client::rpc::client::
     unsafe {
         *rpc_result = mem::transmute(Box::new(result))
     }
-    SUCCESS
+    CApiResult::SUCCESS
 }
 
 #[no_mangle]
@@ -243,7 +250,7 @@ pub extern "C" fn swiboe_client_context_recv(context: *mut client::rpc::client::
             }
         }
     }
-    SUCCESS
+    CApiResult::SUCCESS
 }
 
 #[no_mangle]
@@ -284,9 +291,9 @@ pub extern "C" fn swiboe_rpc_result_unwrap_err(rpc_result: *const rpc::Result, d
     }
 
     match err.kind {
-        rpc::ErrorKind::UnknownRpc => RPC_ERR_UNKNOWN,
-        rpc::ErrorKind::Io => RPC_ERR_IO,
-        rpc::ErrorKind::InvalidArgs => RPC_ERR_INVALID_ARGS,
+        rpc::ErrorKind::UnknownRpc => CApiRpcErrorKind::RPC_ERR_UNKNOWN,
+        rpc::ErrorKind::Io => CApiRpcErrorKind::RPC_ERR_IO,
+        rpc::ErrorKind::InvalidArgs => CApiRpcErrorKind::RPC_ERR_INVALID_ARGS,
     }
 }
 
@@ -334,5 +341,5 @@ pub extern "C" fn swiboe_new_rpc(client: *mut client::Client,
 
     let rpc_name = to_str_or_die(rpc_name_cstr);
     try_capi!(client.new_rpc(rpc_name, rpc));
-    SUCCESS
+    CApiResult::SUCCESS
 }

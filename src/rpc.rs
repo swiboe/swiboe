@@ -33,25 +33,6 @@ pub enum ErrorKind {
     InvalidArgs,
 }
 
-impl ErrorKind {
-    pub fn from_str(description: &str) -> ErrorKind {
-        match description {
-            "UnknownRpc" => ErrorKind::UnknownRpc,
-            "Io" => ErrorKind::Io,
-            "InvalidArgs" => ErrorKind::InvalidArgs,
-            _ => panic!("{} is not a valid ErrorKind name.", description),
-        }
-    }
-
-    pub fn to_str(&self) -> &str {
-        match *self {
-            ErrorKind::UnknownRpc => "UnknownRpc",
-            ErrorKind::Io => "Io",
-            ErrorKind::InvalidArgs => "InvalidArgs",
-        }
-    }
-}
-
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 pub struct Error {
     pub kind: ErrorKind,
