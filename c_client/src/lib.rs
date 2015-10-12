@@ -15,14 +15,21 @@ use std::ptr;
 use std::str;
 use swiboe::{client, rpc};
 
-pub type CApiResult = libc::int32_t;
 
+// Local results.
+pub type CApiResult = libc::int32_t;
 const SUCCESS: CApiResult = 0;
 const ERR_DISCONNECTED: CApiResult = 1;
 const ERR_IO: CApiResult = 2;
 const ERR_JSON_PARSING: CApiResult = 3;
 const ERR_RPC_DONE: CApiResult = 4;
 const ERR_INVALID_UTF8: CApiResult = 5;
+
+// RPC errors.
+pub type CApiRpcErrorKind = libc::int32_t;
+const RPC_ERR_UNKNOWN: CApiRpcErrorKind = 1;
+const RPC_ERR_IO: CApiRpcErrorKind = 2;
+const RPC_ERR_INVALID_ARGS: CApiRpcErrorKind = 3;
 
 macro_rules! try_capi {
     ($expr:expr) => (match $expr {
@@ -256,6 +263,31 @@ pub extern "C" fn swiboe_rpc_result_unwrap(rpc_result: *const rpc::Result) -> *c
     let json_value = rpc_result.unwrap();
     let json_string = serde_json::to_string(&json_value).unwrap();
     CString::new(json_string).unwrap().into_raw()
+}
+
+#[no_mangle]
+pub extern "C" fn swiboe_rpc_result_unwrap_err(rpc_result: *const rpc::Result, details: *mut *const c_char) -> CApiRpcErrorKind {
+    // NOCOM(#sirver): deletes the object, needs to be documented.
+    assert_eq!(ptr::null(), unsafe { *details });
+
+    let rpc_result: Box<rpc::Result> = unsafe {
+        mem::transmute(rpc_result)
+    };
+    let err = rpc_result.unwrap_err();
+
+    if let Some(err_details) = err.details {
+        let json_string = serde_json::to_string(&err_details).unwrap();
+        let details_c_str = CString::new(json_string).unwrap().into_raw();
+        unsafe {
+            *details = details_c_str;
+        }
+    }
+
+    match err.kind {
+        rpc::ErrorKind::UnknownRpc => RPC_ERR_UNKNOWN,
+        rpc::ErrorKind::Io => RPC_ERR_IO,
+        rpc::ErrorKind::InvalidArgs => RPC_ERR_INVALID_ARGS,
+    }
 }
 
 

@@ -83,9 +83,10 @@ class TestSwiboeClientLowLevel(unittest.TestCase):
 
     def test_call_rpc_returning_error(self):
         serving_client = self._checked_connect()
-        error = {'details': 'Needed foo, got blah.'}
+        error = {'details': u'Needed föö, got blah.'}
 
         def callback(server_context, args_string):
+            # NOCOM(#sirver): change this to take integer values.
             call_result = self.library.swiboe_rpc_error(
                 'InvalidArgs', json.dumps(error))
             self._ok(self.library.swiboe_server_context_finish(
@@ -102,8 +103,11 @@ class TestSwiboeClientLowLevel(unittest.TestCase):
         self._ok(self.library.swiboe_client_context_wait(client_context, ctypes.byref(call_result)))
         self.assertFalse(self.library.swiboe_rpc_result_is_ok(call_result))
 
-        # NOCOM(#sirver): Inpsect error. Need swiboe_rpc_unwrap_err or
-        # something.
+        details = ctypes.c_char_p()
+        rpc_error_code = self.library.swiboe_rpc_result_unwrap_err(
+                call_result, ctypes.byref(details))
+        self.assertEqual(swiboe.RPC_ERR_INVALID_ARGS, rpc_error_code)
+        self.assertEqual(error, json.loads(details.value))
 
         self._ok(self.library.swiboe_disconnect(client))
         self._ok(self.library.swiboe_disconnect(serving_client))

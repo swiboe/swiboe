@@ -14,16 +14,22 @@ PtrClientContext = c_void_p
 PtrRpcResult = c_void_p
 PtrServerContext = c_void_p
 Result = c_int32
+RpcErrorKind = c_int32
 
 RPC = CFUNCTYPE(None, PtrServerContext, c_char_p)
 
-# Error codes
+# Result codes
 SUCCESS = 0
 ERR_DISCONNECTED = 1
 ERR_IO = 2
 ERR_JSON_PARSING = 3
 ERR_RPC_DONE = 4
 ERR_INVALID_UTF8 = 5
+
+# RPC error codes
+RPC_ERR_UNKNOWN = 1
+RPC_ERR_IO = 2
+RPC_ERR_INVALID_ARGS = 3
 
 def load_shared_library(shared_library):
     # TODO(sirver): This needs extending for Windows.
@@ -74,6 +80,9 @@ def load_shared_library(shared_library):
 
     library.swiboe_rpc_result_unwrap.restype = c_char_p
     library.swiboe_rpc_result_unwrap.argtypes = [PtrRpcResult]
+
+    library.swiboe_rpc_result_unwrap_err.restype = RpcErrorKind
+    library.swiboe_rpc_result_unwrap_err.argtypes = [PtrRpcResult, POINTER(c_char_p)]
 
     library.swiboe_client_context_recv.restype = Result
     library.swiboe_client_context_recv.argtypes = [PtrClientContext, POINTER(c_char_p)]
