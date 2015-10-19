@@ -52,6 +52,31 @@ pub enum CApiRpcErrorKind {
     RPC_ERR_INVALID_ARGS = 3,
 }
 
+/// Wraps the callback type for RPCs so that C clients can implement them using a single C
+/// function.
+pub type CCallback = extern fn(*mut client::rpc::server::Context, *const c_char);
+struct CallbackRpc {
+    priority: u16,
+    callback: CCallback,
+}
+
+impl client::rpc::server::Rpc for CallbackRpc {
+    fn priority(&self) -> u16 { self.priority }
+
+    fn call(&self,
+            context: client::rpc::server::Context,
+            args: serde_json::Value) {
+        let args_str = serde_json::to_string(&args).unwrap();
+        let c_str = CString::new(args_str).expect("JSON contained zero byte");
+
+        unsafe {
+            let context_ptr: *mut client::rpc::server::Context =
+                mem::transmute(Box::new(context));
+            (self.callback)(context_ptr, c_str.as_ptr());
+        };
+    }
+}
+
 
 // Converts 'kind' to a matching rpc::ErrorKind enum.
 fn to_rpc_error_kind(kind: CApiRpcErrorKind) -> rpc::ErrorKind {
@@ -253,8 +278,25 @@ pub extern "C" fn swiboe_client_context_wait(context: *mut client::rpc::client::
     CApiResult::SUCCESS
 }
 
+/// Deletes 'c_buf' which must be a String that was previously passed from the Swiboe library to
+/// the C client or nullptr.
+/// NOCOM(#sirver): change back again to only take pointer, not pointer to pointer.
+#[no_mangle]
+pub extern "C" fn swiboe_delete_string(c_buf: *mut *mut c_char) {
+    assert!(!c_buf.is_null());
+
+    unsafe {
+        if (*c_buf).is_null() {
+            return;
+        }
+        CString::from_raw(*c_buf);
+        *c_buf = ptr::null_mut();
+    }
+}
+
+
 /// Blocks till a partial result is received for the RPC represented by 'context'. Fills in
-/// 'json_c_str' with the new result. This has to be free() by the caller.
+/// 'json_c_str' with the new result. This has to be freed using swiboe_delete_string().
 #[no_mangle]
 pub extern "C" fn swiboe_client_context_recv(context: *mut client::rpc::client::Context, json_c_str: *mut *const c_char) -> CApiResult {
     // We expect the input parameter to be an unallocated string.
@@ -279,7 +321,8 @@ pub extern "C" fn swiboe_client_context_recv(context: *mut client::rpc::client::
     CApiResult::SUCCESS
 }
 
-// NOCOM(#sirver): we continue here tomorrow.
+/// Returns 'true' if the 'rpc_result' is a Ok() value. You can get to the result using
+/// 'swiboe_rpc_result_unwrap' or 'swiboe_rpc_result_unwrap_err'.
 #[no_mangle]
 pub extern "C" fn swiboe_rpc_result_is_ok(rpc_result: *const rpc::Result) -> bool {
     let rpc_result: &rpc::Result = unsafe {
@@ -288,9 +331,11 @@ pub extern "C" fn swiboe_rpc_result_is_ok(rpc_result: *const rpc::Result) -> boo
     rpc_result.is_ok()
 }
 
+/// Unwraps 'rpc_result' and returns the contained JSON result string. This value must be deleted
+/// using swiboe_delete_string(). Crashes if 'rpc_result' is not a Ok() value. Deletes
+/// 'rpc_result'.
 #[no_mangle]
 pub extern "C" fn swiboe_rpc_result_unwrap(rpc_result: *const rpc::Result) -> *const c_char {
-    // NOCOM(#sirver): deletes the object, needs to be documented.
     let rpc_result: Box<rpc::Result> = unsafe {
         mem::transmute(rpc_result)
     };
@@ -299,9 +344,10 @@ pub extern "C" fn swiboe_rpc_result_unwrap(rpc_result: *const rpc::Result) -> *c
     CString::new(json_string).unwrap().into_raw()
 }
 
+/// Unwraps 'rpc_result' and returns the contained error. Crashes if 'rpc_result' is a Ok() value.
+/// Deletes 'rpc_result'. 'details' must be freed using swiboe_delete_string().
 #[no_mangle]
 pub extern "C" fn swiboe_rpc_result_unwrap_err(rpc_result: *const rpc::Result, details: *mut *const c_char) -> CApiRpcErrorKind {
-    // NOCOM(#sirver): deletes the object, needs to be documented.
     assert_eq!(ptr::null(), unsafe { *details });
 
     let rpc_result: Box<rpc::Result> = unsafe {
@@ -324,30 +370,8 @@ pub extern "C" fn swiboe_rpc_result_unwrap_err(rpc_result: *const rpc::Result, d
     }
 }
 
-
-pub type CCallback = extern fn(*mut client::rpc::server::Context, *const c_char);
-struct CallbackRpc {
-    priority: u16,
-    callback: CCallback,
-}
-
-impl client::rpc::server::Rpc for CallbackRpc {
-    fn priority(&self) -> u16 { self.priority }
-
-    fn call(&self,
-            context: client::rpc::server::Context,
-            args: serde_json::Value) {
-        let args_str = serde_json::to_string(&args).unwrap();
-        let c_str = CString::new(args_str).expect("JSON contained zero byte");
-
-        unsafe {
-            let context_ptr: *mut client::rpc::server::Context =
-                mem::transmute(Box::new(context));
-            (self.callback)(context_ptr, c_str.as_ptr());
-        };
-    }
-}
-
+/// Creates a new RPC implementation for 'rpc_name' with the 'priority' and the implementation
+/// 'callback'.
 #[no_mangle]
 pub extern "C" fn swiboe_new_rpc(client: *mut client::Client,
                                  rpc_name: *const c_char,

@@ -78,6 +78,7 @@ def load_shared_library(shared_library):
     library.swiboe_rpc_result_is_ok.restype = bool
     library.swiboe_rpc_result_is_ok.argtypes = [PtrRpcResult]
 
+    # NOCOM(#sirver): We cannot return a c_char_p, because python always takes ownership and calls free() on this string. Unfortunately this cleaks memory. We have change this to take the pointer as an argument, similar to recv.
     library.swiboe_rpc_result_unwrap.restype = c_char_p
     library.swiboe_rpc_result_unwrap.argtypes = [PtrRpcResult]
 
@@ -89,6 +90,9 @@ def load_shared_library(shared_library):
 
     library.swiboe_server_context_update.restype = Result
     library.swiboe_server_context_update.argtypes = [PtrServerContext, c_char_p]
+
+    library.swiboe_delete_string.restype = None
+    library.swiboe_delete_string.argtypes = [POINTER(c_char_p)]
 
     return library
 

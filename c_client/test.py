@@ -107,6 +107,7 @@ class TestSwiboeClientLowLevel(unittest.TestCase):
                 call_result, ctypes.byref(details))
         self.assertEqual(swiboe.RPC_ERR_INVALID_ARGS, rpc_error_code)
         self.assertEqual(error, json.loads(details.value))
+        self.library.swiboe_delete_string(ctypes.byref(details))
 
         self._ok(self.library.swiboe_disconnect(client))
         self._ok(self.library.swiboe_disconnect(serving_client))
@@ -133,99 +134,108 @@ class TestSwiboeClientLowLevel(unittest.TestCase):
 
         json_blob = self.library.swiboe_rpc_result_unwrap(call_result)
         self.assertEqual(golden_return, json.loads(json_blob))
+        sys.stdout.write("ALIVE!\n"); sys.stdout.flush()
+        self.library.swiboe_delete_string(ctypes.byref(json_blob))
+        sys.stdout.write("ALIVE!\n"); sys.stdout.flush()
 
         self._ok(self.library.swiboe_disconnect(client))
         self._ok(self.library.swiboe_disconnect(serving_client))
 
-    def test_call_successfull_rpc_from_inside_rpc(self):
-        serving_client1 = self._checked_connect()
-        golden_return = {'blub': 'foo'}
+    #  def test_call_successfull_rpc_from_inside_rpc(self):
+        #  serving_client1 = self._checked_connect()
+        #  golden_return = {'blub': 'foo'}
 
-        def callback1(server_context, args_string):
-            call_result = self.library.swiboe_rpc_ok(json.dumps(golden_return))
-            self._ok(self.library.swiboe_server_context_finish(
-                server_context, call_result))
-        rpc_callback1 = swiboe.RPC(callback1)
-        self._ok(self.library.swiboe_new_rpc(
-            serving_client1, 'test.test', 100, rpc_callback1))
+        #  def callback1(server_context, args_string):
+            #  call_result = self.library.swiboe_rpc_ok(json.dumps(golden_return))
+            #  self._ok(self.library.swiboe_server_context_finish(
+                #  server_context, call_result))
+        #  rpc_callback1 = swiboe.RPC(callback1)
+        #  self._ok(self.library.swiboe_new_rpc(
+            #  serving_client1, 'test.test', 100, rpc_callback1))
 
-        serving_client2 = self._checked_connect()
+        #  serving_client2 = self._checked_connect()
 
-        def callback2(server_context, args_string):
-            client_context = swiboe.PtrClientContext()
-            self._ok(self.library.swiboe_server_context_call_rpc(server_context, 'test.test',
-                                                                         args_string, ctypes.byref(client_context)))
-            call_result = swiboe.PtrRpcResult()
-            self._ok(self.library.swiboe_client_context_wait(client_context, ctypes.byref(call_result)))
-            self._ok(self.library.swiboe_server_context_finish(
-                server_context, call_result))
-        rpc_callback2 = swiboe.RPC(callback2)
-        self._ok(self.library.swiboe_new_rpc(
-            serving_client2, 'test.foo', 100, rpc_callback2))
+        #  def callback2(server_context, args_string):
+            #  client_context = swiboe.PtrClientContext()
+            #  self._ok(self.library.swiboe_server_context_call_rpc(server_context, 'test.test',
+                                                                         #  args_string, ctypes.byref(client_context)))
+            #  call_result = swiboe.PtrRpcResult()
+            #  self._ok(self.library.swiboe_client_context_wait(client_context, ctypes.byref(call_result)))
+            #  self._ok(self.library.swiboe_server_context_finish(
+                #  server_context, call_result))
+        #  rpc_callback2 = swiboe.RPC(callback2)
+        #  self._ok(self.library.swiboe_new_rpc(
+            #  serving_client2, 'test.foo', 100, rpc_callback2))
 
-        client = self._checked_connect()
-        client_context = swiboe.PtrClientContext()
-        self._ok(self.library.swiboe_client_call_rpc(
-            client, 'test.foo', 'null', ctypes.byref(client_context)))
-        call_result = swiboe.PtrRpcResult()
-        self._ok(self.library.swiboe_client_context_wait(client_context, ctypes.byref(call_result)))
-        self.assertTrue(self.library.swiboe_rpc_result_is_ok(call_result))
+        #  client = self._checked_connect()
+        #  client_context = swiboe.PtrClientContext()
+        #  self._ok(self.library.swiboe_client_call_rpc(
+            #  client, 'test.foo', 'null', ctypes.byref(client_context)))
+        #  call_result = swiboe.PtrRpcResult()
+        #  self._ok(self.library.swiboe_client_context_wait(client_context, ctypes.byref(call_result)))
+        #  self.assertTrue(self.library.swiboe_rpc_result_is_ok(call_result))
 
-        json_blob = self.library.swiboe_rpc_result_unwrap(call_result)
-        self.assertEqual(golden_return, json.loads(json_blob))
+        #  json_blob = self.library.swiboe_rpc_result_unwrap(call_result)
+        #  self.assertEqual(golden_return, json.loads(json_blob))
+        #  self.library.swiboe_delete_string(json_blob)
 
-        self._ok(self.library.swiboe_disconnect(client))
-        self._ok(self.library.swiboe_disconnect(serving_client1))
-        self._ok(self.library.swiboe_disconnect(serving_client2))
+        #  self._ok(self.library.swiboe_disconnect(client))
+        #  self._ok(self.library.swiboe_disconnect(serving_client1))
+        #  self._ok(self.library.swiboe_disconnect(serving_client2))
 
-    def test_streaming_successfull_rpc(self):
-        serving_client = self._checked_connect()
+    #  def test_streaming_successfull_rpc(self):
+        #  serving_client = self._checked_connect()
 
-        last = {'blub': 'foo'}
+        #  last = {'blub': 'foo'}
 
-        def callback(server_context, args_string):
-            for i in range(1, 4):
-                update = {'count': i}
-                self._ok(self.library.swiboe_server_context_update(server_context,
-                                                          json.dumps(update)))
-            call_result = self.library.swiboe_rpc_ok(json.dumps(last))
-            self._ok(self.library.swiboe_server_context_finish(
-                server_context, call_result))
-        rpc_callback = swiboe.RPC(callback)
-        self._ok(self.library.swiboe_new_rpc(
-            serving_client, 'test.test', 100, rpc_callback))
+        #  def callback(server_context, args_string):
+            #  for i in range(1, 4):
+                #  update = {'count': i}
+                #  self._ok(self.library.swiboe_server_context_update(server_context,
+                                                          #  json.dumps(update)))
+            #  call_result = self.library.swiboe_rpc_ok(json.dumps(last))
+            #  self._ok(self.library.swiboe_server_context_finish(
+                #  server_context, call_result))
+        #  rpc_callback = swiboe.RPC(callback)
+        #  self._ok(self.library.swiboe_new_rpc(
+            #  serving_client, 'test.test', 100, rpc_callback))
 
-        client = self._checked_connect()
-        client_context = swiboe.PtrClientContext()
-        self._ok(self.library.swiboe_client_call_rpc(
-            client, 'test.test', 'null', ctypes.byref(client_context)))
+        #  client = self._checked_connect()
+        #  client_context = swiboe.PtrClientContext()
+        #  self._ok(self.library.swiboe_client_call_rpc(
+            #  client, 'test.test', 'null', ctypes.byref(client_context)))
 
-        json_str = ctypes.c_char_p()
-        self._ok(self.library.swiboe_client_context_recv(client_context, ctypes.byref(json_str)))
+        #  json_str = ctypes.c_char_p()
+        #  self._ok(self.library.swiboe_client_context_recv(client_context, ctypes.byref(json_str)))
 
-        self.assertEqual(1, json.loads(json_str.value)['count'])
+        #  self.assertEqual(1, json.loads(json_str.value)['count'])
+        #  self.library.swiboe_delete_string(json_str)
 
-        json_str = ctypes.c_char_p()
-        self._ok(self.library.swiboe_client_context_recv(client_context, ctypes.byref(json_str)))
-        self.assertEqual(2, json.loads(json_str.value)['count'])
+        #  json_str = ctypes.c_char_p()
+        #  self._ok(self.library.swiboe_client_context_recv(client_context, ctypes.byref(json_str)))
+        #  self.assertEqual(2, json.loads(json_str.value)['count'])
+        #  self.library.swiboe_delete_string(json_str)
 
-        json_str = ctypes.c_char_p()
-        self._ok(self.library.swiboe_client_context_recv(client_context, ctypes.byref(json_str)))
-        self.assertEqual(3, json.loads(json_str.value)['count'])
+        #  json_str = ctypes.c_char_p()
+        #  self._ok(self.library.swiboe_client_context_recv(client_context, ctypes.byref(json_str)))
+        #  self.assertEqual(3, json.loads(json_str.value)['count'])
+        #  self.library.swiboe_delete_string(json_str)
 
-        json_str = ctypes.c_char_p()
-        self._ok(self.library.swiboe_client_context_recv(client_context, ctypes.byref(json_str)))
-        self.assertEqual(None, json_str.value)
+        #  json_str = ctypes.c_char_p()
+        #  self._ok(self.library.swiboe_client_context_recv(client_context, ctypes.byref(json_str)))
+        #  self.assertEqual(None, json_str.value)
+        #  self.library.swiboe_delete_string(json_str)
 
-        call_result = swiboe.PtrRpcResult()
-        self._ok(self.library.swiboe_client_context_wait(client_context, ctypes.byref(call_result)))
-        self.assertTrue(self.library.swiboe_rpc_result_is_ok(call_result))
+        #  call_result = swiboe.PtrRpcResult()
+        #  self._ok(self.library.swiboe_client_context_wait(client_context, ctypes.byref(call_result)))
+        #  self.assertTrue(self.library.swiboe_rpc_result_is_ok(call_result))
 
-        json_blob = self.library.swiboe_rpc_result_unwrap(call_result)
-        self.assertEqual(last, json.loads(json_blob))
+        #  json_blob = self.library.swiboe_rpc_result_unwrap(call_result)
+        #  self.assertEqual(last, json.loads(json_blob))
+        #  self.library.swiboe_delete_string(json_blob)
 
-        self._ok(self.library.swiboe_disconnect(client))
-        self._ok(self.library.swiboe_disconnect(serving_client))
+        #  self._ok(self.library.swiboe_disconnect(client))
+        #  self._ok(self.library.swiboe_disconnect(serving_client))
 
 
 def flatten_test_suite(suite):
