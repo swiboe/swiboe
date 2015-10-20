@@ -280,17 +280,13 @@ pub extern "C" fn swiboe_client_context_wait(context: *mut client::rpc::client::
 
 /// Deletes 'c_buf' which must be a String that was previously passed from the Swiboe library to
 /// the C client or nullptr.
-/// NOCOM(#sirver): change back again to only take pointer, not pointer to pointer.
 #[no_mangle]
-pub extern "C" fn swiboe_delete_string(c_buf: *mut *mut c_char) {
-    assert!(!c_buf.is_null());
-
+pub extern "C" fn swiboe_delete_string(c_buf: *mut c_char) {
+    if c_buf.is_null() {
+        return;
+    }
     unsafe {
-        if (*c_buf).is_null() {
-            return;
-        }
-        CString::from_raw(*c_buf);
-        *c_buf = ptr::null_mut();
+        CString::from_raw(c_buf);
     }
 }
 
@@ -310,7 +306,6 @@ pub extern "C" fn swiboe_client_context_recv(context: *mut client::rpc::client::
     match object {
         None => (),
         Some(json_value) => {
-            // TODO(sirver): maybe this leaks memory. Does the c-land free() this correctly?
             let json_string = serde_json::to_string(&json_value).unwrap();
             let c_json_str = CString::new(json_string).unwrap().into_raw();
             unsafe {
@@ -335,13 +330,16 @@ pub extern "C" fn swiboe_rpc_result_is_ok(rpc_result: *const rpc::Result) -> boo
 /// using swiboe_delete_string(). Crashes if 'rpc_result' is not a Ok() value. Deletes
 /// 'rpc_result'.
 #[no_mangle]
-pub extern "C" fn swiboe_rpc_result_unwrap(rpc_result: *const rpc::Result) -> *const c_char {
+pub extern "C" fn swiboe_rpc_result_unwrap(rpc_result: *const rpc::Result, c_buf: *mut *const c_char) {
     let rpc_result: Box<rpc::Result> = unsafe {
         mem::transmute(rpc_result)
     };
     let json_value = rpc_result.unwrap();
     let json_string = serde_json::to_string(&json_value).unwrap();
-    CString::new(json_string).unwrap().into_raw()
+    let raw = CString::new(json_string).unwrap().into_raw();
+    unsafe {
+        *c_buf = raw;
+    }
 }
 
 /// Unwraps 'rpc_result' and returns the contained error. Crashes if 'rpc_result' is a Ok() value.
