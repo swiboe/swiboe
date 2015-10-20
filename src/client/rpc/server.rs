@@ -78,6 +78,7 @@ impl Context {
         Ok(try!(self.rpc_loop_commands.send(rpc_loop::Command::Send(msg))))
     }
 
+    // NOCOM(#sirver): maybe call is_cancelled?
     pub fn cancelled(&mut self) -> bool {
         self.update_state();
         self.state == ContextState::Cancelled

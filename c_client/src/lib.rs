@@ -125,6 +125,8 @@ fn call<T: client::RpcCaller>(context: &mut T, rpc_name: *const c_char, args: *c
 
 /// Connects to the Unix socket listening at 'socket_name' which must be a Swiboe server. Fills in
 /// 'client' which must be deleted through 'swiboe_disconnect' once no longer used.
+// TODO(sirver): This can only connect to unix domain sockets right now, change it to also connect
+// to TCP/IP.
 #[no_mangle]
 pub extern "C" fn swiboe_connect(socket_name: *const c_char, client: *mut *const client::Client) -> CApiResult {
     let socket_name_cstr = unsafe {
@@ -182,6 +184,16 @@ pub extern "C" fn swiboe_server_context_update(context: *mut client::rpc::server
     CApiResult::SUCCESS
 }
 
+/// Returns true if the RPC has been cancelled from the client. The handling should
+/// 'swiboe_server_context_finish' as soon as possible once this is true.
+#[no_mangle]
+pub extern "C" fn swiboe_server_context_cancelled(context: *mut client::rpc::server::Context) -> bool {
+    let mut context: &mut client::rpc::server::Context = unsafe {
+         mem::transmute(context)
+    };
+    context.cancelled()
+}
+
 /// Creates a new rpc::Result::Ok with the given 'json_str'.
 #[no_mangle]
 pub extern "C" fn swiboe_rpc_ok(json_str: *const c_char) -> *const rpc::Result {
@@ -225,8 +237,6 @@ pub extern "C" fn swiboe_rpc_not_handled() -> *const rpc::Result {
     }
 }
 
-// TODO(sirver): Wrap cancel for long running RPCs.
-
 /// Calls another RPC from an RPC handler. Fills in 'client_context' with a new object that has to
 /// be deleted through 'wait'.
 #[no_mangle]
@@ -262,7 +272,19 @@ pub extern "C" fn swiboe_client_call_rpc(client: *const client::Client,
     CApiResult::SUCCESS
 }
 
+/// Deletes 'c_buf' which must be a String that was previously passed from the Swiboe library to
+/// the C client or nullptr.
+#[no_mangle]
+pub extern "C" fn swiboe_delete_string(c_buf: *mut c_char) {
+    if c_buf.is_null() {
+        return;
+    }
+    unsafe {
+        CString::from_raw(c_buf);
+    }
+}
 
+// TODO(sirver): Wrap client_context try_recv, cancel.
 /// Waits for the RPC to finish and deletes the 'context'. Fills in 'rpc_result' with the final
 /// result which must be deleted using any of the unwrap() methods.
 #[no_mangle]
@@ -277,19 +299,6 @@ pub extern "C" fn swiboe_client_context_wait(context: *mut client::rpc::client::
     }
     CApiResult::SUCCESS
 }
-
-/// Deletes 'c_buf' which must be a String that was previously passed from the Swiboe library to
-/// the C client or nullptr.
-#[no_mangle]
-pub extern "C" fn swiboe_delete_string(c_buf: *mut c_char) {
-    if c_buf.is_null() {
-        return;
-    }
-    unsafe {
-        CString::from_raw(c_buf);
-    }
-}
-
 
 /// Blocks till a partial result is received for the RPC represented by 'context'. Fills in
 /// 'json_c_str' with the new result. This has to be freed using swiboe_delete_string().
@@ -314,6 +323,16 @@ pub extern "C" fn swiboe_client_context_recv(context: *mut client::rpc::client::
         }
     }
     CApiResult::SUCCESS
+}
+
+/// Returns true if this RPC call has completely finished, i.e. has no more streaming results to
+/// read.
+#[no_mangle]
+pub extern "C" fn swiboe_client_context_done(context: *mut client::rpc::client::Context) -> bool {
+    let context: &mut client::rpc::client::Context = unsafe {
+        mem::transmute(context)
+    };
+    context.done()
 }
 
 /// Returns 'true' if the 'rpc_result' is a Ok() value. You can get to the result using

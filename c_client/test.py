@@ -86,6 +86,7 @@ class TestSwiboeClientLowLevel(unittest.TestCase):
         error = {'details': u'Needed föö, got blah.'}
 
         def callback(server_context, args_string):
+            self.assertEqual(False, self.library.swiboe_server_context_cancelled(server_context))
             call_result = self.library.swiboe_rpc_error(
                 swiboe.RPC_ERR_INVALID_ARGS, json.dumps(error))
             self._ok(self.library.swiboe_server_context_finish(
@@ -99,6 +100,7 @@ class TestSwiboeClientLowLevel(unittest.TestCase):
         self._ok(self.library.swiboe_client_call_rpc(
             client, 'test.test', 'null', ctypes.byref(client_context)))
         call_result = swiboe.PtrRpcResult()
+        self.assertEqual(False, self.library.swiboe_client_context_done(client_context))
         self._ok(self.library.swiboe_client_context_wait(client_context, ctypes.byref(call_result)))
         self.assertFalse(self.library.swiboe_rpc_result_is_ok(call_result))
 
@@ -225,6 +227,8 @@ class TestSwiboeClientLowLevel(unittest.TestCase):
         self._ok(self.library.swiboe_client_context_recv(client_context, ctypes.byref(json_str)))
         self.assertEqual(None, json_str.value)
         self.library.swiboe_delete_string(json_str)
+
+        self.assertEqual(True, self.library.swiboe_client_context_done(client_context))
 
         call_result = swiboe.PtrRpcResult()
         self._ok(self.library.swiboe_client_context_wait(client_context, ctypes.byref(call_result)))

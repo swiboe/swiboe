@@ -61,20 +61,6 @@ def load_shared_library(shared_library):
     library.swiboe_rpc_error.restype = PtrRpcResult
     library.swiboe_rpc_error.argtypes = [RpcErrorKind, c_char_p]
 
-    library.swiboe_client_call_rpc.restype = Result
-    library.swiboe_client_call_rpc.argtypes = [PtrClient, c_char_p, c_char_p, POINTER(PtrClientContext)]
-
-    library.swiboe_client_context_wait.restype = Result
-    library.swiboe_client_context_wait.argtypes = [PtrClientContext, POINTER(PtrRpcResult)]
-
-    library.swiboe_server_context_finish.restype = Result
-    library.swiboe_server_context_finish.argtypes = [
-        PtrServerContext, PtrRpcResult]
-
-    library.swiboe_server_context_call_rpc.restype = Result
-    library.swiboe_server_context_call_rpc.argtypes = [
-        PtrServerContext, c_char_p, c_char_p, POINTER(PtrClientContext)]
-
     library.swiboe_rpc_result_is_ok.restype = bool
     library.swiboe_rpc_result_is_ok.argtypes = [PtrRpcResult]
 
@@ -84,11 +70,30 @@ def load_shared_library(shared_library):
     library.swiboe_rpc_result_unwrap_err.restype = RpcErrorKind
     library.swiboe_rpc_result_unwrap_err.argtypes = [PtrRpcResult, POINTER(c_char_p)]
 
+    library.swiboe_client_call_rpc.restype = Result
+    library.swiboe_client_call_rpc.argtypes = [PtrClient, c_char_p, c_char_p, POINTER(PtrClientContext)]
+
+    library.swiboe_client_context_wait.restype = Result
+    library.swiboe_client_context_wait.argtypes = [PtrClientContext, POINTER(PtrRpcResult)]
     library.swiboe_client_context_recv.restype = Result
     library.swiboe_client_context_recv.argtypes = [PtrClientContext, POINTER(c_char_p)]
 
+    library.swiboe_client_context_done.restype = bool
+    library.swiboe_client_context_done.argtypes = [PtrClientContext]
+
     library.swiboe_server_context_update.restype = Result
     library.swiboe_server_context_update.argtypes = [PtrServerContext, c_char_p]
+
+    library.swiboe_server_context_finish.restype = Result
+    library.swiboe_server_context_finish.argtypes = [
+        PtrServerContext, PtrRpcResult]
+
+    library.swiboe_server_context_call_rpc.restype = Result
+    library.swiboe_server_context_call_rpc.argtypes = [
+        PtrServerContext, c_char_p, c_char_p, POINTER(PtrClientContext)]
+
+    library.swiboe_server_context_cancelled.restype = bool
+    library.swiboe_server_context_cancelled.argtypes = [PtrServerContext]
 
     library.swiboe_delete_string.restype = None
     library.swiboe_delete_string.argtypes = [c_char_p]

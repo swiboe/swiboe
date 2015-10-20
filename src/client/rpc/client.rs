@@ -86,6 +86,7 @@ impl Context {
         Ok(self.result.take().unwrap())
     }
 
+    // NOCOM(#sirver): this feels not useful, once wait() consumes the context.
     pub fn done(&self) -> bool {
         self.result.is_some()
     }
