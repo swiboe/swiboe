@@ -75,8 +75,15 @@ def load_shared_library(shared_library):
 
     library.swiboe_client_context_wait.restype = Result
     library.swiboe_client_context_wait.argtypes = [PtrClientContext, POINTER(PtrRpcResult)]
+
+    library.swiboe_client_context_cancel.restype = Result
+    library.swiboe_client_context_cancel.argtypes = [PtrClientContext]
+
     library.swiboe_client_context_recv.restype = Result
     library.swiboe_client_context_recv.argtypes = [PtrClientContext, POINTER(c_char_p)]
+
+    library.swiboe_client_context_try_recv.restype = Result
+    library.swiboe_client_context_try_recv.argtypes = [PtrClientContext, POINTER(c_char_p)]
 
     library.swiboe_client_context_done.restype = bool
     library.swiboe_client_context_done.argtypes = [PtrClientContext]

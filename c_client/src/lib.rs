@@ -284,7 +284,6 @@ pub extern "C" fn swiboe_delete_string(c_buf: *mut c_char) {
     }
 }
 
-// TODO(sirver): Wrap client_context try_recv, cancel.
 /// Waits for the RPC to finish and deletes the 'context'. Fills in 'rpc_result' with the final
 /// result which must be deleted using any of the unwrap() methods.
 #[no_mangle]
@@ -300,18 +299,42 @@ pub extern "C" fn swiboe_client_context_wait(context: *mut client::rpc::client::
     CApiResult::SUCCESS
 }
 
-/// Blocks till a partial result is received for the RPC represented by 'context'. Fills in
-/// 'json_c_str' with the new result. This has to be freed using swiboe_delete_string().
+/// Cancels a streaming RPC and deletes the 'context'.
 #[no_mangle]
-pub extern "C" fn swiboe_client_context_recv(context: *mut client::rpc::client::Context, json_c_str: *mut *const c_char) -> CApiResult {
-    // We expect the input parameter to be an unallocated string.
+pub extern "C" fn swiboe_client_context_cancel(context: *mut client::rpc::client::Context) -> CApiResult {
+    let context: Box<client::rpc::client::Context> = unsafe {
+        mem::transmute(context)
+    };
+    try_capi!(context.cancel());
+    CApiResult::SUCCESS
+}
+
+trait ClientContextReceiverFunction {
+    fn receive(context: &mut client::rpc::client::Context) -> swiboe::Result<Option<serde_json::Value>>;
+}
+
+struct Recv;
+impl ClientContextReceiverFunction for Recv {
+    fn receive(context: &mut client::rpc::client::Context) -> swiboe::Result<Option<serde_json::Value>> {
+        context.recv()
+    }
+}
+
+struct TryRecv;
+impl ClientContextReceiverFunction for TryRecv {
+    fn receive(context: &mut client::rpc::client::Context) -> swiboe::Result<Option<serde_json::Value>> {
+        context.try_recv()
+    }
+}
+
+fn client_context_receive<T: ClientContextReceiverFunction>(context: *mut client::rpc::client::Context, json_c_str: *mut *const c_char) -> CApiResult {
     assert_eq!(ptr::null(), unsafe { *json_c_str });
 
     let mut context: &mut client::rpc::client::Context = unsafe {
         mem::transmute(context)
     };
 
-    let object = try_capi!(context.recv());
+    let object = try_capi!(T::receive(context));
     match object {
         None => (),
         Some(json_value) => {
@@ -323,6 +346,21 @@ pub extern "C" fn swiboe_client_context_recv(context: *mut client::rpc::client::
         }
     }
     CApiResult::SUCCESS
+}
+
+/// Blocks till a partial result is received for the RPC represented by 'context'. Fills in
+/// 'json_c_str' with the new result. This has to be freed using swiboe_delete_string().
+#[no_mangle]
+pub extern "C" fn swiboe_client_context_recv(context: *mut client::rpc::client::Context, json_c_str: *mut *const c_char) -> CApiResult {
+    client_context_receive::<Recv>(context, json_c_str)
+}
+
+/// Tries to read a partial result for the RPC represented by 'context'. If no result is pending,
+/// will return immediately. Fills in 'json_c_str' with the new result if one was pending. This has
+/// to be freed using swiboe_delete_string().
+#[no_mangle]
+pub extern "C" fn swiboe_client_context_try_recv(context: *mut client::rpc::client::Context, json_c_str: *mut *const c_char) -> CApiResult {
+    client_context_receive::<TryRecv>(context, json_c_str)
 }
 
 /// Returns true if this RPC call has completely finished, i.e. has no more streaming results to

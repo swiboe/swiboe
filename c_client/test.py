@@ -10,6 +10,7 @@ import json
 import os
 import subprocess
 import sys
+import threading
 import unittest
 
 import swiboe
@@ -131,6 +132,13 @@ class TestSwiboeClientLowLevel(unittest.TestCase):
         self._ok(self.library.swiboe_client_call_rpc(
             client, 'test.test', 'null', ctypes.byref(client_context)))
         call_result = swiboe.PtrRpcResult()
+
+        # We do not expect any data to be streamed, so try_recv should return nothing.
+        try_recv_result = ctypes.c_char_p()
+        self._ok(self.library.swiboe_client_context_try_recv(client_context, ctypes.byref(try_recv_result)))
+        self.assertEqual(None, try_recv_result.value)
+        self.library.swiboe_delete_string(try_recv_result)
+
         self._ok(self.library.swiboe_client_context_wait(client_context, ctypes.byref(call_result)))
         self.assertTrue(self.library.swiboe_rpc_result_is_ok(call_result))
 
@@ -239,6 +247,42 @@ class TestSwiboeClientLowLevel(unittest.TestCase):
         self.assertEqual(last, json.loads(json_blob.value))
         self.library.swiboe_delete_string(json_blob)
 
+        self._ok(self.library.swiboe_disconnect(client))
+        self._ok(self.library.swiboe_disconnect(serving_client))
+
+    def test_streaming_cancelled_rpc(self):
+        serving_client = self._checked_connect()
+
+        done_event = threading.Event()
+        def callback(server_context, args_string):
+            i = 0
+            while not self.library.swiboe_server_context_cancelled(server_context):
+                update = {'count': i}
+                rv = self.library.swiboe_server_context_update(server_context,
+                                                          json.dumps(update))
+                self.assertTrue(rv == swiboe.SUCCESS or rv == swiboe.ERR_RPC_DONE)
+                i += 1
+            done_event.set()
+
+        rpc_callback = swiboe.RPC(callback)
+        self._ok(self.library.swiboe_new_rpc(
+            serving_client, 'test.test', 100, rpc_callback))
+
+        client = self._checked_connect()
+        client_context = swiboe.PtrClientContext()
+        self._ok(self.library.swiboe_client_call_rpc(
+            client, 'test.test', 'null', ctypes.byref(client_context)))
+
+        for i in range(10):
+            json_str = ctypes.c_char_p()
+            self._ok(self.library.swiboe_client_context_recv(client_context, ctypes.byref(json_str)))
+
+            self.assertEqual(i, json.loads(json_str.value)['count'])
+            self.library.swiboe_delete_string(json_str)
+
+        self._ok(self.library.swiboe_client_context_cancel(client_context));
+
+        done_event.wait()
         self._ok(self.library.swiboe_disconnect(client))
         self._ok(self.library.swiboe_disconnect(serving_client))
 
