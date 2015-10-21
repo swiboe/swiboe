@@ -31,6 +31,7 @@ RPC_ERR_UNKNOWN = 1
 RPC_ERR_IO = 2
 RPC_ERR_INVALID_ARGS = 3
 
+
 def load_shared_library(shared_library):
     # TODO(sirver): This needs extending for Windows.
     if shared_library is None:
@@ -65,39 +66,48 @@ def load_shared_library(shared_library):
     library.swiboe_rpc_result_is_ok.argtypes = [PtrRpcResult]
 
     library.swiboe_rpc_result_unwrap.restype = None
-    library.swiboe_rpc_result_unwrap.argtypes = [PtrRpcResult, POINTER(c_char_p)]
+    library.swiboe_rpc_result_unwrap.argtypes = [PtrRpcResult,
+                                                 POINTER(c_char_p)]
 
     library.swiboe_rpc_result_unwrap_err.restype = RpcErrorKind
-    library.swiboe_rpc_result_unwrap_err.argtypes = [PtrRpcResult, POINTER(c_char_p)]
+    library.swiboe_rpc_result_unwrap_err.argtypes = [PtrRpcResult,
+                                                     POINTER(c_char_p)]
 
     library.swiboe_client_call_rpc.restype = Result
-    library.swiboe_client_call_rpc.argtypes = [PtrClient, c_char_p, c_char_p, POINTER(PtrClientContext)]
+    library.swiboe_client_call_rpc.argtypes = [PtrClient, c_char_p, c_char_p,
+                                               POINTER(PtrClientContext)]
 
     library.swiboe_client_context_wait.restype = Result
-    library.swiboe_client_context_wait.argtypes = [PtrClientContext, POINTER(PtrRpcResult)]
+    library.swiboe_client_context_wait.argtypes = [PtrClientContext,
+                                                   POINTER(PtrRpcResult)]
 
     library.swiboe_client_context_cancel.restype = Result
     library.swiboe_client_context_cancel.argtypes = [PtrClientContext]
 
     library.swiboe_client_context_recv.restype = Result
-    library.swiboe_client_context_recv.argtypes = [PtrClientContext, POINTER(c_char_p)]
+    library.swiboe_client_context_recv.argtypes = [PtrClientContext,
+                                                   POINTER(c_char_p)]
 
     library.swiboe_client_context_try_recv.restype = Result
-    library.swiboe_client_context_try_recv.argtypes = [PtrClientContext, POINTER(c_char_p)]
+    library.swiboe_client_context_try_recv.argtypes = [PtrClientContext,
+                                                       POINTER(c_char_p)]
 
     library.swiboe_client_context_done.restype = bool
     library.swiboe_client_context_done.argtypes = [PtrClientContext]
 
     library.swiboe_server_context_update.restype = Result
-    library.swiboe_server_context_update.argtypes = [PtrServerContext, c_char_p]
+    library.swiboe_server_context_update.argtypes = [PtrServerContext, c_char_p
+                                                     ]
 
     library.swiboe_server_context_finish.restype = Result
     library.swiboe_server_context_finish.argtypes = [
-        PtrServerContext, PtrRpcResult]
+        PtrServerContext, PtrRpcResult
+    ]
 
     library.swiboe_server_context_call_rpc.restype = Result
     library.swiboe_server_context_call_rpc.argtypes = [
-        PtrServerContext, c_char_p, c_char_p, POINTER(PtrClientContext)]
+        PtrServerContext, c_char_p, c_char_p, POINTER(PtrClientContext)
+    ]
 
     library.swiboe_server_context_cancelled.restype = bool
     library.swiboe_server_context_cancelled.argtypes = [PtrServerContext]
@@ -118,8 +128,8 @@ class SwiboeLibrary(object):
             SwiboeLibrary.LIBRARY_LOADING_ARGUMENT = shared_library
         elif SwiboeLibrary.LIBRARY_LOADING_ARGUMENT != shared_library:
             raise RuntimeError(
-                'SwiboeLibrary() initialized with different arguments (was: %r, is: %r)' %
-                (SwiboeLibrary.LIBRARY_LOADING_ARGUMENT, shared_library))
+                'SwiboeLibrary() initialized with different arguments (was: %r, is: %r)'
+                % (SwiboeLibrary.LIBRARY_LOADING_ARGUMENT, shared_library))
 
     def __getattribute__(self, name):
         # Using __getattr__ actually crashes here.
