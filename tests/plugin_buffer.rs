@@ -5,11 +5,11 @@
 use ::{CallbackRpc, create_file};
 use std::sync::{Arc, Mutex};
 use std::thread;
-use support::TestHarness;
-use swiboe::client;
 use swiboe::client::RpcCaller;
+use swiboe::client;
 use swiboe::plugin_buffer;
 use swiboe::rpc;
+use swiboe::testing::TestHarness;
 
 fn wait_for_true_with_timeout(mutex: &Mutex<bool>) -> bool {
     for _ in (0..10) {

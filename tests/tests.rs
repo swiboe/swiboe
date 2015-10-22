@@ -7,15 +7,13 @@
 extern crate serde;
 extern crate serde_json;
 extern crate swiboe;
-extern crate tempdir;
 extern crate uuid;
 
 use std::fs;
 use std::io::Write;
 use std::path;
 use swiboe::client;
-
-mod support;
+use swiboe::testing;
 
 mod core;
 mod plugin_buffer;
@@ -32,7 +30,7 @@ impl<F: Send + Sync> client::rpc::server::Rpc for CallbackRpc<F> where F: Fn(cli
     fn priority(&self) -> u16 { self.priority }
 }
 
-pub fn create_file(t: &support::TestHarness, name: &str, content: &str) -> path::PathBuf {
+pub fn create_file(t: &testing::TestHarness, name: &str, content: &str) -> path::PathBuf {
     let mut file_name = t.temp_directory.path().to_path_buf();
     file_name.push(name);
 

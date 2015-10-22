@@ -4,94 +4,365 @@
 # Licensed under the Apache License, Version 2.0. See LICENSE.txt
 # in the project root for license information.
 
-from ctypes import c_void_p, c_char_p, c_uint16, CFUNCTYPE
-import ctypes
+from ctypes import byref, c_char_p
+import argparse
 import json
-import time
+import os
+import subprocess
+import sys
+import threading
+import unittest
 
-swiboe = ctypes.cdll.LoadLibrary("target/debug/libswiboe.dylib")
+import swiboe
 
-PtrClient = c_void_p
-swiboe.swiboe_connect.restype = PtrClient
-swiboe.swiboe_connect.argtypes = [c_char_p]
 
-swiboe.swiboe_disconnect.restype = None
-swiboe.swiboe_disconnect.argtypes = [PtrClient]
+class TestSwiboeClientLowLevel(unittest.TestCase):
+    SHARED_LIBRARY = None
+    TEST_SERVER = None
 
-PtrRpcResult = c_void_p
-PtrServerContext = c_void_p
-RPC = CFUNCTYPE(None, PtrServerContext, c_char_p)
+    def _checked_connect(self):
+        client = swiboe.PtrClient()
+        result = self.library.swiboe_connect(self.socket_name, byref(client))
+        self._ok(result)
+        return client
 
-swiboe.swiboe_new_rpc.restype = None
-swiboe.swiboe_new_rpc.argtypes = [PtrClient, c_char_p, c_uint16, RPC]
+    def _ok(self, result):
+        self.assertEqual(swiboe.SUCCESS, result)
 
-swiboe.swiboe_rpc_ok.restype = PtrRpcResult
-swiboe.swiboe_rpc_ok.argtypes = [c_char_p]
+    def setUp(self):
+        self.library = swiboe.SwiboeLibrary(self.SHARED_LIBRARY)
+        self.server_process = subprocess.Popen(
+            [self.TEST_SERVER],
+            stdout=subprocess.PIPE)
+        self.test_dir = self.server_process.stdout.readline().strip()
+        self.socket_name = os.path.join(self.test_dir, '_socket')
 
-swiboe.swiboe_rpc_not_handled.restype = PtrRpcResult
-swiboe.swiboe_rpc_not_handled.argtypes = []
+    def tearDown(self):
+        self.server_process.kill()
 
-swiboe.swiboe_rpc_error.restype = PtrRpcResult
-swiboe.swiboe_rpc_error.argtypes = [c_char_p, c_char_p]
+    def test_connect_with_invalid_socket(self):
+        client = swiboe.PtrClient()
+        result = self.library.swiboe_connect("foobarblub", byref(client))
+        self.assertEqual(result, swiboe.ERR_IO)
 
-PtrClientContext = c_void_p
-swiboe.swiboe_client_call_rpc.restype = PtrClientContext
-swiboe.swiboe_client_call_rpc.argtypes = [PtrClient, c_char_p, c_char_p]
+    def test_connect_and_disconnect(self):
+        client = self._checked_connect()
+        self._ok(self.library.swiboe_disconnect(client))
 
-# NOCOM(#sirver): rename rpc_context to either client_context or server_context
-swiboe.swiboe_rpc_context_wait.restype = None
-swiboe.swiboe_rpc_context_wait.argtypes = [PtrClientContext]
+    def test_new_rpc(self):
+        client = self._checked_connect()
 
-swiboe.swiboe_server_context_finish.restype = None
-swiboe.swiboe_server_context_finish.argtypes = [PtrServerContext, PtrRpcResult]
+        def callback(server_context, args_string):
+            return
 
-swiboe.swiboe_server_context_call_rpc.restype = PtrClientContext
-swiboe.swiboe_server_context_call_rpc.argtypes = [PtrServerContext, c_char_p, c_char_p]
+        rpc_callback = swiboe.RPC(callback)
+        self._ok(self.library.swiboe_new_rpc(
+            client, 'list_rust_files', 100, rpc_callback))
+        self._ok(self.library.swiboe_disconnect(client))
 
-serving_client = swiboe.swiboe_connect("/tmp/blub.socket")
-serving_client1 = swiboe.swiboe_connect("/tmp/blub.socket")
-# TODO(sirver): handle streaming rpcs.
+    def test_call_not_handled_rpc(self):
+        serving_client = self._checked_connect()
 
-def callback1(rpc_context, args):
-    print "#sirver args: %r" % (args)
-    result = swiboe.swiboe_rpc_ok("""{ "foo": "blah" }""")
-    swiboe.swiboe_server_context_finish(rpc_context, result)
+        def callback(server_context, args_string):
+            call_result = self.library.swiboe_rpc_not_handled()
+            self._ok(self.library.swiboe_server_context_finish(
+                server_context, call_result))
 
-def callback(rpc_context, args):
-    print("callback called %s" % args)
-    result = swiboe.swiboe_rpc_ok("{}")
-    # client_context = swiboe.swiboe_server_context_call_rpc(rpc_context,
-            # "test.test1", "{}")
-    # TODO(sirver): look into getting results back.
-    # swiboe.swiboe_rpc_context_wait(client_context)
-    swiboe.swiboe_server_context_finish(rpc_context, result)
-    # rpc_context is no longer valid.
+        rpc_callback = swiboe.RPC(callback)
+        self._ok(self.library.swiboe_new_rpc(
+            serving_client, 'test.test', 100, rpc_callback))
 
-rpc_callback = RPC(callback)
-rpc_callback1 = RPC(callback1)
+        client = self._checked_connect()
+        client_context = swiboe.PtrClientContext()
+        self._ok(self.library.swiboe_client_call_rpc(
+            client, 'test.test', 'null', byref(client_context)))
+        call_result = swiboe.PtrRpcResult()
+        self._ok(self.library.swiboe_client_context_wait(
+            client_context, byref(call_result)))
+        self.assertFalse(self.library.swiboe_rpc_result_is_ok(call_result))
 
-# TODO(sirver): The serving_client should complain if the same RPC is registered twice.
-swiboe.swiboe_new_rpc(serving_client, "test.test", 100, rpc_callback)
-swiboe.swiboe_new_rpc(serving_client1, "test.test1", 100, rpc_callback1)
+        self._ok(self.library.swiboe_disconnect(client))
+        self._ok(self.library.swiboe_disconnect(serving_client))
 
-clients = [ swiboe.swiboe_connect("/tmp/blub.socket") for i in range(5) ]
-contexts = []
-num = 0
-for c in clients:
-    for i in range(10):
-        contexts.append(
-                swiboe.swiboe_client_call_rpc(c, "test.test", json.dumps({
-                    "num": num })))
-        num += 1
+    def test_call_rpc_returning_error(self):
+        serving_client = self._checked_connect()
+        error = {'details': u'Needed föö, got blah.'}
 
-for context in contexts:
-    swiboe.swiboe_rpc_context_wait(context)
+        def callback(server_context, args_string):
+            self.assertEqual(
+                False,
+                self.library.swiboe_server_context_cancelled(server_context))
+            call_result = self.library.swiboe_rpc_error(
+                swiboe.RPC_ERR_INVALID_ARGS, json.dumps(error))
+            self._ok(self.library.swiboe_server_context_finish(
+                server_context, call_result))
 
-for c in clients:
-    swiboe.swiboe_disconnect(c)
+        rpc_callback = swiboe.RPC(callback)
+        self._ok(self.library.swiboe_new_rpc(
+            serving_client, 'test.test', 100, rpc_callback))
 
-# while 1:
-    # time.sleep(1)
+        client = self._checked_connect()
+        client_context = swiboe.PtrClientContext()
+        self._ok(self.library.swiboe_client_call_rpc(
+            client, 'test.test', 'null', byref(client_context)))
+        call_result = swiboe.PtrRpcResult()
+        self.assertEqual(
+            False, self.library.swiboe_client_context_done(client_context))
+        self._ok(self.library.swiboe_client_context_wait(
+            client_context, byref(call_result)))
+        self.assertFalse(self.library.swiboe_rpc_result_is_ok(call_result))
 
-swiboe.swiboe_disconnect(serving_client1)
-swiboe.swiboe_disconnect(serving_client)
+        details = c_char_p()
+        rpc_error_code = self.library.swiboe_rpc_result_unwrap_err(
+            call_result, byref(details))
+        self.assertEqual(swiboe.RPC_ERR_INVALID_ARGS, rpc_error_code)
+        self.assertEqual(error, json.loads(details.value))
+        self.library.swiboe_delete_string(details)
+
+        self._ok(self.library.swiboe_disconnect(client))
+        self._ok(self.library.swiboe_disconnect(serving_client))
+
+    def test_call_successfull_rpc(self):
+        serving_client = self._checked_connect()
+        golden_return = {'blub': 'foo'}
+
+        def callback(server_context, args_string):
+            call_result = self.library.swiboe_rpc_ok(json.dumps(golden_return))
+            self._ok(self.library.swiboe_server_context_finish(
+                server_context, call_result))
+
+        rpc_callback = swiboe.RPC(callback)
+        self._ok(self.library.swiboe_new_rpc(
+            serving_client, 'test.test', 100, rpc_callback))
+
+        client = self._checked_connect()
+        client_context = swiboe.PtrClientContext()
+        self._ok(self.library.swiboe_client_call_rpc(
+            client, 'test.test', 'null', byref(client_context)))
+        call_result = swiboe.PtrRpcResult()
+
+        # We do not expect any data to be streamed, so try_recv should return nothing.
+        try_recv_result = c_char_p()
+        self._ok(self.library.swiboe_client_context_try_recv(
+            client_context, byref(try_recv_result)))
+        self.assertEqual(None, try_recv_result.value)
+        self.library.swiboe_delete_string(try_recv_result)
+
+        self._ok(self.library.swiboe_client_context_wait(
+            client_context, byref(call_result)))
+        self.assertTrue(self.library.swiboe_rpc_result_is_ok(call_result))
+
+        json_blob = c_char_p()
+        self.library.swiboe_rpc_result_unwrap(call_result, byref(json_blob))
+        self.assertEqual(golden_return, json.loads(json_blob.value))
+        self.library.swiboe_delete_string(json_blob)
+
+        self._ok(self.library.swiboe_disconnect(client))
+        self._ok(self.library.swiboe_disconnect(serving_client))
+
+    def test_call_successfull_rpc_from_inside_rpc(self):
+        serving_client1 = self._checked_connect()
+        golden_return = {'blub': 'foo'}
+
+        def callback1(server_context, args_string):
+            call_result = self.library.swiboe_rpc_ok(json.dumps(golden_return))
+            self._ok(self.library.swiboe_server_context_finish(
+                server_context, call_result))
+
+        rpc_callback1 = swiboe.RPC(callback1)
+        self._ok(self.library.swiboe_new_rpc(
+            serving_client1, 'test.test', 100, rpc_callback1))
+
+        serving_client2 = self._checked_connect()
+
+        def callback2(server_context, args_string):
+            client_context = swiboe.PtrClientContext()
+            self._ok(self.library.swiboe_server_context_call_rpc(
+                server_context, 'test.test', args_string, byref(
+                    client_context)))
+            call_result = swiboe.PtrRpcResult()
+            self._ok(self.library.swiboe_client_context_wait(
+                client_context, byref(call_result)))
+            self._ok(self.library.swiboe_server_context_finish(
+                server_context, call_result))
+
+        rpc_callback2 = swiboe.RPC(callback2)
+        self._ok(self.library.swiboe_new_rpc(
+            serving_client2, 'test.foo', 100, rpc_callback2))
+
+        client = self._checked_connect()
+        client_context = swiboe.PtrClientContext()
+        self._ok(self.library.swiboe_client_call_rpc(
+            client, 'test.foo', 'null', byref(client_context)))
+        call_result = swiboe.PtrRpcResult()
+        self._ok(self.library.swiboe_client_context_wait(
+            client_context, byref(call_result)))
+        self.assertTrue(self.library.swiboe_rpc_result_is_ok(call_result))
+
+        json_blob = c_char_p()
+        self.library.swiboe_rpc_result_unwrap(call_result, byref(json_blob))
+        self.assertEqual(golden_return, json.loads(json_blob.value))
+        self.library.swiboe_delete_string(json_blob)
+
+        self._ok(self.library.swiboe_disconnect(client))
+        self._ok(self.library.swiboe_disconnect(serving_client1))
+        self._ok(self.library.swiboe_disconnect(serving_client2))
+
+    def test_streaming_successfull_rpc(self):
+        serving_client = self._checked_connect()
+
+        last = {'blub': 'foo'}
+
+        def callback(server_context, args_string):
+            for i in range(1, 4):
+                update = {'count': i}
+                self._ok(self.library.swiboe_server_context_update(
+                    server_context, json.dumps(update)))
+            call_result = self.library.swiboe_rpc_ok(json.dumps(last))
+            self._ok(self.library.swiboe_server_context_finish(
+                server_context, call_result))
+
+        rpc_callback = swiboe.RPC(callback)
+        self._ok(self.library.swiboe_new_rpc(
+            serving_client, 'test.test', 100, rpc_callback))
+
+        client = self._checked_connect()
+        client_context = swiboe.PtrClientContext()
+        self._ok(self.library.swiboe_client_call_rpc(
+            client, 'test.test', 'null', byref(client_context)))
+
+        json_str = c_char_p()
+        self._ok(self.library.swiboe_client_context_recv(
+            client_context, byref(json_str)))
+
+        self.assertEqual(1, json.loads(json_str.value)['count'])
+        self.library.swiboe_delete_string(json_str)
+
+        json_str = c_char_p()
+        self._ok(self.library.swiboe_client_context_recv(
+            client_context, byref(json_str)))
+        self.assertEqual(2, json.loads(json_str.value)['count'])
+        self.library.swiboe_delete_string(json_str)
+
+        json_str = c_char_p()
+        self._ok(self.library.swiboe_client_context_recv(
+            client_context, byref(json_str)))
+        self.assertEqual(3, json.loads(json_str.value)['count'])
+        self.library.swiboe_delete_string(json_str)
+
+        json_str = c_char_p()
+        self._ok(self.library.swiboe_client_context_recv(
+            client_context, byref(json_str)))
+        self.assertEqual(None, json_str.value)
+        self.library.swiboe_delete_string(json_str)
+
+        self.assertEqual(
+            True, self.library.swiboe_client_context_done(client_context))
+
+        call_result = swiboe.PtrRpcResult()
+        self._ok(self.library.swiboe_client_context_wait(
+            client_context, byref(call_result)))
+        self.assertTrue(self.library.swiboe_rpc_result_is_ok(call_result))
+
+        json_blob = c_char_p()
+        self.library.swiboe_rpc_result_unwrap(call_result, byref(json_blob))
+        self.assertEqual(last, json.loads(json_blob.value))
+        self.library.swiboe_delete_string(json_blob)
+
+        self._ok(self.library.swiboe_disconnect(client))
+        self._ok(self.library.swiboe_disconnect(serving_client))
+
+    def test_streaming_cancelled_rpc(self):
+        serving_client = self._checked_connect()
+
+        done_event = threading.Event()
+
+        def callback(server_context, args_string):
+            i = 0
+            while not self.library.swiboe_server_context_cancelled(
+                server_context):
+                update = {'count': i}
+                rv = self.library.swiboe_server_context_update(
+                    server_context, json.dumps(update))
+                self.assertTrue(rv == swiboe.SUCCESS or rv ==
+                                swiboe.ERR_RPC_DONE)
+                i += 1
+            done_event.set()
+
+        rpc_callback = swiboe.RPC(callback)
+        self._ok(self.library.swiboe_new_rpc(
+            serving_client, 'test.test', 100, rpc_callback))
+
+        client = self._checked_connect()
+        client_context = swiboe.PtrClientContext()
+        self._ok(self.library.swiboe_client_call_rpc(
+            client, 'test.test', 'null', byref(client_context)))
+
+        for i in range(10):
+            json_str = c_char_p()
+            self._ok(self.library.swiboe_client_context_recv(
+                client_context, byref(json_str)))
+
+            self.assertEqual(i, json.loads(json_str.value)['count'])
+            self.library.swiboe_delete_string(json_str)
+
+        self._ok(self.library.swiboe_client_context_cancel(client_context))
+
+        done_event.wait()
+        self._ok(self.library.swiboe_disconnect(client))
+        self._ok(self.library.swiboe_disconnect(serving_client))
+
+
+def flatten_test_suite(suite):
+    flatten = unittest.TestSuite()
+    for test in suite:
+        if isinstance(test, unittest.TestSuite):
+            flatten.addTests(flatten_test_suite(test))
+        else:
+            flatten.addTest(test)
+    return flatten
+
+
+def parse_args():
+    p = argparse.ArgumentParser(
+        description=
+        'Test runner for the python interface. Also tests the full C ABI.')
+
+    p.add_argument(
+        '--shared_library',
+        type=str,
+        default=None,
+        help='The shared library that will be loaded by ctypes for testing.')
+    p.add_argument('--test_server',
+                   type=str,
+                   default='../target/debug/test_server',
+                   help='The test server binary.')
+    p.add_argument('-v',
+                   '--verbose',
+                   action='store_true',
+                   default=False,
+                   help='print name of tests as they are executed')
+
+    return p.parse_args()
+
+
+def main():
+    args = parse_args()
+
+    all_test_suites = unittest.defaultTestLoader.discover(start_dir='.')
+    suite = unittest.TestSuite()
+
+    tests = set()
+    for test in flatten_test_suite(all_test_suites):
+        test.SHARED_LIBRARY = args.shared_library
+        test.TEST_SERVER = args.test_server
+        tests.add(test)
+    suite.addTests(tests)
+    successful = unittest.TextTestRunner(
+        verbosity=0 if not args.verbose else 3,
+        failfast=False).run(suite).wasSuccessful()
+    return 0 if successful else 1
+
+
+if __name__ == '__main__':
+    sys.exit(main())

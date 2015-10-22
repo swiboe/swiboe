@@ -8,11 +8,11 @@ use std::env;
 use std::path;
 use std::sync;
 use std::thread;
-use support::TestHarness;
 use swiboe::client::RpcCaller;
 use swiboe::client;
 use swiboe::rpc;
 use swiboe::server::Server;
+use swiboe::testing::TestHarness;
 use uuid::Uuid;
 
 fn temporary_socket_name() -> path::PathBuf {

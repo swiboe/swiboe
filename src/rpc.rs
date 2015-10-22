@@ -33,25 +33,6 @@ pub enum ErrorKind {
     InvalidArgs,
 }
 
-impl ErrorKind {
-    pub fn from_str(description: &str) -> ErrorKind {
-        match description {
-            "UnknownRpc" => ErrorKind::UnknownRpc,
-            "Io" => ErrorKind::Io,
-            "InvalidArgs" => ErrorKind::InvalidArgs,
-            _ => panic!("{} is not a valid ErrorKind name.", description),
-        }
-    }
-
-    pub fn to_str(&self) -> &str {
-        match *self {
-            ErrorKind::UnknownRpc => "UnknownRpc",
-            ErrorKind::Io => "Io",
-            ErrorKind::InvalidArgs => "InvalidArgs",
-        }
-    }
-}
-
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 pub struct Error {
     pub kind: ErrorKind,
@@ -85,6 +66,14 @@ impl Result {
         match self {
             Ok(_) | NotHandled => panic!("Called unwrap_rpc_error on a non_error."),
             Err(e) => e,
+        }
+    }
+
+    pub fn unwrap(self) -> serde_json::Value {
+        use self::Result::*;
+        match self {
+            Err(_) | NotHandled => panic!("Called unwrap on a non Ok() value."),
+            Ok(val) => val,
         }
     }
 
