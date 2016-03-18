@@ -3,8 +3,6 @@
 // in the project root for license information.
 
 #![feature(custom_derive, plugin)]
-#![feature(drain)]
-#![feature(read_exact)]
 #![plugin(serde_macros)]
 
 extern crate libc;

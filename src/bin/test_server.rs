@@ -10,7 +10,6 @@ extern crate swiboe;
 
 use swiboe::testing::TestHarness;
 
-use std::path::Path;
 
 fn main() {
     let matches = clap::App::new("server")

@@ -6,7 +6,6 @@ use ::Result;
 use ::rpc;
 use mio::{TryRead, TryWrite};
 use serde_json;
-use std::error::Error;
 use std::io::{Read, Write};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
