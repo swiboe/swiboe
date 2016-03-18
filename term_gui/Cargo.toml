@@ -6,9 +6,9 @@ authors = ["Holger Rapp <HolgerRapp@gmx.net>"]
 [dependencies]
 clap = "1.2.0"
 rustbox = "0.7.0"
-serde = "0.6.0"
-serde_json = "0.6.0"
-serde_macros = "0.5.3"
+serde = "0.7.0"
+serde_json = "0.7.0"
+serde_macros = "0.7.0"
 time = "0.1.32"
 uuid = "0.1"
 
