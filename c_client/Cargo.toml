@@ -8,8 +8,8 @@ path = ".."
 
 [dependencies]
 libc = "0.1.10"
-serde = "0.6.0"
-serde_json = "0.6.0"
+serde = "0.7.0"
+serde_json = "0.7.0"
 
 [lib]
 name = "swiboe"
