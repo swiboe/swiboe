@@ -4,7 +4,7 @@
 
 use ::client::RpcCaller;
 use ::client;
-use ::error::{Result, Error};
+use ::error::{Result};
 use ::rpc;
 use serde_json;
 use std::collections::HashMap;

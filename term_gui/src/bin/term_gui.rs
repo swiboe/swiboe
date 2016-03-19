@@ -267,10 +267,10 @@ impl TerminalGui {
     }
 
     fn handle_events(&mut self) -> swiboe::Result<bool> {
-        match self.rustbox.peek_event(time::Duration::milliseconds(5), false) {
+        match self.rustbox.peek_event(std::time::Duration::from_millis(5), false) {
             Ok(rustbox::Event::KeyEvent(key)) => {
                 if self.completer.is_some() {
-                    let rv = self.completer.as_mut().unwrap().on_key(key.unwrap());
+                    let rv = self.completer.as_mut().unwrap().on_key(key);
                     match rv {
                         CompleterState::Running => (),
                         CompleterState::Canceled => {
@@ -289,7 +289,7 @@ impl TerminalGui {
                             self.buffer_view_widget = Some(BufferViewWidget::new(view_id, try!(self.client.clone())));
                         },
                     }
-                } else if let Some(key) = key {
+                } else {
                     if !try!(self.handle_key(key)) {
                         return Ok(false);
                     }

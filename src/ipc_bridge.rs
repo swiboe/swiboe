@@ -27,7 +27,8 @@ pub struct ClientId {
 // We abstract over unix and TCP connections. Since receiver and sender both get a copy of the
 // socket, we need to clone them. Since we store them in slab (which means the trait cannot be
 // sized), we have to return boxes too.
-trait MioStream: Send + io::Read + io::Write + mio::Evented {
+#[doc(hidden)]
+pub trait MioStream: Send + io::Read + io::Write + mio::Evented {
     fn try_clone(&self) -> io::Result<Box<MioStream>>;
 }
 
