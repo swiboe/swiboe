@@ -2,7 +2,7 @@ language: rust
 
 # TODO(sirver): support beta, stable
 rust:
-  - nightly
+  - nightly-2016-04-21
 
 install:
   - pip install 'Sphinx' --user
