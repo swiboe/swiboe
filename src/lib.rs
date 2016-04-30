@@ -35,6 +35,8 @@ pub mod plugin_buffer;
 pub mod plugin_core;
 pub mod plugin_list_files;
 pub mod rpc;
+pub mod spinner;
+pub mod swiboe;
 pub mod server;
 pub mod testing;
 

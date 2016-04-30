@@ -3,7 +3,7 @@
 // in the project root for license information.
 
 use ::ipc;
-use ::server;
+use ::swiboe;
 use ::{Error, Result};
 use mio::tcp::{TcpListener, TcpStream};
 use mio::unix::{UnixListener, UnixStream};
@@ -56,7 +56,7 @@ pub struct IpcBridge {
     unix_listener: UnixListener,
     tcp_listeners: Vec<TcpListener>,
     connections: mio::util::Slab<Connection<Box<MioStream>>>,
-    commands: server::CommandSender,
+    commands: swiboe::SenderTo,
     first_client_token: usize,
     next_serial: u64,
     thread_pool: ThreadPool,
@@ -68,7 +68,7 @@ impl IpcBridge {
     pub fn new(event_loop: &mut mio::EventLoop<Self>,
                socket_name: &Path,
                tcp_addresses: &Vec<String>,
-               server_commands: server::CommandSender) -> Self {
+               server_commands: swiboe::SenderTo) -> Self {
         let unix_listener = UnixListener::bind(socket_name).unwrap();
         event_loop.register(
             &unix_listener,
@@ -117,7 +117,7 @@ impl IpcBridge {
                 reader: Some(ipc::Reader::new(stream)),
                 client_id: client_id,
             };
-            commands.send(server::Command::ClientConnected(client_id)).expect("ClientConnected");
+            commands.send(swiboe::Command::ClientConnected(client_id)).expect("ClientConnected");
             connection
         }) {
             Some(token) => {
@@ -188,7 +188,7 @@ impl mio::Handler for IpcBridge {
                 match result {
                     Ok(_) => self.reregister_for_writing(receiver.token, event_loop).expect("reregister for writing"),
                     Err(err) => {
-                        self.commands.send(server::Command::SendDataFailed(receiver, message,
+                        self.commands.send(swiboe::Command::SendDataFailed(receiver, message,
                                                                            err)).expect("SendFailed");
                     },
                 };
@@ -246,14 +246,14 @@ impl mio::Handler for IpcBridge {
                                             // thread_pool does not wait for its thread to
                                             // terminate on deletion.
                                             ipc::Message::RpcCall(rpc_call) => {
-                                                commands.send(server::Command::RpcCall(
+                                                commands.send(swiboe::Command::RpcCall(
                                                         client_id, rpc_call)).expect("RpcCall");
                                             },
                                             ipc::Message::RpcResponse(rpc_response) => {
-                                                commands.send(server::Command::RpcResponse(rpc_response)).expect("RpcResponse");
+                                                commands.send(swiboe::Command::RpcResponse(rpc_response)).expect("RpcResponse");
                                             },
                                             ipc::Message::RpcCancel(rpc_cancel) => {
-                                                commands.send(server::Command::RpcCancel(rpc_cancel)).expect("RpcCancel");
+                                                commands.send(swiboe::Command::RpcCancel(rpc_cancel)).expect("RpcCancel");
                                             },
                                         }
                                     }
@@ -291,7 +291,7 @@ impl mio::Handler for IpcBridge {
                 if events.is_hup() {
                     if let Some(connection) = self.connections.remove(client_token) {
                         self.commands.send(
-                            server::Command::ClientDisconnected(connection.client_id)).expect("ClientDisconnected");
+                            swiboe::Command::ClientDisconnected(connection.client_id)).expect("ClientDisconnected");
                     }
                     return;
                 }
