@@ -3,8 +3,8 @@
 // in the project root for license information.
 
 use ::ipc;
-use ::swiboe;
 use ::{Error, Result};
+use ::server::swiboe;
 use mio::tcp::{TcpListener, TcpStream};
 use mio::unix::{UnixListener, UnixStream};
 use mio;

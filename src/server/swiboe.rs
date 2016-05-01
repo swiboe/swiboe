@@ -1,9 +1,9 @@
 use ::error::{Error, Result};
 use ::ipc;
-use ::ipc_bridge;
+use ::server::ipc_bridge;
+use ::server::plugin_core;
 use ::spinner;
 use ::rpc;
-use ::plugin_core;
 use mio;
 use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};

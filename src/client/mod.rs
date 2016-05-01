@@ -6,7 +6,11 @@
 
 use ::error::Result;
 use ::ipc;
-use ::plugin_core::NewRpcRequest;
+
+// NOCOM such class/module should be pulled out
+//       server and client should not depend each other
+use ::server::plugin_core::NewRpcRequest;
+
 use serde;
 use std::io;
 use std::net::{self, TcpStream};

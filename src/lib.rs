@@ -28,15 +28,12 @@ macro_rules! try_rpc {
 }
 
 mod ipc;
-mod ipc_bridge;
 pub mod client;
 pub mod error;
 pub mod plugin_buffer;
-pub mod plugin_core;
 pub mod plugin_list_files;
 pub mod rpc;
 pub mod spinner;
-pub mod swiboe;
 pub mod server;
 pub mod testing;
 

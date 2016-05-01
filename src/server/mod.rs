@@ -3,10 +3,8 @@
 // in the project root for license information.
 
 use ::error::Result;
-use ::ipc_bridge;
 use ::plugin_buffer;
 use ::plugin_list_files;
-use ::swiboe;
 use mio;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -92,3 +90,7 @@ impl Server {
             &format!("Could not remove socket {:?}", self.unix_domain_socket_name));
     }
 }
+
+mod ipc_bridge;
+mod swiboe;
+pub mod plugin_core; // NOCOM being a private mod

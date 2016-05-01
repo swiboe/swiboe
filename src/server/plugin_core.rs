@@ -2,9 +2,9 @@
 // Licensed under the Apache License, Version 2.0. See LICENSE.txt
 // in the project root for license information.
 
-use ::ipc_bridge;
 use ::rpc;
-use ::swiboe;
+use ::server::ipc_bridge;
+use ::server::swiboe;
 use serde_json;
 
 #[derive(Serialize, Deserialize, Debug)]
