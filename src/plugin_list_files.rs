@@ -3,8 +3,10 @@
 // in the project root for license information.
 
 use ::client;
+use ::client::RpcCaller;
 use ::error::{Result};
 use ::rpc;
+use ::plugin_logger;
 use serde_json;
 use std::convert;
 use std::fs::{self, DirEntry};
@@ -12,6 +14,7 @@ use std::io;
 use std::mem;
 use std::path::Path;
 use std::path;
+use std::sync::{Arc, RwLock};
 use std::thread;
 use time;
 
@@ -56,11 +59,19 @@ pub struct ListFilesRequest {
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub struct ListFilesResponse;
 
-struct ListFiles;
+struct ListFiles {
+    client: Arc<RwLock<client::ThinClient>>,
+}
 
 impl client::rpc::server::Rpc for ListFiles {
-    fn call(&self, mut context: client::rpc::server::Context, args: serde_json::Value) {
+    fn call(& self, mut context: client::rpc::server::Context, args: serde_json::Value) {
         let request: ListFilesRequest = try_rpc!(context, serde_json::from_value(args));
+        // NOCOM handle the result
+        let _ = self.client.write().unwrap().call("logger", &plugin_logger::LoggerRequest {
+            level: String::from("Debug"),
+            message: String::from("list files called"),
+            time: String::from("now"),
+        });
 
         thread::spawn(move || {
             let mut files = Vec::new();
@@ -101,12 +112,13 @@ pub struct ListFilesPlugin {
 impl ListFilesPlugin {
     pub fn new(socket_name: &path::Path) -> Result<Self> {
         let client = try!(client::Client::connect_unix(socket_name));
+        let thin_client = Arc::new(RwLock::new(try!(client.clone())));
 
         let mut plugin = ListFilesPlugin {
             client: client,
         };
 
-        let list_files = Box::new(ListFiles);
+        let list_files = Box::new(ListFiles {client: thin_client.clone()});
         try!(plugin.client.new_rpc("list_files", list_files));
 
         Ok(plugin)
