@@ -32,6 +32,7 @@ pub mod client;
 pub mod error;
 pub mod plugin_buffer;
 pub mod plugin_list_files;
+pub mod plugin_logger;
 pub mod rpc;
 pub mod spinner;
 pub mod server;
