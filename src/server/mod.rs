@@ -5,6 +5,7 @@
 use ::error::Result;
 use ::plugin_buffer;
 use ::plugin_list_files;
+use ::plugin_logger;
 use mio;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -24,6 +25,7 @@ pub struct Server {
     event_loop_thread: Option<thread::JoinHandle<()>>,
     buffer_plugin: Option<plugin_buffer::BufferPlugin>,
     list_files_plugin: Option<plugin_list_files::ListFilesPlugin>,
+    logger_plugin: Option<plugin_logger::LoggerPlugin>,
 }
 
 impl Server {
@@ -39,6 +41,7 @@ impl Server {
             ipc_bridge_commands: event_loop.channel(),
             buffer_plugin: None,
             list_files_plugin: None,
+            logger_plugin: None,
             swiboe_thread: None,
             event_loop_thread: None,
         };
@@ -57,6 +60,8 @@ impl Server {
             try!(plugin_buffer::BufferPlugin::new(&server.unix_domain_socket_name)));
         server.list_files_plugin = Some(
             try!(plugin_list_files::ListFilesPlugin::new(&server.unix_domain_socket_name)));
+        server.logger_plugin = Some(
+            try!(plugin_logger::LoggerPlugin::new(&server.unix_domain_socket_name)));
         Ok(server)
     }
 
