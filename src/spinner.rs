@@ -8,7 +8,7 @@ pub enum Command {
     Quit,
 }
 
-pub trait Recver<T> { // Recvs messages from mpsc, tcp, udp or other protocols
+pub trait Receiver<T> { // Recvs messages from mpsc, tcp, udp or other protocols
     fn recv(&mut self) -> Result<T>;
 }
 
@@ -17,7 +17,7 @@ pub trait Handler<T> {
 }
 
 pub struct Spinner<T, R, H>
-        where R: Recver<T>,
+        where R: Receiver<T>,
               H: Handler<T> {
     recver: R,
     handler: H,
@@ -25,7 +25,7 @@ pub struct Spinner<T, R, H>
 }
 
 impl<T, R, H> Spinner<T, R, H>
-        where R: Recver<T>,
+        where R: Receiver<T>,
               H: Handler<T> {
     pub fn new(recver: R, handler: H) -> Spinner<T, R, H> {
         Spinner {
@@ -50,7 +50,7 @@ impl<T, R, H> Spinner<T, R, H>
 pub fn spawn<T, R, H>(recver: R,
                       handler: H) -> thread::JoinHandle<()>
         where T: 'static,
-              R: 'static + Send + Recver<T>,
+              R: 'static + Send + Receiver<T>,
               H: 'static + Send + Handler<T> {
     thread::spawn(move || {
         if let Err(error) = Spinner::new(recver, handler).spin() {

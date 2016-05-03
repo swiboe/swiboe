@@ -7,7 +7,7 @@ use ::rpc;
 use mio;
 use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
-use std::sync::mpsc::{Sender, Receiver};
+use std::sync::mpsc;
 use std::thread;
 
 const CORE_FUNCTIONS_PREFIX: &'static str = "core.";
@@ -36,21 +36,21 @@ struct RunningRpc {
     last_index: usize,
 }
 
-pub type SenderTo = Sender<Command>;
+pub type SenderTo = mpsc::Sender<Command>;
 
-pub struct Recver {
-    commands: Receiver<Command>,
+pub struct Receiver {
+    commands: mpsc::Receiver<Command>,
 }
 
-impl Recver {
-    pub fn new(commands: Receiver<Command>) -> Self {
-        Recver {
+impl Receiver {
+    pub fn new(commands: mpsc::Receiver<Command>) -> Self {
+        Receiver {
             commands: commands,
         }
     }
 }
 
-impl spinner::Recver<Command> for Recver {
+impl spinner::Receiver<Command> for Receiver {
     fn recv(&mut self) -> Result<Command> {
         match self.commands.recv() {
             Ok(value) => Ok(value),
@@ -316,8 +316,8 @@ impl spinner::Handler<Command> for Handler {
     }
 }
 
-pub fn spawn(ipc_bridge_commands: mio::Sender<ipc_bridge::Command>, tx: SenderTo, rx: Receiver<Command>) -> thread::JoinHandle<()> {
-    let recver = Recver::new(rx);
+pub fn spawn(ipc_bridge_commands: mio::Sender<ipc_bridge::Command>, tx: SenderTo, rx: mpsc::Receiver<Command>) -> thread::JoinHandle<()> {
+    let recver = Receiver::new(rx);
     let handler = Handler::new(ipc_bridge_commands, tx.clone());
     spinner::spawn(recver, handler)
 }

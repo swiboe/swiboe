@@ -35,19 +35,19 @@ impl RunningRpc {
     }
 }
 
-struct Recver {
+struct Receiver {
     commands: mpsc::Receiver<Command>,
 }
 
-impl Recver {
+impl Receiver {
     fn new(commands: mpsc::Receiver<Command>) -> Self {
-        Recver {
+        Receiver {
             commands: commands,
         }
     }
 }
 
-impl spinner::Recver<Command> for Recver {
+impl spinner::Receiver<Command> for Receiver {
     fn recv(&mut self,) -> Result<Command> {
         match self.commands.recv() {
             Ok(value) => Ok(value),
@@ -154,7 +154,7 @@ pub fn spawn(commands: mpsc::Receiver<Command>,
                  command_sender: CommandSender,
                  send_queue: mpsc::Sender<ipc::Message>) -> thread::JoinHandle<()>
 {
-    let recver = Recver::new(commands);
+    let recver = Receiver::new(commands);
     let handler = Handler::new(command_sender, send_queue);
     spinner::spawn(recver, handler)
 }
