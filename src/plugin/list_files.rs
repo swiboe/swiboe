@@ -6,7 +6,7 @@ use ::client;
 use ::client::RpcCaller;
 use ::error::{Result};
 use ::rpc;
-use ::plugin_logger;
+use ::plugin;
 use serde_json;
 use std::convert;
 use std::fs::{self, DirEntry};
@@ -67,7 +67,7 @@ impl client::rpc::server::Rpc for ListFiles {
     fn call(&self, mut context: client::rpc::server::Context, args: serde_json::Value) {
         let request: ListFilesRequest = try_rpc!(context, serde_json::from_value(args));
         // NOCOM handle the result
-        let _ = self.client.write().unwrap().call("logger", &plugin_logger::LoggerRequest {
+        let _ = self.client.write().unwrap().call("logger", &plugin::logger::LoggerRequest {
             level: String::from("Debug"),
             message: String::from("list files called"),
             time: String::from("now"),

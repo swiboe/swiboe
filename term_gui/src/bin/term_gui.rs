@@ -52,7 +52,7 @@ impl CompleterWidget {
         // directory.
         let current_dir = env::current_dir().unwrap();
 
-        let rpc = try!(client.call("list_files", &swiboe::plugin_list_files::ListFilesRequest {
+        let rpc = try!(client.call("list_files", &swiboe::plugin::list_files::ListFilesRequest {
             directory: current_dir.to_string_lossy().into_owned(),
         }));
 
@@ -105,7 +105,7 @@ impl CompleterWidget {
     fn draw(&mut self, rustbox: &rustbox::RustBox) {
         while let Some(b) = self.rpc.as_mut().unwrap().try_recv().unwrap() {
             self.results.clear();
-            let b: swiboe::plugin_list_files::ListFilesUpdate = serde_json::from_value(b).unwrap();
+            let b: swiboe::plugin::list_files::ListFilesUpdate = serde_json::from_value(b).unwrap();
             for file in &b.files {
                 self.candidates.insert(file);
             }
@@ -279,10 +279,10 @@ impl TerminalGui {
                         CompleterState::Selected(result) => {
                             self.completer = None;
 
-                            let mut rpc = try!(self.client.call("buffer.open", &swiboe::plugin_buffer::OpenRequest {
+                            let mut rpc = try!(self.client.call("buffer.open", &swiboe::plugin::buffer::OpenRequest {
                                 uri: format!("file://{}", result),
                             }));
-                            let response: swiboe::plugin_buffer::OpenResponse = rpc.wait_for().unwrap();
+                            let response: swiboe::plugin::buffer::OpenResponse = rpc.wait_for().unwrap();
 
                             let mut buffer_views = self.buffer_views.write().unwrap();
                             let view_id = buffer_views.new_view(response.buffer_index, self.rustbox.width(), self.rustbox.height());

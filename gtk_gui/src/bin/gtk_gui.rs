@@ -33,8 +33,7 @@ use std::sync::mpsc;
 use std::sync::{RwLock, Arc};
 use std::thread;
 use swiboe::client;
-use swiboe::plugin_buffer;
-use swiboe::plugin_list_files;
+use swiboe::plugin;
 use swiboe_gtk_gui::buffer_view_widget;
 use swiboe_gtk_gui::buffer_views;
 use swiboe_gtk_gui::command::GuiCommand;
@@ -110,20 +109,20 @@ impl SwiboeGtkGui {
                     println!("#sirver keypress: {}", time::precise_time_ns());
                     match &name_str as &str {
                         "F2" => {
-                            let mut rpc = thin_client.call("buffer.open", &plugin_buffer::OpenRequest {
+                            let mut rpc = thin_client.call("buffer.open", &plugin::buffer::OpenRequest {
                                 uri: "file:///Users/sirver/Desktop/Programming/rust/Swiboe/gui/src/bin/gtk_gui.rs".into(),
                             });
-                            let b: plugin_buffer::OpenResponse = rpc.wait_for().unwrap();
+                            let b: plugin::buffer::OpenResponse = rpc.wait_for().unwrap();
                             println!("#sirver b: {:#?}", b);
                         },
                         "F3" => {
-                            let mut rpc = thin_client.call("list_files", &plugin_list_files::ListFilesRequest {
+                            let mut rpc = thin_client.call("list_files", &plugin::list_files::ListFilesRequest {
                                 directory: "/Users/sirver/Desktop/Programming/".into(),
                             });
                             let mut num = 0;
                             let start = time::SteadyTime::now();
                             while let Some(b) = rpc.recv().unwrap() {
-                                let b: plugin_list_files::ListFilesUpdate = serde_json::from_value(b).unwrap();
+                                let b: plugin::list_files::ListFilesUpdate = serde_json::from_value(b).unwrap();
                                 num += b.files.len();
                                 println!("#sirver num: {:#?}", num);
                                 if num > 10000 {
@@ -131,7 +130,7 @@ impl SwiboeGtkGui {
                                 }
                             }
                             rpc.cancel();
-                            // let b: plugin_list_files::ListFilesResponse = rpc.wait_for().unwrap();
+                            // let b: plugin::list_files::ListFilesResponse = rpc.wait_for().unwrap();
                             // println!("#sirver b: {:#?}", b);
                             let duration = time::SteadyTime::now() - start;
                             println!("#sirver duration: {:#?}", duration);

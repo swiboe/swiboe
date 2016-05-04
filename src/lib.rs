@@ -30,9 +30,7 @@ macro_rules! try_rpc {
 mod ipc;
 pub mod client;
 pub mod error;
-pub mod plugin_buffer;
-pub mod plugin_list_files;
-pub mod plugin_logger;
+pub mod plugin;
 pub mod rpc;
 pub mod spinner;
 pub mod server;
