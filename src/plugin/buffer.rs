@@ -4,7 +4,8 @@
 
 use ::client::RpcCaller;
 use ::client;
-use ::error::{Result};
+use ::error::Result;
+use ::plugin;
 use ::rpc;
 use serde_json;
 use std::collections::HashMap;
@@ -299,37 +300,27 @@ impl ops::Deref for BuffersManager {
     }
 }
 
-
-
 pub struct BufferPlugin {
-    client: client::Client,
-    buffers: Arc<RwLock<BuffersManager>>,
+    _client: client::Client,
+    _buffers: Arc<RwLock<BuffersManager>>,
 }
 
 impl BufferPlugin {
     pub fn new(socket_name: &path::Path) -> Result<Self> {
-        let client = try!(client::Client::connect_unix(socket_name));
-
-        let mut plugin = BufferPlugin {
-            buffers: Arc::new(RwLock::new(BuffersManager::new(try!(client.clone())))),
-            client: client,
+        let mut client = try!(client::Client::connect_unix(socket_name));
+        let buffers = Arc::new(RwLock::new(BuffersManager::new(try!(client.clone()))));
+        let rpc_map = rpc_map! {
+            "buffer.new" => New { buffers: buffers.clone() },
+            "buffer.delete" => Delete { buffers: buffers.clone() },
+            "buffer.get_content" => GetContent { buffers: buffers.clone() },
+            "buffer.open" => Open { buffers: buffers.clone() },
+            "buffer.list" => List { buffers: buffers.clone() },
         };
+        try!(plugin::register_rpc(&mut client, rpc_map));
 
-        let new = Box::new(New { buffers: plugin.buffers.clone() });
-        try!(plugin.client.new_rpc("buffer.new", new));
-
-        let delete = Box::new(Delete { buffers: plugin.buffers.clone() });
-        try!(plugin.client.new_rpc("buffer.delete", delete));
-
-        let get_content = Box::new(GetContent { buffers: plugin.buffers.clone() });
-        try!(plugin.client.new_rpc("buffer.get_content", get_content));
-
-        let open = Box::new(Open { buffers: plugin.buffers.clone() });
-        try!(plugin.client.new_rpc("buffer.open", open));
-
-        let list = Box::new(List { buffers: plugin.buffers.clone() });
-        try!(plugin.client.new_rpc("buffer.list", list));
-
-        Ok(plugin)
+        Ok(BufferPlugin{
+            _client: client,
+            _buffers: buffers,
+        })
     }
 }
