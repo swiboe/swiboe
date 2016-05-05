@@ -4,6 +4,7 @@
 use ::client;
 use ::error::Result;
 use ::rpc;
+use ::plugin;
 use serde_json;
 use std::convert;
 use std::path;
@@ -30,17 +31,17 @@ impl client::rpc::server::Rpc for Logger {
 }
 
 pub struct LoggerPlugin {
-    client: client::Client,
+    _client: client::Client,
 }
 
 impl LoggerPlugin {
     pub fn new(socket_name: &path::Path) -> Result<Self> {
-        let client = try!(client::Client::connect_unix(socket_name));
-        let mut plugin = LoggerPlugin {
-            client: client,
-        };
-        let logger = Box::new(Logger);
-        try!(plugin.client.new_rpc("logger", logger));
-        Ok(plugin)
+        let mut client = try!(client::Client::connect_unix(socket_name));
+        try!(plugin::register_rpc(&mut client, rpc_map! {
+            "logger" => Logger,
+        }));
+        Ok(LoggerPlugin{
+            _client: client,
+        })
     }
 }
