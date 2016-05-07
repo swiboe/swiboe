@@ -27,4 +27,4 @@ pub fn register_rpc(client: &mut client::Client, map: RpcMap) -> Result<()> {
 
 pub mod buffer;
 pub mod list_files;
-pub mod logger;
+pub mod log;
