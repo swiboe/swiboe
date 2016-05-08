@@ -208,7 +208,6 @@ impl spinner::Handler<Command> for Handler {
                 // NOCOM(#sirver): function name might not be in there.
 
                 // Special case 'core.'. We handle them immediately.
-                println!("{}", rpc_call.function);
                 if rpc_call.function.starts_with(CORE_FUNCTIONS_PREFIX) {
                     let result = self.plugin_core.call(client_id, &rpc_call);
                     try!(self.ipc_bridge_commands.send(ipc_bridge::Command::SendData(

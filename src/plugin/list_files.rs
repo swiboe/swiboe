@@ -4,9 +4,9 @@
 
 use ::client;
 use ::client::RpcCaller;
-use ::error::{Result};
+use ::error::Result;
 use ::rpc;
-use ::plugin_logger;
+use ::plugin;
 use serde_json;
 use std::convert;
 use std::fs::{self, DirEntry};
@@ -67,7 +67,7 @@ impl client::rpc::server::Rpc for ListFiles {
     fn call(&self, mut context: client::rpc::server::Context, args: serde_json::Value) {
         let request: ListFilesRequest = try_rpc!(context, serde_json::from_value(args));
         // NOCOM handle the result
-        let _ = self.client.write().unwrap().call("logger", &plugin_logger::LoggerRequest {
+        let _ = self.client.write().unwrap().call("logger", &plugin::logger::LoggerRequest {
             level: String::from("Debug"),
             message: String::from("list files called"),
             time: String::from("now"),
@@ -106,21 +106,18 @@ impl client::rpc::server::Rpc for ListFiles {
 }
 
 pub struct ListFilesPlugin {
-    client: client::Client,
+    _client: client::Client,
 }
 
 impl ListFilesPlugin {
     pub fn new(socket_name: &path::Path) -> Result<Self> {
-        let client = try!(client::Client::connect_unix(socket_name));
+        let mut client = try!(client::Client::connect_unix(socket_name));
         let thin_client = Arc::new(RwLock::new(try!(client.clone())));
-
-        let mut plugin = ListFilesPlugin {
-            client: client,
-        };
-
-        let list_files = Box::new(ListFiles {client: thin_client.clone()});
-        try!(plugin.client.new_rpc("list_files", list_files));
-
-        Ok(plugin)
+        try!(plugin::register_rpc(&mut client, rpc_map! {
+            "list_files" => ListFiles { client: thin_client.clone() },
+        }));
+        Ok(ListFilesPlugin {
+            _client: client,
+        })
     }
 }

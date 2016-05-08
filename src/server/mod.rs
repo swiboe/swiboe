@@ -3,9 +3,7 @@
 // in the project root for license information.
 
 use ::error::Result;
-use ::plugin_buffer;
-use ::plugin_list_files;
-use ::plugin_logger;
+use ::plugin;
 use mio;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -23,9 +21,9 @@ pub struct Server {
     ipc_bridge_commands: mio::Sender<ipc_bridge::Command>,
     swiboe_thread: Option<thread::JoinHandle<()>>,
     event_loop_thread: Option<thread::JoinHandle<()>>,
-    buffer_plugin: Option<plugin_buffer::BufferPlugin>,
-    list_files_plugin: Option<plugin_list_files::ListFilesPlugin>,
-    logger_plugin: Option<plugin_logger::LoggerPlugin>,
+    buffer_plugin: Option<plugin::buffer::BufferPlugin>,
+    list_files_plugin: Option<plugin::list_files::ListFilesPlugin>,
+    logger_plugin: Option<plugin::logger::LoggerPlugin>,
 }
 
 impl Server {
@@ -57,11 +55,11 @@ impl Server {
         }));
 
         server.buffer_plugin = Some(
-            try!(plugin_buffer::BufferPlugin::new(&server.unix_domain_socket_name)));
+            try!(plugin::buffer::BufferPlugin::new(&server.unix_domain_socket_name)));
         server.list_files_plugin = Some(
-            try!(plugin_list_files::ListFilesPlugin::new(&server.unix_domain_socket_name)));
+            try!(plugin::list_files::ListFilesPlugin::new(&server.unix_domain_socket_name)));
         server.logger_plugin = Some(
-            try!(plugin_logger::LoggerPlugin::new(&server.unix_domain_socket_name)));
+            try!(plugin::logger::LoggerPlugin::new(&server.unix_domain_socket_name)));
         Ok(server)
     }
 
