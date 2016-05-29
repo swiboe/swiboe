@@ -23,7 +23,7 @@ pub struct Server {
     event_loop_thread: Option<thread::JoinHandle<()>>,
     buffer_plugin: Option<plugin::buffer::BufferPlugin>,
     list_files_plugin: Option<plugin::list_files::ListFilesPlugin>,
-    logger_plugin: Option<plugin::logger::LoggerPlugin>,
+    log_plugin: Option<plugin::log::Plugin>,
 }
 
 impl Server {
@@ -39,7 +39,7 @@ impl Server {
             ipc_bridge_commands: event_loop.channel(),
             buffer_plugin: None,
             list_files_plugin: None,
-            logger_plugin: None,
+            log_plugin: None,
             swiboe_thread: None,
             event_loop_thread: None,
         };
@@ -58,8 +58,8 @@ impl Server {
             try!(plugin::buffer::BufferPlugin::new(&server.unix_domain_socket_name)));
         server.list_files_plugin = Some(
             try!(plugin::list_files::ListFilesPlugin::new(&server.unix_domain_socket_name)));
-        server.logger_plugin = Some(
-            try!(plugin::logger::LoggerPlugin::new(&server.unix_domain_socket_name)));
+        server.log_plugin = Some(
+            try!(plugin::log::Plugin::new(&server.unix_domain_socket_name)));
         Ok(server)
     }
 

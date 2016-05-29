@@ -67,8 +67,7 @@ impl client::rpc::server::Rpc for ListFiles {
     fn call(&self, mut context: client::rpc::server::Context, args: serde_json::Value) {
         let request: ListFilesRequest = try_rpc!(context, serde_json::from_value(args));
         // NOCOM handle the result
-        let _ = self.client.write().unwrap().call("logger", &plugin::logger::LoggerRequest {
-            level: String::from("Debug"),
+        let _ = self.client.write().unwrap().call("log.debug", &plugin::log::debug::Request {
             message: String::from("list files called"),
             time: String::from("now"),
         });
