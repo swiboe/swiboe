@@ -69,7 +69,7 @@ impl client::rpc::server::Rpc for ListFiles {
         // NOCOM handle the result
         let _ = self.client.write().unwrap().call("log.debug", &plugin::log::debug::Request {
             message: String::from("list files called"),
-            time: String::from("now"),
+            time: plugin::log::current(),
         });
 
         thread::spawn(move || {

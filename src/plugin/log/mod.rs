@@ -5,6 +5,7 @@ use ::client;
 use ::error::Result;
 use ::plugin;
 use std::path;
+use time;
 
 
 pub struct Plugin {
@@ -24,6 +25,10 @@ impl Plugin {
             _client: client,
         })
     }
+}
+
+pub fn current() -> String {
+    format!("{}", time::now_utc().rfc3339())
 }
 
 mod base;
