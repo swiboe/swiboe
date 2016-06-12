@@ -7,7 +7,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use swiboe::client::RpcCaller;
 use swiboe::client;
-use swiboe::plugin;
+use swiboe::plugin::buffer;
 use swiboe::rpc;
 use swiboe::testing::TestHarness;
 
@@ -22,11 +22,11 @@ fn wait_for_true_with_timeout(mutex: &Mutex<bool>) -> bool {
 }
 
 fn create_buffer(client: &mut client::Client, expected_index: usize, content: Option<&str>) {
-    let request = plugin::buffer::NewRequest {
+    let request = buffer::new::Request {
         content: content.map(|s| s.to_string()),
     };
     let mut rpc = client.call("buffer.new", &request).unwrap();
-    assert_eq!(rpc.wait().unwrap(), rpc::Result::success(plugin::buffer::NewResponse {
+    assert_eq!(rpc.wait().unwrap(), rpc::Result::success(buffer::new::Response {
         buffer_index: expected_index,
     }));
 }
@@ -59,10 +59,10 @@ fn buffer_new_with_content() {
     let content = "blub\nblah\nbli";
     create_buffer(&mut client, 0, Some(content));
 
-    let mut rpc = client.call("buffer.get_content", &plugin::buffer::GetContentRequest {
+    let mut rpc = client.call("buffer.get_content", &buffer::get_content::Request {
         buffer_index: 0,
     }).unwrap();
-    assert_eq!(rpc.wait().unwrap(), rpc::Result::success(plugin::buffer::GetContentResponse {
+    assert_eq!(rpc.wait().unwrap(), rpc::Result::success(buffer::get_content::Response {
         content: content.into(),
     }));
 }
@@ -72,7 +72,7 @@ fn buffer_open_unhandled_uri() {
     let t = TestHarness::new();
     let mut client = client::Client::connect_unix(&t.socket_name).unwrap();
 
-    let mut rpc = client.call("buffer.open", &plugin::buffer::OpenRequest {
+    let mut rpc = client.call("buffer.open", &buffer::open::Request {
         uri: "blumba://foo".into(),
     }).unwrap();
 
@@ -87,17 +87,17 @@ fn buffer_open_file() {
     let content = "blub\nblah\nbli";
     let path = create_file(&t, "foo", &content);
 
-    let mut rpc = client.call("buffer.open", &plugin::buffer::OpenRequest {
+    let mut rpc = client.call("buffer.open", &buffer::open::Request {
         uri: format!("file://{}", path.to_str().unwrap()),
     }).unwrap();
-    assert_eq!(rpc.wait().unwrap(), rpc::Result::success(plugin::buffer::OpenResponse {
+    assert_eq!(rpc.wait().unwrap(), rpc::Result::success(buffer::open::Response {
         buffer_index: 0,
     }));
 
-    let mut rpc = client.call("buffer.get_content", &plugin::buffer::GetContentRequest {
+    let mut rpc = client.call("buffer.get_content", &buffer::get_content::Request {
         buffer_index: 0,
     }).unwrap();
-    assert_eq!(rpc.wait().unwrap(), rpc::Result::success(plugin::buffer::GetContentResponse {
+    assert_eq!(rpc.wait().unwrap(), rpc::Result::success(buffer::get_content::Response {
         content: content.into(),
     }));
 }
@@ -119,7 +119,7 @@ fn buffer_delete() {
 
         create_buffer(&mut client, 0, None);
 
-        let request = plugin::buffer::DeleteRequest {
+        let request = buffer::delete::Request {
             buffer_index: 0,
         };
         let mut rpc = client.call("buffer.delete", &request).unwrap();
@@ -133,7 +133,7 @@ fn buffer_delete_non_existing() {
     let t = TestHarness::new();
 
     let mut client = client::Client::connect_unix(&t.socket_name).unwrap();
-    let request = plugin::buffer::DeleteRequest {
+    let request = buffer::delete::Request {
         buffer_index: 0,
     };
     let mut rpc = client.call("buffer.delete", &request).unwrap();
