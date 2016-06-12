@@ -279,10 +279,10 @@ impl TerminalGui {
                         CompleterState::Selected(result) => {
                             self.completer = None;
 
-                            let mut rpc = try!(self.client.call("buffer.open", &swiboe::plugin::buffer::OpenRequest {
+                            let mut rpc = try!(self.client.call("buffer.open", &swiboe::plugin::buffer::open::Request {
                                 uri: format!("file://{}", result),
                             }));
-                            let response: swiboe::plugin::buffer::OpenResponse = rpc.wait_for().unwrap();
+                            let response: swiboe::plugin::buffer::open::Response = rpc.wait_for().unwrap();
 
                             let mut buffer_views = self.buffer_views.write().unwrap();
                             let view_id = buffer_views.new_view(response.buffer_index, self.rustbox.width(), self.rustbox.height());

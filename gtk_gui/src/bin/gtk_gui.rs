@@ -109,10 +109,10 @@ impl SwiboeGtkGui {
                     println!("#sirver keypress: {}", time::precise_time_ns());
                     match &name_str as &str {
                         "F2" => {
-                            let mut rpc = thin_client.call("buffer.open", &plugin::buffer::OpenRequest {
+                            let mut rpc = thin_client.call("buffer.open", &plugin::buffer::open::Request {
                                 uri: "file:///Users/sirver/Desktop/Programming/rust/Swiboe/gui/src/bin/gtk_gui.rs".into(),
                             });
-                            let b: plugin::buffer::OpenResponse = rpc.wait_for().unwrap();
+                            let b: plugin::buffer::open::Response = rpc.wait_for().unwrap();
                             println!("#sirver b: {:#?}", b);
                         },
                         "F3" => {

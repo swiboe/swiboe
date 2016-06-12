@@ -234,11 +234,11 @@ impl BufferViews {
     }
 
     pub fn new_view(&mut self, buffer_index: usize, width: usize, height: usize) -> String {
-        let mut rpc = self.client.call("buffer.get_content", &plugin::buffer::GetContentRequest {
+        let mut rpc = self.client.call("buffer.get_content", &plugin::buffer::get_content::Request {
             buffer_index: buffer_index,
         }).unwrap();
 
-        let response: plugin::buffer::GetContentResponse = rpc.wait_for().unwrap();
+        let response: plugin::buffer::get_content::Response = rpc.wait_for().unwrap();
         let buffer_view = BufferView::new(width, height, &response.content);
         let view_id = buffer_view.id().to_string();
         self.buffer_views.insert(buffer_view.id().to_string(), buffer_view);
