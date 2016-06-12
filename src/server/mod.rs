@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0. See LICENSE.txt
 // in the project root for license information.
 
+use ::client;
 use ::error::Result;
 use ::plugin;
 use mio;
@@ -21,8 +22,8 @@ pub struct Server {
     ipc_bridge_commands: mio::Sender<ipc_bridge::Command>,
     swiboe_thread: Option<thread::JoinHandle<()>>,
     event_loop_thread: Option<thread::JoinHandle<()>>,
-    buffer_plugin: Option<plugin::buffer::BufferPlugin>,
-    list_files_plugin: Option<plugin::list_files::ListFilesPlugin>,
+    buffer_plugin: Option<plugin::buffer::Plugin>,
+    list_files_plugin: Option<plugin::list_files::Plugin>,
     log_plugin: Option<plugin::log::Plugin>,
 }
 
@@ -54,12 +55,12 @@ impl Server {
             event_loop.run(&mut ipc_bridge).expect("Could not start event_loop.");
         }));
 
-        server.buffer_plugin = Some(
-            try!(plugin::buffer::BufferPlugin::new(&server.unix_domain_socket_name)));
-        server.list_files_plugin = Some(
-            try!(plugin::list_files::ListFilesPlugin::new(&server.unix_domain_socket_name)));
-        server.log_plugin = Some(
-            try!(plugin::log::Plugin::new(&server.unix_domain_socket_name)));
+        server.buffer_plugin = Some(try!(plugin::buffer::Plugin::new(
+                    try!(client::Client::connect_unix(&server.unix_domain_socket_name)))));
+        server.list_files_plugin = Some(try!(plugin::list_files::Plugin::new(
+                    try!(client::Client::connect_unix(&server.unix_domain_socket_name)))));
+        server.log_plugin = Some(try!(plugin::log::Plugin::new(
+                    try!(client::Client::connect_unix(&server.unix_domain_socket_name)))));
         Ok(server)
     }
 

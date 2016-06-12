@@ -300,14 +300,13 @@ impl ops::Deref for BuffersManager {
     }
 }
 
-pub struct BufferPlugin {
+pub struct Plugin {
     _client: client::Client,
     _buffers: Arc<RwLock<BuffersManager>>,
 }
 
-impl BufferPlugin {
-    pub fn new(socket_name: &path::Path) -> Result<Self> {
-        let mut client = try!(client::Client::connect_unix(socket_name));
+impl Plugin {
+    pub fn new(mut client: client::Client) -> Result<Self> {
         let buffers = Arc::new(RwLock::new(BuffersManager::new(try!(client.clone()))));
         let rpc_map = rpc_map! {
             "buffer.new" => New { buffers: buffers.clone() },
@@ -318,7 +317,7 @@ impl BufferPlugin {
         };
         try!(plugin::register_rpc(&mut client, rpc_map));
 
-        Ok(BufferPlugin{
+        Ok(Plugin{
             _client: client,
             _buffers: buffers,
         })

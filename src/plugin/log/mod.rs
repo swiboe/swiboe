@@ -4,7 +4,6 @@
 use ::client;
 use ::error::Result;
 use ::plugin;
-use std::path;
 use time;
 
 
@@ -13,8 +12,7 @@ pub struct Plugin {
 }
 
 impl Plugin {
-    pub fn new(socket_name: &path::Path) -> Result<Self> {
-        let mut client = try!(client::Client::connect_unix(socket_name));
+    pub fn new(mut client: client::Client) -> Result<Self> {
         try!(plugin::register_rpc(&mut client, rpc_map! {
             "log.debug" => debug::Rpc,
             "log.info" => info::Rpc,

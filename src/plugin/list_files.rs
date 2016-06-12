@@ -13,7 +13,6 @@ use std::fs::{self, DirEntry};
 use std::io;
 use std::mem;
 use std::path::Path;
-use std::path;
 use std::sync::{Arc, RwLock};
 use std::thread;
 use time;
@@ -104,18 +103,17 @@ impl client::rpc::server::Rpc for ListFiles {
     }
 }
 
-pub struct ListFilesPlugin {
+pub struct Plugin {
     _client: client::Client,
 }
 
-impl ListFilesPlugin {
-    pub fn new(socket_name: &path::Path) -> Result<Self> {
-        let mut client = try!(client::Client::connect_unix(socket_name));
+impl Plugin {
+    pub fn new(mut client: client::Client) -> Result<Self> {
         let thin_client = Arc::new(RwLock::new(try!(client.clone())));
         try!(plugin::register_rpc(&mut client, rpc_map! {
             "list_files" => ListFiles { client: thin_client.clone() },
         }));
-        Ok(ListFilesPlugin {
+        Ok(Plugin {
             _client: client,
         })
     }
