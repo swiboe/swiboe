@@ -252,7 +252,7 @@ impl<'a> PrepareCall<'a> {
         {
             let mut lua_state = &mut self.lua_function.lua_state;
             unsafe {
-                let new_thin_client = lua_state.new_userdata(mem::size_of::<client::ThinClient>() as libc::size_t) as *mut client::ThinClient;
+                let new_thin_client = lua_state.new_userdata(mem::size_of::<client::ThinClient>() as usize) as *mut client::ThinClient;
                 ptr::write(&mut *new_thin_client, thin_client);
             }
             lua_state.set_metatable_from_registry("swiboe.ThinClient");
