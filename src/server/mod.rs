@@ -95,6 +95,7 @@ impl Server {
     }
 }
 
+mod api_table;
 mod ipc_bridge;
 mod swiboe;
 pub mod plugin_core; // NOCOM being a private mod
