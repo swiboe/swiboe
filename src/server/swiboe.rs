@@ -1,5 +1,10 @@
+// Copyright (c) The Swiboe development team. All rights reserved.
+// Licensed under the Apache License, Version 2.0. See LICENSE.txt
+// in the project root for license information.
+
 use ::error::{Error, Result};
 use ::ipc;
+use ::server::api_table;
 use ::server::ipc_bridge;
 use ::server::plugin_core;
 use ::spinner;
@@ -24,16 +29,10 @@ pub enum Command {
 }
 
 #[derive(Debug)]
-struct RegisteredFunction {
-    client_id: ipc_bridge::ClientId,
-    priority: u16,
-}
-
-#[derive(Debug)]
 struct RunningRpc {
     caller: ipc_bridge::ClientId,
+    callee: ipc_bridge::ClientId,
     rpc_call: rpc::Call,
-    last_index: usize,
 }
 
 pub type SenderTo = mpsc::Sender<Command>;
@@ -60,7 +59,7 @@ impl spinner::Receiver<Command> for Receiver {
 }
 
 pub struct Handler {
-    functions: HashMap<String, Vec<RegisteredFunction>>,
+    api_table: api_table::ApiTable,
     clients: HashSet<ipc_bridge::ClientId>,
     ipc_bridge_commands: mio::Sender<ipc_bridge::Command>,
     running_rpcs: HashMap<String, RunningRpc>,
@@ -70,8 +69,8 @@ pub struct Handler {
 impl Handler {
     pub fn new(ipc_bridge_commands: mio::Sender<ipc_bridge::Command>, commands_sender: SenderTo) -> Self {
         Handler {
-            functions: HashMap::new(),
-            clients:HashSet::new(),
+            api_table: api_table::ApiTable::new(),
+            clients: HashSet::new(),
             running_rpcs: HashMap::new(),
             ipc_bridge_commands: ipc_bridge_commands,
             plugin_core: plugin_core::CorePlugin::new(commands_sender),
@@ -79,34 +78,14 @@ impl Handler {
     }
 
     fn on_rpc_cancel(&mut self, rpc_cancel: rpc::Cancel) -> Result<()> {
-        let running_rpc = match self.running_rpcs.entry(rpc_cancel.context.clone()) {
-            Entry::Occupied(running_rpc) => running_rpc,
-            Entry::Vacant(_) => {
-                // Unknown RPC. We simply drop this message.
-                return Ok(());
-            }
-        };
-
         // NOCOM(#sirver): only the original caller can cancel, really.
-        let running_rpc = running_rpc.remove();
-        match {
-            // NOCOM(#sirver): quite some code duplication with RpcCall
-            self.functions.get(&running_rpc.rpc_call.function as &str).and_then(|vec| {
-                vec.get(running_rpc.last_index)
-            })
-        } {
-            Some(function) => {
-                // NOCOM(#sirver): eventually, when we keep proper track of our rpc calls, this should be
-                // able to move again.
-                try!(self.ipc_bridge_commands.send(ipc_bridge::Command::SendData(
-                        function.client_id,
-                        ipc::Message::RpcCancel(rpc_cancel)
-                        )));
-            },
-            None => {
-                // NOCOM(#sirver): Wait what... nothing to cancel?
-            }
-        };
+        // Simply drop this message for unknown RPC
+        if let Some(running_rpc) = self.running_rpcs.get(&rpc_cancel.context) {
+            try!(self.ipc_bridge_commands.send(ipc_bridge::Command::SendData(
+                running_rpc.callee,
+                ipc::Message::RpcCancel(rpc_cancel)
+                )));
+        }
         Ok(())
     }
 
@@ -147,21 +126,16 @@ impl Handler {
                     // a better way to keep track where we are in the list of handlers.
                     let running_rpc = running_rpc.get_mut();
 
-
-                    running_rpc.last_index += 1;
-                    match {
-                        // NOCOM(#sirver): quite some code duplication with RpcCall
-                        self.functions.get(&running_rpc.rpc_call.function as &str).and_then(|vec| {
-                            vec.get(running_rpc.last_index)
-                        })
-                    } {
-                        Some(function) => {
+                    // NOCOM(#sirver): quite some code duplication with RpcCall
+                    match self.api_table.get_next(&running_rpc.rpc_call.function, &running_rpc.callee) {
+                        Some(info) => {
                             // NOCOM(#sirver): eventually, when we keep proper track of our rpc calls, this should be
                             // able to move again.
                             try!(self.ipc_bridge_commands.send(ipc_bridge::Command::SendData(
-                                    function.client_id,
+                                    info.client_id,
                                     ipc::Message::RpcCall(running_rpc.rpc_call.clone())
                                     )));
+                            running_rpc.callee = info.client_id;
                         },
                         None => {
                             try!(self.ipc_bridge_commands.send(ipc_bridge::Command::SendData(
@@ -189,17 +163,9 @@ impl spinner::Handler<Command> for Handler {
                 // NOCOM(#sirver): make sure the client_id is known.
                 // NOCOM(#sirver): make sure the client has not already registered this
                 // function.
-                let vec = self.functions.entry(name)
-                    .or_insert(Vec::new());
-
-                let index = match vec.binary_search_by(|probe| probe.priority.cmp(&priority)) {
-                    Ok(idx) => idx,
-                    Err(idx) => idx,
-                };
-
-                vec.insert(index, RegisteredFunction {
+                self.api_table.register(name, api_table::ApiInfo {
                     client_id: client_id,
-                    priority: priority,
+                    priority: priority
                 });
                 Ok(spinner::Command::Continue)
             },
@@ -217,18 +183,17 @@ impl spinner::Handler<Command> for Handler {
                                 kind: rpc::ResponseKind::Last(result),
                             }))));
                 } else {
-                    match self.functions.get(&rpc_call.function as &str) {
-                        Some(vec) => {
-                            let function = &vec[0];
+                    match self.api_table.get_first(&rpc_call.function) {
+                        Some(info) => {
                             // NOCOM(#sirver): eventually, when we keep proper track of our rpc calls, this should be
                             // able to move again.
                             self.running_rpcs.insert(rpc_call.context.clone(), RunningRpc {
-                                last_index: 0,
-                                rpc_call: rpc_call.clone(),
                                 caller: client_id,
+                                callee: info.client_id,
+                                rpc_call: rpc_call.clone(),
                             });
                             try!(self.ipc_bridge_commands.send(ipc_bridge::Command::SendData(
-                                    function.client_id,
+                                    info.client_id,
                                     ipc::Message::RpcCall(rpc_call)
                                     )));
                             // NOCOM(#sirver): we ignore timeouts.
@@ -296,19 +261,7 @@ impl spinner::Handler<Command> for Handler {
                     self.running_rpcs.remove(&context);
                 }
 
-                // Kill all functions that have been registered by this.
-                let mut functions_to_remove = Vec::new();
-                for (function_name, registered_functions) in &mut self.functions {
-                    registered_functions.retain(|registered_function| {
-                        registered_function.client_id != client_id
-                    });
-                    if registered_functions.is_empty() {
-                        functions_to_remove.push(function_name.to_string());
-                    }
-                }
-                for function_name in functions_to_remove {
-                    self.functions.remove(&function_name);
-                }
+                self.api_table.deregister_by_client(&client_id);
                 Ok(spinner::Command::Continue)
             }
         }
