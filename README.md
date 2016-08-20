@@ -18,13 +18,14 @@ on Swiboe.
 ## Philosophy
 
 Everything in Swiboe is a plugin. The core component of Swiboe, the server, has
-no concept of what a text editor should do. All it knows about is a protocol that implements a
-layered RPC system. All functionality in Swiboe is implemented through this.
+no concept of what a text editor should do. All it knows about is a protocol
+that implements a layered RPC system. All functionality in Swiboe is implemented
+through this.
 
 So far outlines of the buffer plugin, file completion plugin and several GUI
 plugins have been implemented. They are all shells without much functionality
-and the driving idea right now is to verify, test and iterate on the design before
-committing.
+and the driving idea right now is to verify, test and iterate on the design
+before committing.
 
 ## Getting started
 
@@ -34,7 +35,8 @@ contributors for Windows. Mio is working on windows support, once they have it,
 we will push for Windows too.
 
 You will need a nightly rust to build the current code. I suggest using
-[multirust](https://github.com/brson/multirust) to handle different versions.
+[rustup](https://github.com/rust-lang-nursery/rustup.rs) to handle different
+versions.
 
 After cloning, try building the server and run the tests.
 
