@@ -4,12 +4,12 @@
 
 #![allow(deprecated)]
 
-use ::error::Result;
-use ::ipc;
+use error::Result;
+use ipc;
 
 // NOCOM such class/module should be pulled out
 //       server and client should not depend each other
-use ::server::plugin_core::NewRpcRequest;
+use server::plugin_core::NewRpcRequest;
 
 use serde;
 use std::io;
@@ -21,7 +21,11 @@ use unix_socket::UnixStream;
 
 /// An abstraction that can call remove RPCs.
 pub trait RpcCaller {
-    fn call<T: serde::Serialize>(&mut self, function: &str, args: &T) -> Result<::client::rpc::client::Context>;
+    fn call<T: serde::Serialize>(
+        &mut self,
+        function: &str,
+        args: &T,
+    ) -> Result<::client::rpc::client::Context>;
 }
 
 /// A client maintains a connection to a Swiboe server. It can also serve RPCs that can only be
@@ -40,30 +44,41 @@ pub struct Client {
 
     // Function to bring down the connection used for IO. The 'read_thread' and 'write_thread' will
     // both error then and terminate.
-    shutdown_socket_func: Box<Fn() -> ()>,
+    shutdown_socket_func: Box<dyn Fn() -> ()>,
 }
-
 
 impl Client {
     pub fn connect_unix(socket_name: &path::Path) -> Result<Self> {
-        let writer_stream = try!(UnixStream::connect(&socket_name));
-        let reader_stream = try!(writer_stream.try_clone());
-        let shutdown_stream = try!(writer_stream.try_clone());
-        Ok(Client::common_connect(reader_stream, writer_stream, Box::new(move || {
-            let _ = shutdown_stream.shutdown(net::Shutdown::Read);
-        })))
+        let writer_stream = UnixStream::connect(&socket_name)?;
+        let reader_stream = writer_stream.try_clone()?;
+        let shutdown_stream = writer_stream.try_clone()?;
+        Ok(Client::common_connect(
+            reader_stream,
+            writer_stream,
+            Box::new(move || {
+                let _ = shutdown_stream.shutdown(net::Shutdown::Read);
+            }),
+        ))
     }
 
     pub fn connect_tcp(address: &net::SocketAddr) -> Result<Self> {
-        let writer_stream = try!(TcpStream::connect(address));
-        let reader_stream = try!(writer_stream.try_clone());
-        let shutdown_stream = try!(writer_stream.try_clone());
-        Ok(Client::common_connect(reader_stream, writer_stream, Box::new(move || {
-            let _ = shutdown_stream.shutdown(net::Shutdown::Read);
-        })))
+        let writer_stream = TcpStream::connect(address)?;
+        let reader_stream = writer_stream.try_clone()?;
+        let shutdown_stream = writer_stream.try_clone()?;
+        Ok(Client::common_connect(
+            reader_stream,
+            writer_stream,
+            Box::new(move || {
+                let _ = shutdown_stream.shutdown(net::Shutdown::Read);
+            }),
+        ))
     }
 
-    fn common_connect<Reader: io::Read + Send + 'static, Writer: io::Write + Send + 'static>(reader_stream: Reader, writer_stream: Writer, shutdown_func: Box<Fn() -> ()>) -> Self {
+    fn common_connect<Reader: io::Read + Send + 'static, Writer: io::Write + Send + 'static>(
+        reader_stream: Reader,
+        writer_stream: Writer,
+        shutdown_func: Box<dyn Fn() -> ()>,
+    ) -> Self {
         let (commands_tx, commands_rx) = mpsc::channel();
         let (send_tx, send_rx) = mpsc::channel::<ipc::Message>();
 
@@ -75,7 +90,7 @@ impl Client {
                 if reader_commands_tx.send(command).is_err() {
                     break;
                 }
-            };
+            }
         });
 
         let write_thread = thread::spawn(move || {
@@ -94,18 +109,23 @@ impl Client {
         }
     }
 
-    pub fn new_rpc(&mut self, name: &str, rpc: Box<rpc::server::Rpc>) -> Result<()> {
-        let mut new_rpc = try!(self.call("core.new_rpc", &NewRpcRequest {
-            priority: rpc.priority(),
-            name: name.into(),
-        }));
+    pub fn new_rpc(&mut self, name: &str, rpc: Box<dyn rpc::server::Rpc>) -> Result<()> {
+        let mut new_rpc = self.call(
+            "core.new_rpc",
+            &NewRpcRequest {
+                priority: rpc.priority(),
+                name: name.into(),
+            }
+        )?;
         let result = new_rpc.wait();
 
         if !result.is_ok() {
             return Err(result.unwrap_err().into());
         }
 
-        self.rpc_loop_commands.send(rpc_loop::Command::NewRpc(name.into(), rpc)).expect("NewRpc");
+        self.rpc_loop_commands
+            .send(rpc_loop::Command::NewRpc(name.into(), rpc))
+            .expect("NewRpc");
         Ok(())
     }
 
@@ -117,11 +137,14 @@ impl Client {
 }
 
 impl RpcCaller for Client {
-    fn call<T: serde::Serialize>(&mut self, function: &str, args: &T) -> Result<rpc::client::Context> {
+    fn call<T: serde::Serialize>(
+        &mut self,
+        function: &str,
+        args: &T,
+    ) -> Result<rpc::client::Context> {
         rpc::client::Context::new(self.rpc_loop_commands.clone(), function, args)
     }
 }
-
 
 impl Drop for Client {
     fn drop(&mut self) {
@@ -160,7 +183,11 @@ impl ThinClient {
 }
 
 impl RpcCaller for ThinClient {
-    fn call<T: serde::Serialize>(&mut self, function: &str, args: &T) -> Result<rpc::client::Context> {
+    fn call<T: serde::Serialize>(
+        &mut self,
+        function: &str,
+        args: &T,
+    ) -> Result<rpc::client::Context> {
         let commands = {
             let commands = self.rpc_loop_commands.lock().unwrap();
             commands.clone()
@@ -168,7 +195,6 @@ impl RpcCaller for ThinClient {
         rpc::client::Context::new(commands, function, args)
     }
 }
-
 
 mod rpc_loop;
 

@@ -2,15 +2,16 @@
 // Licensed under the Apache License, Version 2.0. See LICENSE.txt
 // in the project root for license information.
 
-use ::client;
-use ::plugin::buffer::base;
-use ::rpc;
+use client;
+use plugin::buffer::base;
+use rpc;
+use serde::{Deserialize, Serialize};
 use serde_json;
 use std::convert;
 use std::fs;
-use std::path;
 use std::io::Read;
-use std::sync::{RwLock, Arc};
+use std::path;
+use std::sync::{Arc, RwLock};
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub struct Request {
@@ -49,4 +50,3 @@ impl client::rpc::server::Rpc for Rpc {
         context.finish(rpc::Result::success(response)).unwrap();
     }
 }
-

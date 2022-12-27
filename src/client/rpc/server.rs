@@ -2,9 +2,9 @@
 // Licensed under the Apache License, Version 2.0. See LICENSE.txt
 // in the project root for license information.
 
-use ::client::RpcCaller;
-use ::client::rpc_loop;
-use ::error::{Result, Error};
+use client::rpc_loop;
+use client::RpcCaller;
+use error::{Error, Result};
 use serde::Serialize;
 use serde_json;
 use std::sync::mpsc;
@@ -21,7 +21,9 @@ pub enum Command {
 }
 
 pub trait Rpc: Send + Sync {
-    fn priority(&self) -> u16 { u16::max_value() }
+    fn priority(&self) -> u16 {
+        u16::max_value()
+    }
     fn call(&self, context: Context, args: serde_json::Value);
 }
 
@@ -33,13 +35,16 @@ pub struct Context {
 }
 
 impl Context {
-    pub fn new(context: String, commands: mpsc::Receiver<Command>,
-           rpc_loop_commands: rpc_loop::CommandSender) -> Self {
+    pub fn new(
+        context: String,
+        commands: mpsc::Receiver<Command>,
+        rpc_loop_commands: rpc_loop::CommandSender,
+    ) -> Self {
         Context {
             context: context,
             commands: commands,
             rpc_loop_commands: rpc_loop_commands,
-            state: ContextState::Alive
+            state: ContextState::Alive,
         }
     }
 
@@ -55,7 +60,7 @@ impl Context {
                     // down. That is like we are canceled.
                     self.state = ContextState::Cancelled;
                 }
-            }
+            },
         }
     }
 
@@ -69,13 +74,15 @@ impl Context {
     }
 
     pub fn update<T: Serialize>(&mut self, args: &T) -> Result<()> {
-        try!(self.check_liveness());
+        self.check_liveness()?;
 
         let msg = ::ipc::Message::RpcResponse(::rpc::Response {
             context: self.context.clone(),
-            kind: ::rpc::ResponseKind::Partial(serde_json::to_value(args)),
+            kind: ::rpc::ResponseKind::Partial(serde_json::to_value(args).unwrap()),
         });
-        Ok(try!(self.rpc_loop_commands.send(rpc_loop::Command::Send(msg))))
+        Ok(self
+            .rpc_loop_commands
+            .send(rpc_loop::Command::Send(msg))?)
     }
 
     // NOCOM(#sirver): maybe call is_cancelled?
@@ -86,21 +93,31 @@ impl Context {
 
     // NOCOM(#sirver): can consume self?
     pub fn finish(&mut self, result: ::rpc::Result) -> Result<()> {
-        try!(self.check_liveness());
+        self.check_liveness()?;
 
         self.state = ContextState::Finished;
         let msg = ::ipc::Message::RpcResponse(::rpc::Response {
             context: self.context.clone(),
             kind: ::rpc::ResponseKind::Last(result),
         });
-        Ok(try!(self.rpc_loop_commands.send(rpc_loop::Command::Send(msg))))
+        Ok(self
+            .rpc_loop_commands
+            .send(rpc_loop::Command::Send(msg))?)
     }
 }
 
 impl RpcCaller for Context {
-    fn call<T: Serialize>(&mut self, function: &str, args: &T) -> Result<::client::rpc::client::Context> {
-        try!(self.check_liveness());
-        Ok(try!(::client::rpc::client::Context::new(self.rpc_loop_commands.clone(), function, args)))
+    fn call<T: Serialize>(
+        &mut self,
+        function: &str,
+        args: &T,
+    ) -> Result<::client::rpc::client::Context> {
+        self.check_liveness()?;
+        Ok(::client::rpc::client::Context::new(
+            self.rpc_loop_commands.clone(),
+            function,
+            args
+        )?)
     }
 }
 

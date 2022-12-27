@@ -2,18 +2,18 @@
 // Licensed under the Apache License, Version 2.0. See LICENSE.txt
 // in the project root for license information.
 
-use ::ipc;
-use ::{Error, Result};
-use ::server::swiboe;
+use ipc;
+use mio;
 use mio::tcp::{TcpListener, TcpStream};
 use mio::unix::{UnixListener, UnixStream};
-use mio;
+use server::swiboe;
 use std::io;
 use std::net;
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 use threadpool::ThreadPool;
+use {Error, Result};
 
 // Number of threads to use for handling IO.
 const NUM_THREADS: usize = 4;
@@ -29,21 +29,20 @@ pub struct ClientId {
 // sized), we have to return boxes too.
 #[doc(hidden)]
 pub trait MioStream: Send + io::Read + io::Write + mio::Evented {
-    fn try_clone(&self) -> io::Result<Box<MioStream>>;
+    fn try_clone(&self) -> io::Result<Box<dyn MioStream>>;
 }
 
 impl MioStream for UnixStream {
-    fn try_clone(&self) -> io::Result<Box<MioStream>> {
-        UnixStream::try_clone(&self).map(|v| Box::new(v) as Box<MioStream>)
+    fn try_clone(&self) -> io::Result<Box<dyn MioStream>> {
+        UnixStream::try_clone(&self).map(|v| Box::new(v) as Box<dyn MioStream>)
     }
 }
 
 impl MioStream for TcpStream {
-    fn try_clone(&self) -> io::Result<Box<MioStream>> {
-        TcpStream::try_clone(&self).map(|v| Box::new(v) as Box<MioStream>)
+    fn try_clone(&self) -> io::Result<Box<dyn MioStream>> {
+        TcpStream::try_clone(&self).map(|v| Box::new(v) as Box<dyn MioStream>)
     }
 }
-
 
 struct Connection<T: io::Read + io::Write> {
     // NOCOM(#sirver): messy design
@@ -55,7 +54,7 @@ struct Connection<T: io::Read + io::Write> {
 pub struct IpcBridge {
     unix_listener: UnixListener,
     tcp_listeners: Vec<TcpListener>,
-    connections: mio::util::Slab<Connection<Box<MioStream>>>,
+    connections: mio::util::Slab<Connection<Box<dyn MioStream>>>,
     commands: swiboe::SenderTo,
     first_client_token: usize,
     next_serial: u64,
@@ -65,31 +64,40 @@ pub struct IpcBridge {
 const UNIX_LISTENER: mio::Token = mio::Token(0);
 
 impl IpcBridge {
-    pub fn new(event_loop: &mut mio::EventLoop<Self>,
-               socket_name: &Path,
-               tcp_addresses: &Vec<String>,
-               server_commands: swiboe::SenderTo) -> Self {
+    pub fn new(
+        event_loop: &mut mio::EventLoop<Self>,
+        socket_name: &Path,
+        tcp_addresses: &Vec<String>,
+        server_commands: swiboe::SenderTo,
+    ) -> Self {
         let unix_listener = UnixListener::bind(socket_name).unwrap();
-        event_loop.register(
-            &unix_listener,
-            UNIX_LISTENER,
-            mio::EventSet::readable(),
-            mio::PollOpt::level()).unwrap();
+        event_loop
+            .register(
+                &unix_listener,
+                UNIX_LISTENER,
+                mio::EventSet::readable(),
+                mio::PollOpt::level(),
+            )
+            .unwrap();
 
         let mut first_client_token = 1;
-        let tcp_listeners: Vec<_> =
-            tcp_addresses.iter()
+        let tcp_listeners: Vec<_> = tcp_addresses
+            .iter()
             .map(|addr| {
                 let addr = net::SocketAddr::from_str(addr).unwrap();
                 let server = TcpListener::bind(&addr).unwrap();
-                event_loop.register(
-                    &server,
-                    mio::Token(first_client_token),
-                    mio::EventSet::readable(),
-                    mio::PollOpt::level()).unwrap();
+                event_loop
+                    .register(
+                        &server,
+                        mio::Token(first_client_token),
+                        mio::EventSet::readable(),
+                        mio::PollOpt::level(),
+                    )
+                    .unwrap();
                 first_client_token += 1;
                 server
-            }).collect();
+            })
+            .collect();
 
         IpcBridge {
             unix_listener: unix_listener,
@@ -102,7 +110,11 @@ impl IpcBridge {
         }
     }
 
-    fn new_client<T: MioStream + 'static>(&mut self, event_loop: &mut mio::EventLoop<Self>, stream: Box<T>) {
+    fn new_client<T: MioStream + 'static>(
+        &mut self,
+        event_loop: &mut mio::EventLoop<Self>,
+        stream: Box<T>,
+    ) {
         // NOCOM(#sirver): can this be done in Some(token)?
         let serial = self.next_serial;
         let commands = self.commands.clone();
@@ -117,27 +129,35 @@ impl IpcBridge {
                 reader: Some(ipc::Reader::new(stream)),
                 client_id: client_id,
             };
-            commands.send(swiboe::Command::ClientConnected(client_id)).expect("ClientConnected");
+            commands
+                .send(swiboe::Command::ClientConnected(client_id))
+                .expect("ClientConnected");
             connection
         }) {
             Some(token) => {
                 // If we successfully insert, then register our connection.
                 let conn = &mut self.connections[token];
-                event_loop.register(
-                    &*conn.reader.as_ref().unwrap().socket,
-                    conn.client_id.token,
-                    mio::EventSet::readable(),
-                    mio::PollOpt::level() | mio::PollOpt::oneshot()).unwrap();
+                event_loop
+                    .register(
+                        &*conn.reader.as_ref().unwrap().socket,
+                        conn.client_id.token,
+                        mio::EventSet::readable(),
+                        mio::PollOpt::level() | mio::PollOpt::oneshot(),
+                    )
+                    .unwrap();
 
                 // We have nothing to write right now, but we still need to register the socket
                 // once for writing. Otherwise reregister will fail later on.
                 let writer = conn.writer.lock().unwrap();
-                event_loop.register(
-                    &*writer.socket,
-                    conn.client_id.token,
-                    mio::EventSet::writable(),
-                    mio::PollOpt::level() | mio::PollOpt::oneshot()).unwrap();
-            },
+                event_loop
+                    .register(
+                        &*writer.socket,
+                        conn.client_id.token,
+                        mio::EventSet::writable(),
+                        mio::PollOpt::level() | mio::PollOpt::oneshot(),
+                    )
+                    .unwrap();
+            }
             None => {
                 // If we fail to insert, `conn` will go out of scope and be dropped.
                 panic!("Failed to insert connection into slab");
@@ -145,14 +165,19 @@ impl IpcBridge {
         };
     }
 
-    fn reregister_for_writing(&mut self, token: mio::Token, event_loop: &mut mio::EventLoop<Self>) -> Result<()> {
+    fn reregister_for_writing(
+        &mut self,
+        token: mio::Token,
+        event_loop: &mut mio::EventLoop<Self>,
+    ) -> Result<()> {
         if let Some(conn) = self.connections.get_mut(token) {
             let writer = conn.writer.lock().expect("Mutex poisoned");
-            try!(event_loop.reregister(
-                    &*writer.socket,
-                    token,
-                    mio::EventSet::writable(),
-                    mio::PollOpt::level() | mio::PollOpt::oneshot()));
+            event_loop.reregister(
+                &*writer.socket,
+                token,
+                mio::EventSet::writable(),
+                mio::PollOpt::level() | mio::PollOpt::oneshot()
+            )?;
         }
         Ok(())
     }
@@ -161,7 +186,7 @@ impl IpcBridge {
 pub enum Command {
     Quit,
     SendData(ClientId, ipc::Message),
-    ReRegisterForReading(mio::Token, ipc::Reader<Box<MioStream>>),
+    ReRegisterForReading(mio::Token, ipc::Reader<Box<dyn MioStream>>),
     ReRegisterForWriting(mio::Token),
 }
 
@@ -173,7 +198,9 @@ impl mio::Handler for IpcBridge {
         match command {
             Command::Quit => event_loop.shutdown(),
             Command::SendData(receiver, message) => {
-                let result = self.connections.get_mut(receiver.token)
+                let result = self
+                    .connections
+                    .get_mut(receiver.token)
                     .ok_or(Error::Disconnected)
                     .and_then(|conn| {
                         if conn.client_id != receiver {
@@ -186,44 +213,58 @@ impl mio::Handler for IpcBridge {
                         }
                     });
                 match result {
-                    Ok(_) => self.reregister_for_writing(receiver.token, event_loop).expect("reregister for writing"),
+                    Ok(_) => self
+                        .reregister_for_writing(receiver.token, event_loop)
+                        .expect("reregister for writing"),
                     Err(err) => {
-                        self.commands.send(swiboe::Command::SendDataFailed(receiver, message,
-                                                                           err)).expect("SendFailed");
-                    },
+                        self.commands
+                            .send(swiboe::Command::SendDataFailed(receiver, message, err))
+                            .expect("SendFailed");
+                    }
                 };
             }
             Command::ReRegisterForReading(token, reader) => {
                 if let Some(conn) = self.connections.get_mut(token) {
                     conn.reader = Some(reader);
-                    event_loop.reregister(
-                        &*conn.reader.as_ref().unwrap().socket,
-                        token,
-                        mio::EventSet::readable(),
-                        mio::PollOpt::level() | mio::PollOpt::oneshot()).unwrap();
+                    event_loop
+                        .reregister(
+                            &*conn.reader.as_ref().unwrap().socket,
+                            token,
+                            mio::EventSet::readable(),
+                            mio::PollOpt::level() | mio::PollOpt::oneshot(),
+                        )
+                        .unwrap();
                 }
-            },
+            }
             Command::ReRegisterForWriting(token) => {
-                self.reregister_for_writing(token, event_loop).expect("reregister_for_writing");
-            },
+                self.reregister_for_writing(token, event_loop)
+                    .expect("reregister_for_writing");
+            }
         }
     }
 
-    fn ready(&mut self, event_loop: &mut mio::EventLoop<Self>, token: mio::Token, events: mio::EventSet) {
+    fn ready(
+        &mut self,
+        event_loop: &mut mio::EventLoop<Self>,
+        token: mio::Token,
+        events: mio::EventSet,
+    ) {
         match token {
             UNIX_LISTENER => {
                 // Unix domain socket connection.
                 if let Some(stream) = self.unix_listener.accept().expect("UNIX_LISTENER::accept") {
                     self.new_client(event_loop, Box::new(stream));
                 }
-
-            },
+            }
             mio::Token(some_token) if some_token < self.first_client_token => {
                 // TCP connection
-                if let Some((stream, _)) = self.tcp_listeners[some_token - 1].accept().expect("TCP listener::accept") {
+                if let Some((stream, _)) = self.tcp_listeners[some_token - 1]
+                    .accept()
+                    .expect("TCP listener::accept")
+                {
                     self.new_client(event_loop, Box::new(stream));
                 }
-            },
+            }
             client_token => {
                 // println!("#sirver client_token: {:?},events: {:?}", client_token, events);
                 if events.is_readable() {
@@ -246,15 +287,24 @@ impl mio::Handler for IpcBridge {
                                             // thread_pool does not wait for its thread to
                                             // terminate on deletion.
                                             ipc::Message::RpcCall(rpc_call) => {
-                                                commands.send(swiboe::Command::RpcCall(
-                                                        client_id, rpc_call)).expect("RpcCall");
-                                            },
+                                                commands
+                                                    .send(swiboe::Command::RpcCall(
+                                                        client_id, rpc_call,
+                                                    ))
+                                                    .expect("RpcCall");
+                                            }
                                             ipc::Message::RpcResponse(rpc_response) => {
-                                                commands.send(swiboe::Command::RpcResponse(rpc_response)).expect("RpcResponse");
-                                            },
+                                                commands
+                                                    .send(swiboe::Command::RpcResponse(
+                                                        rpc_response,
+                                                    ))
+                                                    .expect("RpcResponse");
+                                            }
                                             ipc::Message::RpcCancel(rpc_cancel) => {
-                                                commands.send(swiboe::Command::RpcCancel(rpc_cancel)).expect("RpcCancel");
-                                            },
+                                                commands
+                                                    .send(swiboe::Command::RpcCancel(rpc_cancel))
+                                                    .expect("RpcCancel");
+                                            }
                                         }
                                     }
                                 }
@@ -262,7 +312,8 @@ impl mio::Handler for IpcBridge {
                             // The ipc_bridge might have been shut down in the meantime, so ignore send
                             // errors.
                             // println!("#sirver read token: {:#?}", token);
-                            let _ = event_loop_sender.send(Command::ReRegisterForReading(token, reader));
+                            let _ = event_loop_sender
+                                .send(Command::ReRegisterForReading(token, reader));
                         });
                     }
                 }
@@ -281,7 +332,8 @@ impl mio::Handler for IpcBridge {
                                     // println!("#sirver write token: {:?}", token);
                                     // The ipc_bridge might have been shut down in the meantime, so ignore send
                                     // errors.
-                                    let _ = event_loop_sender.send(Command::ReRegisterForWriting(token));
+                                    let _ = event_loop_sender
+                                        .send(Command::ReRegisterForWriting(token));
                                 }
                             }
                         });
@@ -290,8 +342,9 @@ impl mio::Handler for IpcBridge {
 
                 if events.is_hup() {
                     if let Some(connection) = self.connections.remove(client_token) {
-                        self.commands.send(
-                            swiboe::Command::ClientDisconnected(connection.client_id)).expect("ClientDisconnected");
+                        self.commands
+                            .send(swiboe::Command::ClientDisconnected(connection.client_id))
+                            .expect("ClientDisconnected");
                     }
                     return;
                 }

@@ -4,12 +4,13 @@
 
 // NOCOM(#sirver): add a test for this.
 
-use ::client;
-use ::serde_json;
-use ::plugin::buffer::base;
-use ::rpc;
+use client;
+use plugin::buffer::base;
+use rpc;
+use serde::{Deserialize, Serialize};
+use serde_json;
 use std::convert;
-use std::sync::{RwLock, Arc};
+use std::sync::{Arc, RwLock};
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub struct Request;

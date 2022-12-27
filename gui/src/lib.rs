@@ -2,10 +2,6 @@
 // Licensed under the Apache License, Version 2.0. See LICENSE.txt
 // in the project root for license information.
 
-#![feature(const_fn)]
-#![feature(custom_derive, plugin)]
-#![plugin(serde_macros)]
-
 #[macro_use] extern crate swiboe;
 extern crate libc;
 extern crate lua;

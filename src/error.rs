@@ -3,7 +3,6 @@
 // in the project root for license information.
 
 /// Errors for use with Swiboe.
-
 use mio;
 use serde_json;
 use std::error;
@@ -25,40 +24,39 @@ pub enum Error {
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        error::Error::description(&*self).fmt(f)
+        let error = match *self {
+            Error::Disconnected => "Channel or Socket is disconnected.",
+            Error::Io(_) => "IO error",
+            Error::JsonParsing(_) => "Error in parsing JSON",
+            Error::RpcDone => "RPC is already finished or cancelled.",
+            Error::InvalidUtf8 => "Invalid utf-8 string encountered.",
+        };
+        write!(f, "{}", error)
     }
 }
 
 impl error::Error for Error {
-  fn description(&self) -> &str {
-      match *self {
-          Error::Disconnected => "Channel or Socket is disconnected.",
-          Error::Io(ref e) => e.description(),
-          Error::JsonParsing(ref e) => e.description(),
-          Error::RpcDone => "RPC is already finished or cancelled.",
-          Error::InvalidUtf8 => "Invalid utf-8 string encountered.",
-      }
-  }
-
-  fn cause(&self) -> Option<&error::Error> {
-      match *self {
-          Error::Io(ref e) => Some(e),
-          Error::JsonParsing(ref e) => Some(e),
-          _ => None,
-      }
-  }
+    fn description(&self) -> &str {
+        match *self {
+            Error::Disconnected => "Channel or Socket is disconnected.",
+            Error::Io(ref e) => e.description(),
+            Error::JsonParsing(ref e) => e.description(),
+            Error::RpcDone => "RPC is already finished or cancelled.",
+            Error::InvalidUtf8 => "Invalid utf-8 string encountered.",
+        }
+    }
 }
 
 impl From<io::Error> for Error {
-     fn from(error: io::Error) -> Self {
-         Error::Io(error)
-     }
+    fn from(error: io::Error) -> Self {
+        Error::Io(error)
+    }
 }
 
 impl From<::std::str::Utf8Error> for Error {
-     fn from(_: ::std::str::Utf8Error) -> Self {
-         Error::InvalidUtf8
-     }
+    fn from(_: ::std::str::Utf8Error) -> Self {
+        Error::InvalidUtf8
+    }
 }
 
 impl<T> From<mpsc::SendError<T>> for Error {
@@ -68,15 +66,15 @@ impl<T> From<mpsc::SendError<T>> for Error {
 }
 
 impl From<mpsc::RecvError> for Error {
-     fn from(_: mpsc::RecvError) -> Self {
-         Error::Disconnected
-     }
+    fn from(_: mpsc::RecvError) -> Self {
+        Error::Disconnected
+    }
 }
 
 impl From<serde_json::error::Error> for Error {
-     fn from(error: serde_json::error::Error) -> Self {
-         Error::JsonParsing(error)
-     }
+    fn from(error: serde_json::error::Error) -> Self {
+        Error::JsonParsing(error)
+    }
 }
 
 impl<T> From<mio::NotifyError<T>> for Error {

@@ -2,12 +2,13 @@
 // Licensed under the Apache License, Version 2.0. See LICENSE.txt
 // in the project root for license information.
 
-use ::client;
-use ::plugin::buffer::base;
-use ::rpc;
+use client;
+use plugin::buffer::base;
+use rpc;
+use serde::{Deserialize, Serialize};
 use serde_json;
 use std::convert;
-use std::sync::{RwLock, Arc};
+use std::sync::{Arc, RwLock};
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub struct Request {
@@ -24,10 +25,15 @@ pub struct Rpc {
 impl client::rpc::server::Rpc for Rpc {
     fn call(&self, mut context: client::rpc::server::Context, args: serde_json::Value) {
         let request: Request = try_rpc!(context, serde_json::from_value(args));
-        let mut buffers = self.buffers.write().expect("Delete::call: locking buffers.");
+        let mut buffers = self
+            .buffers
+            .write()
+            .expect("Delete::call: locking buffers.");
         try_rpc!(context, buffers.delete_buffer(request.buffer_index));
 
         let response = Response;
-        context.finish(rpc::Result::success(response)).expect("Delete::call: finish");
+        context
+            .finish(rpc::Result::success(response))
+            .expect("Delete::call: finish");
     }
 }

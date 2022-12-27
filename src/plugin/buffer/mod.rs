@@ -2,10 +2,10 @@
 // Licensed under the Apache License, Version 2.0. See LICENSE.txt
 // in the project root for license information.
 
-use ::client;
-use ::error::Result;
-use ::plugin;
-use std::sync::{RwLock, Arc};
+use client;
+use error::Result;
+use plugin;
+use std::sync::{Arc, RwLock};
 
 pub struct Plugin {
     _client: client::Client,
@@ -14,7 +14,7 @@ pub struct Plugin {
 
 impl Plugin {
     pub fn new(mut client: client::Client) -> Result<Self> {
-        let buffers = Arc::new(RwLock::new(base::BuffersManager::new(try!(client.clone()))));
+        let buffers = Arc::new(RwLock::new(base::BuffersManager::new(client.clone()?)));
         let rpc_map = rpc_map! {
             "buffer.new" => new::Rpc { buffers: buffers.clone() },
             "buffer.delete" => delete::Rpc { buffers: buffers.clone() },
@@ -22,8 +22,8 @@ impl Plugin {
             "buffer.open" => open::Rpc { buffers: buffers.clone() },
             "buffer.list" => list::Rpc { buffers: buffers.clone() },
         };
-        try!(plugin::register_rpc(&mut client, rpc_map));
-        Ok(Plugin{
+        plugin::register_rpc(&mut client, rpc_map)?;
+        Ok(Plugin {
             _client: client,
             _buffers: buffers,
         })
@@ -31,8 +31,8 @@ impl Plugin {
 }
 
 mod base;
-pub mod new;
 pub mod delete;
 pub mod get_content;
-pub mod open;
 pub mod list;
+pub mod new;
+pub mod open;

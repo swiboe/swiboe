@@ -1,9 +1,10 @@
 // Copyright (c) The Swiboe development team. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See LICENSE.txt
 // in the project root for license information.
-use ::client::RpcCaller;
-use ::client;
-use ::rpc;
+use client;
+use client::RpcCaller;
+use rpc;
+use serde::{Deserialize, Serialize};
 use serde_json;
 use std::collections::HashMap;
 use std::io;
@@ -17,46 +18,46 @@ pub enum BufferError {
 }
 
 impl From<BufferError> for rpc::Error {
-     fn from(error: BufferError) -> Self {
-         use rpc::ErrorKind::*;
+    fn from(error: BufferError) -> Self {
+        use rpc::ErrorKind::*;
 
-         let (kind, details) = match error {
-             BufferError::UnknownBuffer => (InvalidArgs, format!("unknown_buffer")),
-         };
+        let (kind, details) = match error {
+            BufferError::UnknownBuffer => (InvalidArgs, format!("unknown_buffer")),
+        };
 
-         rpc::Error {
-             kind: kind,
-             details: Some(serde_json::to_value(&details)),
-         }
-     }
+        rpc::Error {
+            kind: kind,
+            details: Some(serde_json::to_value(&details).unwrap()),
+        }
+    }
 }
 
 impl From<io::Error> for rpc::Error {
-     fn from(error: io::Error) -> Self {
-         let details = match error.kind() {
-             io::ErrorKind::NotFound => "not_found",
-             io::ErrorKind::PermissionDenied => "not_found",
-             io::ErrorKind::ConnectionRefused => "connection_refused",
-             io::ErrorKind::ConnectionReset => "connection_reset",
-             io::ErrorKind::ConnectionAborted => "connection_aborted",
-             io::ErrorKind::NotConnected => "not_connected",
-             io::ErrorKind::AddrInUse => "addr_in_use",
-             io::ErrorKind::AddrNotAvailable => "addr_not_available",
-             io::ErrorKind::BrokenPipe => "broken_pipe",
-             io::ErrorKind::AlreadyExists => "already_exists",
-             io::ErrorKind::WouldBlock => "would_block",
-             io::ErrorKind::InvalidInput => "invalid_input",
-             io::ErrorKind::InvalidData => "invalid_data",
-             io::ErrorKind::TimedOut => "timed_out",
-             io::ErrorKind::WriteZero => "write_zero",
-             io::ErrorKind::Interrupted => "interrupted",
-             _ => "unknown",
-         };
-         rpc::Error {
-             kind: rpc::ErrorKind::Io,
-             details: Some(serde_json::to_value(&details)),
-         }
-     }
+    fn from(error: io::Error) -> Self {
+        let details = match error.kind() {
+            io::ErrorKind::NotFound => "not_found",
+            io::ErrorKind::PermissionDenied => "not_found",
+            io::ErrorKind::ConnectionRefused => "connection_refused",
+            io::ErrorKind::ConnectionReset => "connection_reset",
+            io::ErrorKind::ConnectionAborted => "connection_aborted",
+            io::ErrorKind::NotConnected => "not_connected",
+            io::ErrorKind::AddrInUse => "addr_in_use",
+            io::ErrorKind::AddrNotAvailable => "addr_not_available",
+            io::ErrorKind::BrokenPipe => "broken_pipe",
+            io::ErrorKind::AlreadyExists => "already_exists",
+            io::ErrorKind::WouldBlock => "would_block",
+            io::ErrorKind::InvalidInput => "invalid_input",
+            io::ErrorKind::InvalidData => "invalid_data",
+            io::ErrorKind::TimedOut => "timed_out",
+            io::ErrorKind::WriteZero => "write_zero",
+            io::ErrorKind::Interrupted => "interrupted",
+            _ => "unknown",
+        };
+        rpc::Error {
+            kind: rpc::ErrorKind::Io,
+            details: Some(serde_json::to_value(&details).unwrap()),
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
@@ -86,9 +87,7 @@ impl Buffer {
     }
 
     pub fn from_string(content: String) -> Self {
-        Buffer {
-            content: content,
-        }
+        Buffer { content: content }
     }
 }
 
@@ -103,7 +102,7 @@ impl BuffersManager {
         BuffersManager {
             next_buffer_index: 0,
             buffers: HashMap::new(),
-            client: client
+            client: client,
         }
     }
 
@@ -115,25 +114,34 @@ impl BuffersManager {
 
         // NOCOM(#sirver): new is not good. should be create.
         // Fire the callback, but we do not wait for it's conclusion.
-        let _ = self.client.call("on.buffer.new", &BufferCreated {
-            buffer_index: current_buffer_index,
-        });
+        let _ = self.client.call(
+            "on.buffer.new",
+            &BufferCreated {
+                buffer_index: current_buffer_index,
+            },
+        );
         current_buffer_index
     }
 
     pub fn delete_buffer(&mut self, buffer_index: usize) -> result::Result<(), BufferError> {
-        try!(self.buffers.remove(&buffer_index).ok_or(BufferError::UnknownBuffer));
+        self
+            .buffers
+            .remove(&buffer_index)
+            .ok_or(BufferError::UnknownBuffer)?;
 
         // Fire the callback, but we do not wait for it's conclusion.
-        let _ = self.client.call("on.buffer.deleted", &BufferDeleted {
-            buffer_index: buffer_index,
-        });
+        let _ = self.client.call(
+            "on.buffer.deleted",
+            &BufferDeleted {
+                buffer_index: buffer_index,
+            },
+        );
 
         Ok(())
     }
 
     pub fn get(&self, index: usize) -> result::Result<&Buffer, BufferError> {
-        let buffer = try!(self.buffers.get(&index).ok_or(BufferError::UnknownBuffer));
+        let buffer = self.buffers.get(&index).ok_or(BufferError::UnknownBuffer)?;
         Ok(buffer)
     }
 }
@@ -145,4 +153,3 @@ impl ops::Deref for BuffersManager {
         &self.buffers
     }
 }
-

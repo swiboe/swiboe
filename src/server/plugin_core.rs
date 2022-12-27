@@ -2,10 +2,11 @@
 // Licensed under the Apache License, Version 2.0. See LICENSE.txt
 // in the project root for license information.
 
-use ::rpc;
-use ::server::ipc_bridge;
-use ::server::swiboe;
+use rpc;
+use serde::{Deserialize, Serialize};
 use serde_json;
+use server::ipc_bridge;
+use server::swiboe;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct NewRpcRequest {
@@ -19,9 +20,7 @@ pub struct CorePlugin {
 
 impl CorePlugin {
     pub fn new(commands: swiboe::SenderTo) -> Self {
-        CorePlugin {
-            commands: commands,
-        }
+        CorePlugin { commands: commands }
     }
 
     pub fn call(&self, caller: ipc_bridge::ClientId, rpc_call: &rpc::Call) -> rpc::Result {
@@ -29,7 +28,7 @@ impl CorePlugin {
             "core.exit" => {
                 self.commands.send(swiboe::Command::Quit).unwrap();
                 rpc::Result::success(())
-            },
+            }
             // NOCOM(#sirver): These args can be pulled out into Serializable structs.
             "core.new_rpc" => {
                 let args: NewRpcRequest = match serde_json::from_value(rpc_call.args.clone()) {
@@ -38,12 +37,16 @@ impl CorePlugin {
                     Err(_) => panic!("Invalid arguments"),
                 };
 
-                self.commands.send(
-                    swiboe::Command::NewRpc(caller, args.name, args.priority)).unwrap();
+                self.commands
+                    .send(swiboe::Command::NewRpc(caller, args.name, args.priority))
+                    .unwrap();
                 rpc::Result::success(())
-            },
+            }
             // NOCOM(#sirver): this should not panic, but return an error.
-            _ => panic!("{} was called, but is not a core function.", rpc_call.function),
+            _ => panic!(
+                "{} was called, but is not a core function.",
+                rpc_call.function
+            ),
         }
     }
 }

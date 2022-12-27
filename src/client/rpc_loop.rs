@@ -2,21 +2,20 @@
 // Licensed under the Apache License, Version 2.0. See LICENSE.txt
 // in the project root for license information.
 
-use ::client::rpc;
-use ::error::{Error, Result};
-use ::ipc;
-use ::spinner;
+use client::rpc;
+use error::{Error, Result};
+use ipc;
+use spinner;
 use std::collections::HashMap;
-use std::sync::Arc;
 use std::sync::mpsc;
+use std::sync::Arc;
 use std::thread;
 use threadpool::ThreadPool;
-
 
 pub type CommandSender = mpsc::Sender<Command>;
 pub enum Command {
     Quit,
-    NewRpc(String, Box<rpc::server::Rpc>),
+    NewRpc(String, Box<dyn rpc::server::Rpc>),
     Received(::ipc::Message),
     OutgoingCall(String, mpsc::Sender<::rpc::Response>, ipc::Message),
     CancelOutgoingRpc(String),
@@ -29,9 +28,7 @@ struct RunningRpc {
 
 impl RunningRpc {
     fn new(commands: mpsc::Sender<rpc::server::Command>) -> Self {
-        RunningRpc {
-            commands: commands,
-        }
+        RunningRpc { commands: commands }
     }
 }
 
@@ -41,14 +38,12 @@ struct Receiver {
 
 impl Receiver {
     fn new(commands: mpsc::Receiver<Command>) -> Self {
-        Receiver {
-            commands: commands,
-        }
+        Receiver { commands: commands }
     }
 }
 
 impl spinner::Receiver<Command> for Receiver {
-    fn recv(&mut self,) -> Result<Command> {
+    fn recv(&mut self) -> Result<Command> {
         match self.commands.recv() {
             Ok(value) => Ok(value),
             Err(_) => Err(Error::Disconnected),
@@ -57,7 +52,7 @@ impl spinner::Receiver<Command> for Receiver {
 }
 
 struct Handler {
-    remote_procedures: HashMap<String, Arc<Box<rpc::server::Rpc>>>,
+    remote_procedures: HashMap<String, Arc<Box<dyn rpc::server::Rpc>>>,
     send_queue: mpsc::Sender<ipc::Message>,
     running_rpc_calls: HashMap<String, RunningRpc>,
     command_sender: CommandSender,
@@ -67,8 +62,7 @@ struct Handler {
 }
 
 impl Handler {
-    pub fn new(command_sender: CommandSender,
-               send_queue: mpsc::Sender<ipc::Message>) -> Self {
+    pub fn new(command_sender: CommandSender, send_queue: mpsc::Sender<ipc::Message>) -> Self {
         Handler {
             remote_procedures: HashMap::new(),
             running_function_calls: HashMap::new(),
@@ -88,31 +82,33 @@ impl spinner::Handler<Command> for Handler {
             Command::NewRpc(name, rpc) => {
                 self.remote_procedures.insert(name, Arc::new(rpc));
                 Ok(spinner::Command::Continue)
-            },
+            }
             Command::Received(message) => {
                 match message {
                     ::ipc::Message::RpcCall(rpc_call) => {
-
                         if let Some(function) = self.remote_procedures.get(&rpc_call.function) {
                             let (tx, rx) = mpsc::channel();
-                            self.running_rpc_calls.insert(rpc_call.context.clone(), RunningRpc::new(tx));
+                            self.running_rpc_calls
+                                .insert(rpc_call.context.clone(), RunningRpc::new(tx));
                             let command_sender = self.command_sender.clone();
                             let function = function.clone();
                             self.thread_pool.execute(move || {
-                                function.call(rpc::server::Context::new(
-                                        rpc_call.context, rx, command_sender), rpc_call.args);
+                                function.call(
+                                    rpc::server::Context::new(rpc_call.context, rx, command_sender),
+                                    rpc_call.args,
+                                );
                             })
                         }
                         // NOCOM(#sirver): return an error - though if that has happened the
                         // server messed up too.
-                    },
+                    }
                     ::ipc::Message::RpcCancel(rpc_cancel) => {
                         // NOCOM(#sirver): on drop, the rpcservercontext must delete the entry.
                         if let Some(function) = self.running_rpc_calls.remove(&rpc_cancel.context) {
                             // The function might be dead already, so we ignore errors.
                             let _ = function.commands.send(rpc::server::Command::Cancel);
                         }
-                    },
+                    }
                     ipc::Message::RpcResponse(rpc_data) => {
                         // NOCOM(#sirver): if this is a streaming RPC, we should cancel the
                         // RPC.
@@ -125,35 +121,34 @@ impl spinner::Handler<Command> for Handler {
                                 // might have dropped the RPC already. Just ignore it.
                                 let _ = channel.send(rpc_data);
                             });
-                    },
+                    }
                 }
                 Ok(spinner::Command::Continue)
-            },
+            }
             Command::Send(message) => {
-                try!(self.send_queue.send(message));
+                self.send_queue.send(message)?;
                 Ok(spinner::Command::Continue)
-            },
+            }
             Command::OutgoingCall(context, tx, message) => {
                 self.running_function_calls.insert(context, tx);
                 // NOCOM(#sirver): can the message be constructed here?
-                try!(self.send_queue.send(message));
+                self.send_queue.send(message)?;
                 Ok(spinner::Command::Continue)
             }
             Command::CancelOutgoingRpc(context) => {
-                let msg = ::ipc::Message::RpcCancel(::rpc::Cancel {
-                    context: context,
-                });
-                try!(self.send_queue.send(msg));
+                let msg = ::ipc::Message::RpcCancel(::rpc::Cancel { context: context });
+                self.send_queue.send(msg)?;
                 Ok(spinner::Command::Continue)
             }
         }
     }
 }
 
-pub fn spawn(commands: mpsc::Receiver<Command>,
-                 command_sender: CommandSender,
-                 send_queue: mpsc::Sender<ipc::Message>) -> thread::JoinHandle<()>
-{
+pub fn spawn(
+    commands: mpsc::Receiver<Command>,
+    command_sender: CommandSender,
+    send_queue: mpsc::Sender<ipc::Message>,
+) -> thread::JoinHandle<()> {
     let recver = Receiver::new(commands);
     let handler = Handler::new(command_sender, send_queue);
     spinner::spawn(recver, handler)
