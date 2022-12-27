@@ -5,6 +5,7 @@
 use serde;
 use serde_json;
 use std::error::Error as StdError;
+use serde::{Serialize, Deserialize};
 
 // NOCOM(#sirver): add documentation (using this lint that forbids not having documentation).
 //
@@ -40,12 +41,12 @@ pub struct Error {
 }
 
 impl From<serde_json::error::Error> for Error {
-     fn from(error: serde_json::error::Error) -> Self {
-         Error {
-             kind: ErrorKind::InvalidArgs,
-             details: Some(serde_json::to_value(&error.description())),
-         }
-     }
+    fn from(error: serde_json::error::Error) -> Self {
+        Error {
+            kind: ErrorKind::InvalidArgs,
+            details: Some(serde_json::to_value(&error.description()).unwrap()),
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
@@ -58,7 +59,7 @@ pub enum Result {
 
 impl Result {
     pub fn success<T: serde::Serialize>(value: T) -> Result {
-        Result::Ok(serde_json::to_value(&value))
+        Result::Ok(serde_json::to_value(&value).unwrap())
     }
 
     pub fn unwrap_err(self) -> Error {

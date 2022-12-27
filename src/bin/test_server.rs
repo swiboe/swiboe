@@ -10,7 +10,6 @@ extern crate swiboe;
 
 use swiboe::testing::TestHarness;
 
-
 fn main() {
     let matches = clap::App::new("server")
         .about("Swiboe stand alone server for testing.")

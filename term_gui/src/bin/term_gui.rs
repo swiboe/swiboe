@@ -10,9 +10,11 @@ extern crate subsequence_match;
 extern crate swiboe;
 extern crate swiboe_gui as gui;
 extern crate time;
+extern crate serde;
 extern crate uuid;
 
 use gui::buffer_views;
+use serde::{Serialize, Deserialize};
 use gui::keymap_handler;
 use rustbox::{Color, RustBox};
 use std::cmp;

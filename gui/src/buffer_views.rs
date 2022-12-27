@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0. See LICENSE.txt
 // in the project root for license information.
 
+use serde::{Serialize, Deserialize};
 use ::command::GuiCommand;
 use serde_json;
 use std::clone::Clone;
@@ -34,7 +35,7 @@ impl From<BufferViewError> for rpc::Error {
 
          rpc::Error {
              kind: kind,
-             details: Some(serde_json::to_value(&details)),
+             details: Some(serde_json::to_value(&details).unwrap()),
          }
      }
 }

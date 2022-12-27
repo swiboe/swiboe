@@ -2,13 +2,9 @@
 // Licensed under the Apache License, Version 2.0. See LICENSE.txt
 // in the project root for license information.
 
-#![feature(iter_arith)]
-#![feature(test)]
-
 /// The beginnings of a fuzzy matcher library. The algorithm is heavily inspired
 /// by YouCompleteMe by Val Markovic.
 
-extern crate test;
 extern crate bit_set;
 
 use bit_set::BitSet;

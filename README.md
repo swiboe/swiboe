@@ -34,7 +34,7 @@ contributors for Windows. Mio is working on windows support, once they have it,
 we will push for Windows too.
 
 You will need a nightly rust to build the current code. I suggest using
-[multirust](https://github.com/brson/multirust) to handle different versions.
+[rustup](https://rustup.rs) to handle different versions.
 
 After cloning, try building the server and run the tests.
 

@@ -1,10 +1,11 @@
 // Copyright (c) The Swiboe development team. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See LICENSE.txt
 // in the project root for license information.
-use ::client;
-use ::rpc;
-use std::convert;
+use client;
+use rpc;
+use serde::{Deserialize, Serialize};
 use serde_json;
+use std::convert;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub struct Request {

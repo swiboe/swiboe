@@ -2,10 +2,10 @@
 // Licensed under the Apache License, Version 2.0. See LICENSE.txt
 // in the project root for license information.
 
-use ::client;
-use ::error::Result;
-use ::plugin;
+use client;
+use error::Result;
 use mio;
+use plugin;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::channel;
@@ -35,7 +35,10 @@ impl Server {
 
         let mut server = Server {
             unix_domain_socket_name: unix_domain_socket_name.to_path_buf(),
-            tcp_addresses: tcp_addresses.iter().map(|slice| slice.to_string()).collect(),
+            tcp_addresses: tcp_addresses
+                .iter()
+                .map(|slice| slice.to_string())
+                .collect(),
             commands: tx.clone(),
             ipc_bridge_commands: event_loop.channel(),
             buffer_plugin: None,
@@ -48,19 +51,27 @@ impl Server {
         server.swiboe_thread = Some(swiboe::spawn(event_loop.channel(), tx.clone(), rx));
 
         let mut ipc_bridge = ipc_bridge::IpcBridge::new(
-            &mut event_loop, &server.unix_domain_socket_name, &server.tcp_addresses,
-            server.commands.clone());
+            &mut event_loop,
+            &server.unix_domain_socket_name,
+            &server.tcp_addresses,
+            server.commands.clone(),
+        );
 
         server.event_loop_thread = Some(thread::spawn(move || {
-            event_loop.run(&mut ipc_bridge).expect("Could not start event_loop.");
+            event_loop
+                .run(&mut ipc_bridge)
+                .expect("Could not start event_loop.");
         }));
 
-        server.buffer_plugin = Some(try!(plugin::buffer::Plugin::new(
-                    try!(client::Client::connect_unix(&server.unix_domain_socket_name)))));
-        server.list_files_plugin = Some(try!(plugin::list_files::Plugin::new(
-                    try!(client::Client::connect_unix(&server.unix_domain_socket_name)))));
-        server.log_plugin = Some(try!(plugin::log::Plugin::new(
-                    try!(client::Client::connect_unix(&server.unix_domain_socket_name)))));
+        server.buffer_plugin = Some(plugin::buffer::Plugin::new(
+            client::Client::connect_unix(&server.unix_domain_socket_name)
+        ?)?);
+        server.list_files_plugin = Some(plugin::list_files::Plugin::new(
+            client::Client::connect_unix(&server.unix_domain_socket_name)
+        ?)?);
+        server.log_plugin = Some(plugin::log::Plugin::new(
+            client::Client::connect_unix(&server.unix_domain_socket_name)
+        ?)?);
         Ok(server)
     }
 
@@ -90,12 +101,14 @@ impl Server {
         self.wait_for_event_loop_thread_to_shut_down();
         self.wait_for_swiboe_thread_to_shut_down();
 
-        fs::remove_file(&self.unix_domain_socket_name).expect(
-            &format!("Could not remove socket {:?}", self.unix_domain_socket_name));
+        fs::remove_file(&self.unix_domain_socket_name).expect(&format!(
+            "Could not remove socket {:?}",
+            self.unix_domain_socket_name
+        ));
     }
 }
 
 mod api_table;
 mod ipc_bridge;
-mod swiboe;
-pub mod plugin_core; // NOCOM being a private mod
+pub mod plugin_core;
+mod swiboe; // NOCOM being a private mod
