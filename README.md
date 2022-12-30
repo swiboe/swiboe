@@ -30,10 +30,9 @@ committing.
 
 Swiboe only runs on Mac OS X and Linux right now. This is due to it's dependency
 [mio](https://github.com/carllerche/mio) not working on Windows and a lack of
-contributors for Windows. Mio is working on windows support, once they have it,
-we will push for Windows too.
+contributors for Windows. The newer versions of mio support windows, but we still need to upgrade.
 
-You will need a nightly rust to build the current code. I suggest using
+You will need a stable Rust to build the current code. I suggest using
 [rustup](https://rustup.rs) to handle different versions.
 
 After cloning, try building the server and run the tests.
