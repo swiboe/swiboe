@@ -240,7 +240,7 @@ dependencies = [
  "net2",
  "nix",
  "slab",
- "time",
+ "time 0.1.45",
  "winapi 0.2.8",
 ]
 
@@ -530,7 +530,7 @@ dependencies = [
  "serde_json",
  "tempdir",
  "threadpool",
- "time",
+ "time 0.1.45",
  "unix_socket",
  "uuid",
 ]
@@ -544,7 +544,7 @@ dependencies = [
  "serde",
  "serde_json",
  "swiboe",
- "time",
+ "time 0.1.45",
  "uuid",
 ]
 
@@ -594,7 +594,7 @@ dependencies = [
  "subsequence_match",
  "swiboe",
  "swiboe_gui",
- "time",
+ "time 0.2.0",
  "uuid",
 ]
 
@@ -629,6 +629,12 @@ dependencies = [
  "wasi",
  "winapi 0.3.9",
 ]
+
+[[package]]
+name = "time"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fcc26de0a81a07c8352b548977862908fa9863e0e6e4f0eb36b2a9f4f8845585"
 
 [[package]]
 name = "unicode-ident"
